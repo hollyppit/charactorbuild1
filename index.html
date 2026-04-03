@@ -203,7 +203,7 @@ body.admin .add-btn{display:flex}
 /* ══════════════════════════════
    모달 공통
 ══════════════════════════════ */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;align-items:center;justify-content:center;padding:12px;overflow-y:auto}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;align-items:center;justify-content:center;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom));overflow-y:auto}
 .modal-overlay.show{display:flex}
 .modal{background:var(--c-card);border:2px solid var(--c-purple);box-shadow:var(--shadow-purple);padding:20px;width:100%;max-width:450px;max-height:92vh;overflow-y:auto}
 .modal h2{font-family:var(--f-display-kr);font-size:18px;color:var(--c-yellow);margin-bottom:13px;text-align:center}
@@ -245,6 +245,11 @@ body.admin .add-btn{display:flex}
   .stage{width:250px;height:380px}
   .style-grid{grid-template-columns:repeat(2,1fr)}
   .result-grid{grid-template-columns:1fr}
+}
+
+/* iOS background-attachment:fixed 렌더링 버그 방지 */
+@media(max-width:620px){
+  body{background-attachment:scroll}
 }
 
 /* ══════════════════════════════
@@ -327,6 +332,7 @@ body.admin .add-btn{display:flex}
     border-top:2px solid var(--c-purple);
     padding:9px 12px;z-index:400;
     box-shadow:0 -4px 0px var(--c-purple);
+    padding-bottom:calc(9px + env(safe-area-inset-bottom));
   }
   .mai-style-scroll{
     display:flex;gap:5px;flex:1;
@@ -787,7 +793,7 @@ body.admin .add-btn{display:flex}
         <div class="style-card" data-style="realistic" onclick="selStyle(this,'dressup')"><span class="style-icon">📷</span><div class="style-label">실사풍</div></div>
         <div class="style-card" data-style="painting" onclick="selStyle(this,'dressup')"><span class="style-icon">🖼️</span><div class="style-label">수채화</div></div>
       </div>
-      <div style="font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-black);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">📝 그림 추가 설명 <span style="font-weight:400;color:#777">(선택)</span></div>
+      <div style="font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-white);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">📝 그림 추가 설명 <span style="font-weight:400;color:#999">(선택)</span></div>
       <input
         id="aiExtraPrompt-dressup"
         class="name-input"
@@ -799,7 +805,7 @@ body.admin .add-btn{display:flex}
     </div>
 
     <div class="result-wrap" id="result-dressup">
-      <div style="font-family:var(--f-display-kr);font-size:16px;color:var(--c-black);text-align:center;letter-spacing:.02em">AI 변신 완료!</div>
+      <div style="font-family:var(--f-display-kr);font-size:16px;color:var(--c-yellow);text-align:center;letter-spacing:.02em">AI 변신 완료!</div>
       <div class="result-grid">
         <div class="result-card"><div class="result-card-label">내 캐릭터 원본</div><canvas id="dressupThumb" style="width:100%;display:block"></canvas></div>
         <div class="result-card"><div class="result-card-label" id="dressupResultLabel">AI 변환</div><div class="result-placeholder" id="dressupResultArea"><span>✨</span><span>AI 결과</span></div></div>
@@ -872,7 +878,7 @@ body.admin .add-btn{display:flex}
         <div class="style-card" data-style="realistic" onclick="selStyle(this,'draw')"><span class="style-icon">📷</span><div class="style-label">실사풍</div></div>
         <div class="style-card" data-style="painting" onclick="selStyle(this,'draw')"><span class="style-icon">🖼️</span><div class="style-label">수채화</div></div>
       </div>
-      <div style="font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-black);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">📝 그림 추가 설명 <span style="font-weight:400;color:#777">(선택)</span></div>
+      <div style="font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-white);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">📝 그림 추가 설명 <span style="font-weight:400;color:#999">(선택)</span></div>
       <input
         id="aiExtraPrompt-draw"
         class="name-input"
@@ -884,7 +890,7 @@ body.admin .add-btn{display:flex}
     </div>
 
     <div class="result-wrap" id="result-draw">
-      <div style="font-family:var(--f-display-kr);font-size:16px;color:var(--c-black);text-align:center;letter-spacing:.02em">AI 변신 완료!</div>
+      <div style="font-family:var(--f-display-kr);font-size:16px;color:var(--c-yellow);text-align:center;letter-spacing:.02em">AI 변신 완료!</div>
       <div class="result-grid">
         <div class="result-card"><div class="result-card-label">내 그림 원본</div><canvas id="drawThumb" style="width:100%;display:block"></canvas></div>
         <div class="result-card"><div class="result-card-label" id="drawResultLabel">AI 변환</div><div class="result-placeholder" id="drawResultArea"><span>✨</span><span>AI 결과</span></div></div>
@@ -1851,17 +1857,17 @@ function endPaint(e){painting=false;}
 
 function setDrawTool(t,btn){
   drawTool=t;
-  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
 function setBrushSize(s,btn){
   brushSize=s;
-  document.querySelectorAll('.sz-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#panel-draw .sz-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
 function setPalColor(c,el){
   document.getElementById('colorPicker').value=c;
-  document.querySelectorAll('.pal-dot').forEach(d=>d.classList.remove('active'));
+  document.querySelectorAll('#panel-draw .pal-dot').forEach(d=>d.classList.remove('active'));
   el.classList.add('active');
 }
 function saveDrawHistory(){
@@ -2104,7 +2110,7 @@ function showAIResult(mode, style, imageUrl) {
       <img src="${originImg}" class="result-img" alt="원본">
     </div>
     <div style="text-align:center; font-size: 24px;">👇</div>
-    <div class="res-item" style="border: 2px solid var(--purple); background: #fdfaff;">
+    <div class="res-item" style="border: 2px solid var(--c-yellow); background: #1a0020;">
       <div class="res-item-label">✨ AI 변신 결과 (${styleLabel})</div>
       <img src="${imageUrl}" class="result-img" alt="AI결과" id="finalAiImage">
     </div>
@@ -2164,10 +2170,10 @@ function exitAdmin(){isAdmin=false;document.body.classList.remove('admin');docum
 /* ═══════════════════════════════════════
    모달
 ═══════════════════════════════════════ */
-function openModal(id){document.getElementById(id).classList.add('show');}
-function closeModal(id){document.getElementById(id).classList.remove('show');}
+function openModal(id){document.getElementById(id).classList.add('show');document.body.style.overflow='hidden';}
+function closeModal(id){document.getElementById(id).classList.remove('show');if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';}
 document.querySelectorAll('.modal-overlay').forEach(o=>{
-  o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('show');});
+  o.addEventListener('click',e=>{if(e.target===o){o.classList.remove('show');if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';}});
 });
 
 /* ═══════════════════════════════════════
@@ -2437,7 +2443,7 @@ function showSBResult(imageUrl) {
       <img src="${sketchImg}" class="result-img" alt="스케치">
     </div>
     <div style="text-align:center;font-size:24px">👇</div>
-    <div class="res-item" style="border:2px solid var(--purple);background:#fdfaff">
+    <div class="res-item" style="border:2px solid var(--c-yellow);background:#1a0020">
       <div class="res-item-label">🎬 AI 영화 장면 (${genreLabels[sbGenre]||sbGenre})</div>
       <img src="${imageUrl}" class="result-img" alt="영화장면" id="finalAiImage">
     </div>`;
