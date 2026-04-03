@@ -168,7 +168,7 @@ Do NOT describe clothing or background. Output in English only. Max 100 words.`;
       : '';
 
     const sceneSection = sceneDesc
-      ? `\n\nADDITIONAL SCENE DETAILS: "${sceneDesc}". Incorporate these elements into the scene.`
+      ? `\n\nSCENE CONTEXT (use only for mood and setting — do NOT render this as visible text in the image): ${sceneDesc}`
       : '';
 
     const finalPrompt = `GENERATE A CINEMATIC MOVIE SCENE. Convert this storyboard sketch into a high-quality photorealistic film frame.
@@ -178,7 +178,8 @@ ${sketchDesc}
 
 VISUAL STYLE: ${genreStyle}${charSection}${sceneSection}
 
-TECHNICAL REQUIREMENTS: Cinematic widescreen composition, professional cinematography, movie-quality lighting and depth of field. This must look like an actual frame from a major motion picture. Full scene, safe for all ages, no violence depiction, no sexual content.`;
+TECHNICAL REQUIREMENTS: Cinematic widescreen composition, professional cinematography, movie-quality lighting and depth of field. This must look like an actual frame from a major motion picture. Full scene, safe for all ages, no violence depiction, no sexual content.
+CRITICAL: Do NOT include any text, words, letters, subtitles, watermarks, captions, or written labels anywhere in the image. Pure visual scene only.`;
 
     // ── Step 4: Gemini로 이미지 생성 ──
     const models = [
