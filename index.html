@@ -167,8 +167,8 @@ body.admin .add-btn{display:flex}
 .pal-dot.active{border-color:var(--c-yellow);box-shadow:3px 3px 0px var(--c-black);transform:translate(-1px,-1px)}
 
 /* 캔버스 */
-.draw-canvas-wrap{border:4px solid var(--c-yellow);box-shadow:var(--shadow-yellow);touch-action:none;position:relative;background:var(--c-white);max-width:660px;width:100%}
-#drawCanvas{display:block;width:100%;cursor:crosshair;touch-action:none}
+.draw-canvas-wrap{border:4px solid var(--c-yellow);box-shadow:var(--shadow-yellow);touch-action:none;position:relative;background:var(--c-white);max-width:660px;width:100%;aspect-ratio:4/3}
+#drawCanvas{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none}
 
 /* ══════════════════════════════
    AI 변신 공통
@@ -253,6 +253,24 @@ body.admin .add-btn{display:flex}
 }
 
 /* ══════════════════════════════
+   데스크탑 전용: 그리기 패드 확대 (≥860px)
+══════════════════════════════ */
+@media(min-width:860px){
+  /* 직접 그리기: 캔버스 + 관련 요소 확대 */
+  .draw-canvas-wrap{max-width:900px}
+  .draw-toolbar{max-width:900px;gap:8px;padding:11px 16px}
+  .palette{max-width:900px}
+  .ai-section{max-width:900px}
+  .result-wrap{max-width:900px}
+  .tool-btn{padding:8px 16px;font-size:13px}
+  .sz-btn{width:34px;height:34px}
+  .pal-dot{width:30px;height:30px}
+
+  /* 스토리보드: controls-col 조금 더 넓게 */
+  .sb-controls-col{width:230px}
+}
+
+/* ══════════════════════════════
    모바일 전용 UI (≤620px)
 ══════════════════════════════ */
 @media(max-width:620px){
@@ -289,19 +307,25 @@ body.admin .add-btn{display:flex}
   .btn{padding:8px 11px;font-size:12px}
 
   /* 그리기 패널 */
-  #panel-draw{padding-bottom:86px}
+  #panel-draw{padding-bottom:86px;padding-left:0;padding-right:0}
   .draw-col .btn-row .btn-purple{display:none}
+  .draw-col{gap:7px}
 
-  /* 그리기 툴바: 컴팩트 */
-  .draw-toolbar{gap:4px;padding:7px 9px}
-  .tool-btn{padding:5px 9px;font-size:11px}
-  .toolbar-sep{height:20px}
+  /* 캔버스: 화면 폭 꽉 채우기 */
+  .draw-canvas-wrap{width:100%;max-width:none;border-left:none;border-right:none;border-width:3px 0}
+  #panel-draw .draw-toolbar{max-width:none;border-left:none;border-right:none}
+  #panel-draw .palette{max-width:none;border-left:none;border-right:none}
+
+  /* 그리기 툴바: 컴팩트 + 터치 최적화 */
+  .draw-toolbar{gap:5px;padding:8px 10px}
+  .tool-btn{padding:9px 13px;font-size:12px;min-height:40px}
+  .toolbar-sep{height:22px}
 
   /* 팔레트 도트: 터치 영역 확대 */
-  .pal-dot{width:36px;height:36px}
+  .pal-dot{width:38px;height:38px}
 
   /* 브러시 크기 버튼: 터치 영역 확대 */
-  .sz-btn{width:38px;height:38px}
+  .sz-btn{width:42px;height:42px}
 }
 
 /* ── 모바일 카테고리 탭 ── */
@@ -427,11 +451,16 @@ body.admin .add-btn{display:flex}
 .sb-go-btn{padding:14px;border:var(--border-thick);background:var(--c-yellow);color:var(--c-black);font-family:var(--f-display-en);font-size:1.4rem;letter-spacing:.05em;cursor:pointer;transition:all .1s ease;width:100%;box-shadow:var(--shadow-solid-sm);text-transform:uppercase}
 .sb-go-btn:active{transform:translate(4px,4px);box-shadow:none}
 @media(max-width:620px){
-  .sb-layout{flex-direction:column}
-  .sb-controls-col{width:100%}
+  .sb-layout{flex-direction:column;padding:0;gap:0}
+  .sb-canvas-col{gap:5px}
+  .sb-controls-col{width:100%;padding:10px 12px;box-sizing:border-box}
+  .sb-canvas-wrap{border-left:none;border-right:none;border-width:3px 0}
+  .sb-canvas-col .draw-toolbar{max-width:none;border-left:none;border-right:none}
+  .sb-canvas-col .palette{max-width:none;border-left:none;border-right:none}
   .sb-genre-grid{grid-template-columns:repeat(3,1fr)}
   .sb-genre-btn{padding:12px 4px;font-size:12px}
   .sb-go-btn{padding:16px;font-size:1.3rem}
+  .sb-frame-label{border-left:none;border-right:none}
 }
 </style>
 </head>
@@ -1795,8 +1824,8 @@ let drawCtx=null;
 function initDrawCanvas() {
   const canvas=document.getElementById('drawCanvas');
   const wrap=canvas.parentElement;
-  const w=Math.min(wrap.offsetWidth,660);
-  const h=Math.round(w*0.65);
+  const w=wrap.offsetWidth;
+  const h=Math.round(w*0.75);
   if(canvas.width!==w||canvas.height!==h){
     const data=canvas.toDataURL();
     canvas.width=w; canvas.height=h;
