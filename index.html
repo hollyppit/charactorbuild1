@@ -198,6 +198,19 @@ body.admin .add-btn{display:flex}
 .res-item{background:var(--c-card);border:2px solid #3a0028;padding:15px}
 .res-item-label{font-family:var(--f-display-kr);font-size:14px;color:var(--c-yellow);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .res-footer{position:sticky;bottom:-20px;background:var(--c-card);padding:15px;margin:0 -20px -20px;border-top:2px solid var(--c-purple);display:flex;flex-direction:column;gap:10px}
+.res-regen-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-white);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.res-regen-label span{font-weight:400;color:#777}
+.res-regen-input{width:100%;padding:9px 10px;border:2px solid #3a0028;font-family:var(--f-ui);font-size:13px;resize:none;background:#0d0008;color:var(--c-white);line-height:1.5;outline:none;transition:.15s;box-sizing:border-box;-webkit-appearance:none;border-radius:0}
+.res-regen-input:focus{background:#1a0010;border-color:var(--c-yellow)}
+.res-regen-input::placeholder{color:#555}
+.res-action-btns{display:flex;gap:8px}
+.res-action-btns .btn{flex:1;padding:13px 8px;font-size:14px;text-align:center}
+@media(max-width:620px){
+  .res-regen-input{font-size:16px} /* iOS 자동줌 방지 */
+  .res-action-btns{flex-direction:column;gap:8px}
+  .res-action-btns .btn{flex:none;width:100%;padding:14px;font-size:14px}
+  .res-footer{padding-bottom:calc(15px + env(safe-area-inset-bottom))}
+}
 
 
 /* ══════════════════════════════
@@ -275,7 +288,7 @@ body.admin .add-btn{display:flex}
 ══════════════════════════════ */
 @media(max-width:620px){
   /* 드레스업 패널: 수직 단열 */
-  #panel-dressup{flex-direction:column;align-items:center;padding:10px 10px 86px;gap:8px}
+  #panel-dressup{flex-direction:column;align-items:center;padding:10px 10px calc(130px + env(safe-area-inset-bottom));gap:8px}
 
   /* 캔버스 컬럼: sticky 해제 */
   .canvas-col{position:static;width:100%;align-items:center}
@@ -307,7 +320,7 @@ body.admin .add-btn{display:flex}
   .btn{padding:8px 11px;font-size:12px}
 
   /* 그리기 패널 */
-  #panel-draw{padding-bottom:86px;padding-left:0;padding-right:0}
+  #panel-draw{padding-bottom:calc(130px + env(safe-area-inset-bottom));padding-left:0;padding-right:0}
   .draw-col .btn-row .btn-purple{display:none}
   .draw-col{gap:7px}
 
@@ -351,12 +364,32 @@ body.admin .add-btn{display:flex}
 @media(max-width:620px){
   .mobile-ai-bar{
     position:fixed;bottom:0;left:0;right:0;
-    display:flex;align-items:center;gap:8px;
+    display:flex;flex-direction:column;gap:7px;
     background:var(--c-card);
     border-top:2px solid var(--c-purple);
     padding:9px 12px;z-index:400;
     box-shadow:0 -4px 0px var(--c-purple);
     padding-bottom:calc(9px + env(safe-area-inset-bottom));
+    transition:transform .2s ease;
+  }
+  .mai-desc-row{
+    display:flex;align-items:center;gap:6px;width:100%
+  }
+  .mai-desc-label{
+    flex-shrink:0;font-family:var(--f-ui);font-size:10px;font-weight:700;
+    color:var(--c-yellow);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap
+  }
+  .mai-desc-input{
+    flex:1;padding:7px 10px;border:2px solid #3a0028;
+    background:#0d0008;color:var(--c-white);
+    font-family:var(--f-ui);font-size:16px; /* iOS 자동줌 방지: 16px 이상 필수 */
+    outline:none;transition:.15s;min-width:0;
+    -webkit-appearance:none;border-radius:0
+  }
+  .mai-desc-input:focus{border-color:var(--c-yellow);background:#1a0010}
+  .mai-desc-input::placeholder{color:#555;font-size:14px}
+  .mai-bottom-row{
+    display:flex;align-items:center;gap:8px;width:100%
   }
   .mai-style-scroll{
     display:flex;gap:5px;flex:1;
@@ -1101,13 +1134,25 @@ body.admin .add-btn{display:flex}
 
 <!-- 모바일 하단 고정 AI 바 (620px 이하에서만 표시) -->
 <div class="mobile-ai-bar" id="mobileAiBar">
-  <div class="mai-style-scroll">
-    <button class="mai-style-btn active" data-style="cartoon" onclick="selectMobileStyle(this)">🎌 만화</button>
-    <button class="mai-style-btn" data-style="3d" onclick="selectMobileStyle(this)">🧊 3D</button>
-    <button class="mai-style-btn" data-style="realistic" onclick="selectMobileStyle(this)">📷 실사</button>
-    <button class="mai-style-btn" data-style="painting" onclick="selectMobileStyle(this)">🖼️ 수채화</button>
+  <div class="mai-desc-row">
+    <span class="mai-desc-label">📝 설명</span>
+    <input
+      id="aiExtraPrompt-mobile"
+      class="mai-desc-input"
+      placeholder="예: 판다가 우주복을 입고 있어요 (선택)"
+      maxlength="150"
+      autocomplete="off"
+    />
   </div>
-  <button class="mai-go-btn" onclick="doAI(currentMode)">✨ AI 변신!</button>
+  <div class="mai-bottom-row">
+    <div class="mai-style-scroll">
+      <button class="mai-style-btn active" data-style="cartoon" onclick="selectMobileStyle(this)">🎌 만화</button>
+      <button class="mai-style-btn" data-style="3d" onclick="selectMobileStyle(this)">🧊 3D</button>
+      <button class="mai-style-btn" data-style="realistic" onclick="selectMobileStyle(this)">📷 실사</button>
+      <button class="mai-style-btn" data-style="painting" onclick="selectMobileStyle(this)">🖼️ 수채화</button>
+    </div>
+    <button class="mai-go-btn" onclick="doAI(currentMode)">✨ AI 변신!</button>
+  </div>
 </div>
 
 <!-- ── AI 결과 모달 ── -->
@@ -1123,7 +1168,14 @@ body.admin .add-btn{display:flex}
     </div>
     
     <div class="res-footer">
-      <button class="btn btn-green" id="aiResultSaveBtn" style="padding: 14px; font-size: 15px;">💾 내 갤러리에 저장하기</button>
+      <div class="res-regen-label">🔄 수정 요청 <span>(어떻게 바꿔줬으면 하는지 적어주세요)</span></div>
+      <textarea id="regenFeedback" class="res-regen-input" rows="2"
+        placeholder="예: 배경을 우주로 바꿔줘 / 색감을 더 밝게 해줘 / 표정을 웃게 해줘"
+        maxlength="200"></textarea>
+      <div class="res-action-btns">
+        <button class="btn btn-purple" id="regenBtn" onclick="regenAI()">🔄 재생성</button>
+        <button class="btn btn-green" id="aiResultSaveBtn">💾 내 갤러리에 저장하기</button>
+      </div>
       <div style="font-size:11px; color:var(--muted); text-align:center;">* 저장이 안 될 경우 이미지를 길게 눌러 직접 저장해 주세요.</div>
     </div>
   </div>
@@ -2080,10 +2132,17 @@ async function doAI(mode) {
       imageB64 = canvas.toDataURL('image/png');
     }
 
+    // 재생성용 상태 저장
+    _regenMode = mode;
+    _regenStyle = style;
+    _regenImageB64 = imageB64;
+
     const inputId = mode === 'dressup'
       ? 'aiExtraPrompt-dressup'
       : 'aiExtraPrompt-draw';
-    const userText = document.getElementById(inputId)?.value || "";
+    const mobileInput = document.getElementById('aiExtraPrompt-mobile');
+    const isMobileBarVisible = mobileInput && getComputedStyle(document.getElementById('mobileAiBar')).display !== 'none';
+    const userText = isMobileBarVisible ? (mobileInput.value || "") : (document.getElementById(inputId)?.value || "");
     const finalPrompt = buildFinalPrompt(aiStyle[mode], userText);
     console.log("최종 프롬프트:", finalPrompt);
 
@@ -2173,6 +2232,8 @@ function showAIResult(mode, style, imageUrl) {
     }
   };
 
+  const fb = document.getElementById('regenFeedback');
+  if (fb) fb.value = '';
   openModal('aiResultModal');
 }
 
@@ -2202,6 +2263,7 @@ function exitAdmin(){isAdmin=false;document.body.classList.remove('admin');docum
 function openModal(id){document.getElementById(id).classList.add('show');document.body.style.overflow='hidden';}
 function closeModal(id){document.getElementById(id).classList.remove('show');if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';}
 document.querySelectorAll('.modal-overlay').forEach(o=>{
+  if(o.id==='aiResultModal') return; // 닫기 버튼으로만 닫을 수 있음
   o.addEventListener('click',e=>{if(e.target===o){o.classList.remove('show');if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';}});
 });
 
@@ -2236,6 +2298,20 @@ async function init() {
     if(currentMode==='draw') initDrawCanvas();
     if(currentMode==='storyboard') initSBCanvas();
   });
+
+  // iOS 키보드 처리: 뷰포트가 줄어들면 모바일 AI 바 일시 숨김
+  const mobileBar = document.getElementById('mobileAiBar');
+  if(mobileBar) {
+    const origH = window.innerHeight;
+    window.addEventListener('resize', () => {
+      const shrunk = window.innerHeight < origH * 0.75;
+      mobileBar.style.transform = shrunk ? 'translateY(200%)' : '';
+    });
+    // 입력 필드 blur 시 항상 복원
+    document.getElementById('aiExtraPrompt-mobile')?.addEventListener('blur', () => {
+      setTimeout(() => { mobileBar.style.transform = ''; }, 200);
+    });
+  }
 }
 init();
 
@@ -2244,6 +2320,10 @@ init();
 ═══════════════════════════════════════ */
 let sbCtx, sbPainting = false, sbHistory = [], sbTool = 'pen', sbBrushSize = 3, sbColor = '#1A1A2E';
 let sbCharPhotoB64 = null, sbGenre = 'action';
+
+/* ── 재생성용 마지막 AI 호출 상태 ── */
+let _regenMode = null, _regenStyle = null, _regenImageB64 = null;
+let _regenSBGenre = null, _regenSBSketchB64 = null, _regenSBCharPhotoB64 = null, _regenSBSceneDesc = null;
 
 function initSBCanvas() {
   const canvas = document.getElementById('sbCanvas');
@@ -2427,6 +2507,13 @@ async function doStoryboard() {
   const sketchB64 = canvas.toDataURL('image/png');
   const sceneDesc = document.getElementById('sbSceneDesc').value.trim();
 
+  // 재생성용 상태 저장
+  _regenMode = 'storyboard';
+  _regenSBGenre = sbGenre;
+  _regenSBSketchB64 = sketchB64;
+  _regenSBCharPhotoB64 = sbCharPhotoB64;
+  _regenSBSceneDesc = sceneDesc;
+
   const loading = document.getElementById('loading');
   const loadingMsg = document.getElementById('loadingMsg');
   loading.classList.add('show');
@@ -2498,7 +2585,72 @@ function showSBResult(imageUrl) {
       setTimeout(()=>{ saveBtn.disabled=false; saveBtn.textContent='💾 내 갤러리에 저장하기'; }, 2000);
     }
   };
+  const fb = document.getElementById('regenFeedback');
+  if (fb) fb.value = '';
   openModal('aiResultModal');
+}
+
+/* ═══════════════════════════════════════
+   재생성
+═══════════════════════════════════════ */
+async function regenAI() {
+  const feedback = (document.getElementById('regenFeedback')?.value || '').trim();
+  closeModal('aiResultModal');
+
+  const loading = document.getElementById('loading');
+  const msgs = ['AI가 수정 요청을 반영하는 중... 🎨', '다시 그리는 중... ✏️', '거의 다 됐어요! 🌟'];
+  let mi = 0;
+  loading.classList.add('show');
+  document.getElementById('loadingMsg').textContent = msgs[mi];
+  const iv = setInterval(() => {
+    document.getElementById('loadingMsg').textContent = msgs[++mi % msgs.length];
+  }, 1800);
+
+  try {
+    if (_regenMode === 'storyboard') {
+      const combinedDesc = [_regenSBSceneDesc, feedback].filter(Boolean).join('. ');
+      const res = await fetch('/api/storyboard', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          sketch: _regenSBSketchB64,
+          charPhoto: _regenSBCharPhotoB64,
+          genre: _regenSBGenre,
+          sceneDesc: combinedDesc
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.image) throw new Error(data.error || '이미지 생성 실패');
+      clearInterval(iv); loading.classList.remove('show');
+      showSBResult(data.image);
+
+    } else {
+      const inputId = _regenMode === 'dressup' ? 'aiExtraPrompt-dressup' : 'aiExtraPrompt-draw';
+      const mobileInput = document.getElementById('aiExtraPrompt-mobile');
+      const isMobileBarVisible = mobileInput && getComputedStyle(document.getElementById('mobileAiBar')).display !== 'none';
+      const origUserText = isMobileBarVisible ? (mobileInput.value || '') : (document.getElementById(inputId)?.value || '');
+      const combinedText = [origUserText, feedback].filter(Boolean).join('. ');
+
+      const res = await fetch('/api/imagine', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          type: 'upscale',
+          image: _regenImageB64,
+          style: _regenStyle,
+          mode: _regenMode,
+          userPrompt: sanitizeUserPrompt(combinedText)
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.image) throw new Error(data.error || '이미지 생성 실패');
+      clearInterval(iv); loading.classList.remove('show');
+      showAIResult(_regenMode, _regenStyle, data.image);
+    }
+  } catch(e) {
+    clearInterval(iv); loading.classList.remove('show');
+    alert('재생성 오류: ' + e.message);
+  }
 }
 </script>
 </body>
