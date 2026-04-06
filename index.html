@@ -2695,7 +2695,8 @@ async function regenAI() {
 
   try {
     if (_regenMode === 'storyboard') {
-      const combinedDesc = [_regenSBSceneDesc, feedback].filter(Boolean).join('. ');
+      // 재생성은 수정 피드백만 사용 (원본 장면 설명과 취합하지 않음)
+      const combinedDesc = feedback || _regenSBSceneDesc;
       const res = await fetch('/api/storyboard', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
@@ -2712,12 +2713,7 @@ async function regenAI() {
       showSBResult(data.image);
 
     } else {
-      const inputId = _regenMode === 'dressup' ? 'aiExtraPrompt-dressup' : 'aiExtraPrompt-draw';
-      const mobileInput = document.getElementById('aiExtraPrompt-mobile');
-      const isMobileBarVisible = mobileInput && getComputedStyle(document.getElementById('mobileAiBar')).display !== 'none';
-      const origUserText = isMobileBarVisible ? (mobileInput.value || '') : (document.getElementById(inputId)?.value || '');
-      const combinedText = [origUserText, feedback].filter(Boolean).join('. ');
-
+      // 재생성은 이미 생성된 이미지(_regenImageB64) 기준으로 수정 — 원본 텍스트 취합 없이 피드백만 사용
       const res = await fetch('/api/imagine', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
@@ -2726,7 +2722,7 @@ async function regenAI() {
           image: _regenImageB64,
           style: _regenStyle,
           mode: _regenMode,
-          userPrompt: sanitizeUserPrompt(combinedText)
+          userPrompt: sanitizeUserPrompt(feedback)
         })
       });
       const data = await res.json();
