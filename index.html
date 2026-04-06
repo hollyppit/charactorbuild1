@@ -108,9 +108,13 @@ body.admin .lc-user-only{display:none}
 .lc-slider{flex:1;accent-color:var(--c-yellow);height:4px;cursor:pointer}
 @media(max-width:620px){.lc-slider{height:24px}}
 .lc-val{font-size:10px;font-weight:700;color:var(--c-yellow);min-width:30px;text-align:right;font-family:var(--f-ui)}
+.lc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.lc-close-btn{background:none;border:none;color:#888;font-size:16px;cursor:pointer;line-height:1;padding:0 2px;transition:.15s}.lc-close-btn:hover{color:var(--c-white)}
 .lc-btns{display:flex;gap:5px;justify-content:center;margin-top:5px}
+.lc-order-btns{display:flex;gap:5px;justify-content:center;margin-bottom:5px}
 .lc-btn{padding:5px 12px;border:var(--border-thin);font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;transition:.15s;text-transform:uppercase}
 .lc-btn-save{background:var(--c-yellow);color:var(--c-black)}.lc-btn-reset{background:var(--c-card);color:var(--c-white);border-color:#555}
+.lc-btn-order{background:#1a1a2e;color:var(--c-white);border-color:#555;flex:1}.lc-btn-order:hover{background:#333;border-color:var(--c-purple)}.lc-btn-order:disabled{opacity:.35;cursor:not-allowed}
 .name-input{width:100%;max-width:290px;padding:8px 12px;border:2px solid var(--c-purple);font-family:var(--f-ui);font-size:13px;font-weight:600;color:var(--c-white);background:var(--c-card);outline:none}
 .name-input:focus{background:#2d0020;border-color:var(--c-yellow);color:var(--c-yellow);outline:none}
 
@@ -822,7 +826,14 @@ body.admin .add-btn{display:flex}
         </div>
       </div>
       <div class="layer-controls" id="layerControls">
-        <div class="lc-title" id="lcTitle">레이어 조정</div>
+        <div class="lc-header">
+          <div class="lc-title" id="lcTitle" style="margin-bottom:0">레이어 조정</div>
+          <button class="lc-close-btn" onclick="deselectLayer()" title="닫기">✕</button>
+        </div>
+        <div class="lc-order-btns">
+          <button class="lc-btn lc-btn-order" id="lcBtnBack" onclick="moveLayerOrder(-1)">◀ 뒤로</button>
+          <button class="lc-btn lc-btn-order" id="lcBtnFront" onclick="moveLayerOrder(1)">앞으로 ▶</button>
+        </div>
         <div class="lc-row"><span class="lc-label">크기</span><input type="range" class="lc-slider" id="lcScale" min="20" max="200" value="100" oninput="onLcScale()"><span class="lc-val" id="lcScaleVal">100%</span></div>
         <div class="lc-row"><span class="lc-label">좌우</span><input type="range" class="lc-slider" id="lcX" min="-150" max="150" value="0" oninput="onLcX()"><span class="lc-val" id="lcXVal">0</span></div>
         <div class="lc-row"><span class="lc-label">상하</span><input type="range" class="lc-slider" id="lcY" min="-200" max="100" value="0" oninput="onLcY()"><span class="lc-val" id="lcYVal">0</span></div>
@@ -1204,6 +1215,8 @@ const CATEGORIES = [
 
 const LAYER_Z    = {bg_image:1, character:10, effect:30, prop:20};
 const LAYER_IDS  = ['bg_image','character','effect','prop'];
+// 동적 레이어 순서 (인덱스가 클수록 앞에 표시). bg_image는 항상 고정 최하단.
+let layerOrder = ['bg_image','character','prop','effect'];
 const DEFAULT_POS = {scale:100,offsetX:0,offsetY:0,rotate:0};
 
 const STYLE_LABELS = {cartoon:'만화/애니 일러스트',  '3d':'3D 렌더링 캐릭터', realistic:'실사풍 사진', painting:'수채화/회화'};
@@ -1392,7 +1405,7 @@ function ensureLayers() {
     const img=document.createElement('img');
     img.id='lyr-'+id; img.className='char-layer z-'+id;
     img.alt=''; img.draggable=false;
-    img.style.zIndex=LAYER_Z[id]||10;
+    img.style.zIndex=calcZIndex(id);
     stage.appendChild(img);
   });
   if(!document.getElementById('nameTag')){
@@ -1549,6 +1562,48 @@ function updateTransformOverlay() {
   overlay.classList.add('show');
 }
 
+/* ── 레이어 z-order 관리 ── */
+function calcZIndex(id) {
+  // bg_image는 항상 1 고정
+  if(id==='bg_image') return 1;
+  const idx = layerOrder.indexOf(id);
+  return idx < 0 ? 10 : (idx + 1) * 10;
+}
+function applyAllZIndexes() {
+  LAYER_IDS.forEach(id=>{
+    const el=document.getElementById('lyr-'+id);
+    if(el) el.style.zIndex=calcZIndex(id);
+  });
+}
+function getVisibleMovable() {
+  // 현재 표시 중인 레이어(bg_image 제외)를 layerOrder 순으로 반환
+  return layerOrder.filter(id=>{
+    if(id==='bg_image') return false;
+    const el=document.getElementById('lyr-'+id);
+    return el && el.style.display!=='none' && el.classList.contains('visible');
+  });
+}
+function moveLayerOrder(dir) {
+  // dir: +1=앞으로, -1=뒤로 (bg_image 제외)
+  if(!selLayer || selLayer==='bg_image') return;
+  // layerOrder 전체 배열에서 이동 (보이지 않는 레이어도 순서 유지)
+  const movable = layerOrder.filter(id=>id!=='bg_image');
+  const idx = movable.indexOf(selLayer);
+  const newIdx = idx + dir;
+  if(newIdx < 0 || newIdx >= movable.length) return;
+  movable.splice(idx,1); movable.splice(newIdx,0,selLayer);
+  layerOrder = ['bg_image', ...movable];
+  applyAllZIndexes();
+  updateOrderButtons();
+}
+function updateOrderButtons() {
+  if(!selLayer || selLayer==='bg_image') return;
+  const visible = getVisibleMovable();
+  const idx = visible.indexOf(selLayer);
+  document.getElementById('lcBtnBack').disabled  = (idx <= 0);
+  document.getElementById('lcBtnFront').disabled = (idx < 0 || idx >= visible.length-1);
+}
+
 function selectLayer(layerId) {
   deselectLayer(); selLayer=layerId;
   const el=document.getElementById('lyr-'+layerId); if(el) el.classList.add('selected');
@@ -1557,6 +1612,9 @@ function selectLayer(layerId) {
   document.getElementById('layerControls').classList.add('show');
   syncLCSliders(getPos(catId,itemId));
   updateTransformOverlay();
+  // 레이어 순서 버튼 상태: bg_image는 순서 조정 불필요
+  const orderBtns=document.getElementById('layerControls').querySelector('.lc-order-btns');
+  if(layerId==='bg_image'){orderBtns.style.display='none';}else{orderBtns.style.display='flex';updateOrderButtons();}
 }
 function deselectLayer() {
   if(selLayer){const el=document.getElementById('lyr-'+selLayer);if(el)el.classList.remove('selected');}
