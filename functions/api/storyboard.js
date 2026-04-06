@@ -35,16 +35,21 @@ export async function onRequest(context) {
     })();
 
     // ── Step 1: 스케치 장면 분석 ──
-    const SKETCH_PROMPT = `Analyze this hand-drawn storyboard sketch and describe the scene composition for film production.
+    const sceneIntentHint = sceneDesc
+      ? `\n\nIMPORTANT CONTEXT: The artist described this sketch as "${sceneDesc}". Use this as the PRIMARY INTENT — interpret the sketch through this lens and expand it cinematically. For example, if they wrote "warrior with a sword", describe a warrior character armed with a sword in a dramatic action pose.`
+      : '';
 
-SCENE ANALYSIS:
+    const SKETCH_PROMPT = `You are a Hollywood film director analyzing a hand-drawn storyboard sketch. Your job is to interpret the sketch AND the artist's intent to describe a cinematic movie scene.${sceneIntentHint}
+
+SCENE ANALYSIS (interpret sketch + artist's intent together):
+- Main subject/character: what are they, what are they doing (informed by both the sketch and the description)
 - Shot type (close-up, medium shot, wide shot, bird's eye, low angle, etc.)
-- Composition: where are characters/objects positioned (left, right, center, foreground, background)
-- Character actions and poses
-- Setting and environment
+- Composition: where are characters/objects positioned
+- Character actions, poses, and emotional state
+- Setting and environment (infer a fitting cinematic location from the description)
 - Mood and atmosphere
-- Key props or environmental elements
-- Suggested camera movement (static, pan, tracking, etc.)
+- Key props or environmental elements (e.g., if "warrior with sword" — describe the sword, armor, battle environment)
+- Suggested camera angle and movement
 
 Output ONLY the scene description in English. Be specific and cinematic. Do NOT describe it as a drawing — describe it as if it were a real scene. Max 200 words.`;
 
@@ -168,7 +173,7 @@ Do NOT describe clothing or background. Output in English only. Max 100 words.`;
       : '';
 
     const sceneSection = sceneDesc
-      ? `\n\nSCENE CONTEXT (use only for mood and setting — do NOT render this as visible text in the image): ${sceneDesc}`
+      ? `\n\nSCENE SUBJECT & DIRECTOR'S INTENT: "${sceneDesc}" — This is what the artist intended to draw. The entire image must depict this concept cinematically. A director's interpretation: not just the literal words, but the dramatic, emotional, and visual potential of this subject in a movie scene. Do NOT render this text visibly in the image.`
       : '';
 
     const finalPrompt = `GENERATE A CINEMATIC MOVIE SCENE. Convert this storyboard sketch into a high-quality photorealistic film frame.
