@@ -110,6 +110,7 @@ body.admin .lc-user-only{display:none}
 .lc-val{font-size:10px;font-weight:700;color:var(--c-yellow);min-width:30px;text-align:right;font-family:var(--f-ui)}
 .lc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
 .lc-close-btn{background:none;border:none;color:#888;font-size:16px;cursor:pointer;line-height:1;padding:0 2px;transition:.15s}.lc-close-btn:hover{color:var(--c-white)}
+.inst-badge{position:absolute;top:-4px;right:-4px;background:var(--c-yellow);color:var(--c-black);font-size:10px;font-weight:900;font-family:var(--f-ui);width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--c-black)}
 .lc-btns{display:flex;gap:5px;justify-content:center;margin-top:5px}
 .lc-order-btns{display:flex;gap:5px;justify-content:center;margin-bottom:5px}
 .lc-btn{padding:5px 12px;border:var(--border-thin);font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;transition:.15s;text-transform:uppercase}
@@ -131,8 +132,8 @@ body.admin .lc-user-only{display:none}
 .opt-item{display:flex;flex-direction:column;align-items:center;gap:3px;border:2px solid #3a0028;padding:6px 3px;cursor:pointer;background:#0d0008;transition:.15s;position:relative;min-height:76px;justify-content:center}
 .opt-item:hover{border-color:var(--c-purple);box-shadow:var(--shadow-purple);transform:translate(-2px,-2px)}
 .opt-item.sel{border-color:var(--c-yellow);background:#2d1500;box-shadow:var(--shadow-yellow);transform:translate(-2px,-2px)}
-.opt-thumb{width:46px;height:46px;background:#1a000a;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex-shrink:0}
-.opt-thumb img{width:100%;height:100%;object-fit:cover}
+.opt-thumb{position:relative;width:46px;height:46px;background:#1a000a;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:visible;flex-shrink:0}
+.opt-thumb img{width:100%;height:100%;object-fit:cover;overflow:hidden}
 .opt-label{font-family:var(--f-ui);font-size:10px;font-weight:700;color:#aaa;text-align:center;line-height:1.2;word-break:keep-all}
 .opt-item.sel .opt-label{color:var(--c-yellow)}
 .edit-badge{position:absolute;top:2px;right:2px;width:16px;height:16px;background:var(--c-yellow);border:1px solid var(--c-black);display:none;align-items:center;justify-content:center;font-size:8px;cursor:pointer;z-index:10}
@@ -843,7 +844,6 @@ body.admin .add-btn{display:flex}
       <div class="layer-controls" id="layerControls">
         <div class="lc-header">
           <div class="lc-title" id="lcTitle" style="margin-bottom:0">레이어 조정</div>
-          <button class="lc-close-btn" onclick="deselectLayer()" title="닫기">✕</button>
         </div>
         <div class="lc-order-btns">
           <button class="lc-btn lc-btn-order" id="lcBtnBack" onclick="moveLayerOrder(-1)">◀ 뒤로</button>
@@ -855,7 +855,7 @@ body.admin .add-btn{display:flex}
           <div class="lc-row"><span class="lc-label">상하</span><input type="range" class="lc-slider" id="lcY" min="-200" max="100" value="0" oninput="onLcY()"><span class="lc-val" id="lcYVal">0</span></div>
           <div class="lc-row"><span class="lc-label">각도</span><input type="range" class="lc-slider" id="lcRotate" min="-180" max="180" value="0" oninput="onLcRotate()"><span class="lc-val" id="lcRotateVal">0°</span></div>
         </div>
-        <div class="lc-btns"><button class="lc-btn lc-btn-reset" onclick="resetLayerPos()">↺ 초기화</button><button class="lc-btn lc-btn-save lc-admin-only" onclick="saveLayerPos()">✅ DB저장</button><button class="lc-btn lc-user-only" style="background:var(--blue);color:#fff" onclick="deselectLayer()">✓ 완료</button></div>
+        <div class="lc-btns"><button class="lc-btn lc-btn-reset" onclick="resetLayerPos()">↺ 초기화</button><button class="lc-btn" id="lcBtnDelete" style="background:#E63946;color:#fff;display:none" onclick="deleteCurrentLayer()">🗑 삭제</button><button class="lc-btn lc-btn-save lc-admin-only" onclick="saveLayerPos()">✅ DB저장</button><button class="lc-btn lc-user-only" style="background:var(--blue);color:#fff" onclick="deselectLayer()">✓ 완료</button></div>
       </div>
     </div>
     <input class="name-input" id="nameInput" placeholder="캐릭터 이름 입력" maxlength="12"
@@ -1230,10 +1230,13 @@ const CATEGORIES = [
   {id:'prop',      label:'소품',   icon:'🎒', hasBack:false},
 ];
 
-const LAYER_Z    = {bg_image:1, character:10, effect:30, prop:20};
-const LAYER_IDS  = ['bg_image','character','effect','prop'];
-// 동적 레이어 순서 (인덱스가 클수록 앞에 표시). bg_image는 항상 고정 최하단.
-let layerOrder = ['bg_image','character','prop','effect'];
+const LAYER_Z = {bg_image:1, character:10, effect:30, prop:20};
+const LAYER_IDS = ['bg_image']; // bg_image만 고정, 나머지는 동적 인스턴스
+// 동적 레이어 순서. bg_image는 항상 고정 최하단.
+let layerOrder = ['bg_image'];
+// 멀티 인스턴스 레이어 (캐릭터·효과·소품)
+let activeInstances = []; // [{uid, catId, itemId, src}]
+let instanceCounter = 0;
 const DEFAULT_POS = {scale:100,offsetX:0,offsetY:0,rotate:0};
 
 const STYLE_LABELS = {cartoon:'만화/애니 일러스트',  '3d':'3D 렌더링 캐릭터', realistic:'실사풍 사진', painting:'수채화/회화'};
@@ -1278,7 +1281,7 @@ const DEFAULT_ASSETS = {
 ═══════════════════════════════════════ */
 let assets    = JSON.parse(JSON.stringify(DEFAULT_ASSETS));
 let positions = {};
-let state     = {bg:'none', character:'none', effect:'none', prop:'none'};
+let state     = {bg:'none'};
 let isAdmin   = false;
 let currentMode = 'dressup';
 
@@ -1291,7 +1294,7 @@ let pendingFront='', pendingBack='';
 let uploadCurrentTab = 'img';
 
 // 선택된 레이어
-let selLayer = null, dragState = null;
+let selLayer = null, dragState = null, pinchState = null;
 
 // 그림판
 let drawTool = 'pen', brushSize = 8, painting = false, lastX=0, lastY=0;
@@ -1417,14 +1420,14 @@ function switchMode(mode, btn) {
 ═══════════════════════════════════════ */
 function ensureLayers() {
   const stage = document.getElementById('stage');
-  LAYER_IDS.forEach(id=>{
-    if(document.getElementById('lyr-'+id)) return;
+  // bg_image만 고정 레이어
+  if(!document.getElementById('lyr-bg_image')){
     const img=document.createElement('img');
-    img.id='lyr-'+id; img.className='char-layer z-'+id;
+    img.id='lyr-bg_image'; img.className='char-layer z-bg_image';
     img.alt=''; img.draggable=false;
-    img.style.zIndex=calcZIndex(id);
+    img.style.zIndex=1;
     stage.appendChild(img);
-  });
+  }
   if(!document.getElementById('nameTag')){
     const nt=document.createElement('div');
     nt.id='nameTag';nt.className='name-tag';nt.textContent='나의 캐릭터';
@@ -1432,6 +1435,7 @@ function ensureLayers() {
   }
   initStageDrag();
   initHandleDrag();
+  initStagePinch();
 }
 
 function initHandleDrag() {
@@ -1445,8 +1449,8 @@ function initHandleDrag() {
       const el = document.getElementById('lyr-' + selLayer);
       const startW = el.offsetWidth;
       const startX = e.clientX;
-      const {catId, itemId} = layerToCatItem(selLayer);
-      const pos = getPos(catId, itemId);
+      const {posKey} = layerToCatItem(selLayer);
+      const pos = getPos(posKey);
 
       handle.setPointerCapture(e.pointerId);
       handle.onpointermove = ev => {
@@ -1456,8 +1460,8 @@ function initHandleDrag() {
         const newW = Math.max(20, startW + (h.includes('R') ? dx : -dx));
         const newScale = Math.round((newW / baseW) * 100);
         pos.scale = Math.max(10, Math.min(200, newScale));
-        positions[catId+'_'+itemId] = pos;
-        applyLayerLive(selLayer, catId, itemId, pos);
+        positions[posKey] = pos;
+        applyLayerLive(selLayer, pos);
         syncLCSliders(pos);
         updateTransformOverlay();
       };
@@ -1467,13 +1471,12 @@ function initHandleDrag() {
   });
 }
 
-function applyLayer(layerId, src, catId, itemId) {
+function applyLayer(layerId, src, catId, posKey) {
   const el=document.getElementById('lyr-'+layerId); if(!el) return;
   if(!src){el.style.display='none';el.classList.remove('visible');return;}
-  const pos=getPos(catId,itemId);
+  const pos=getPos(posKey);
   const stage=document.getElementById('stage');
   const sw=stage.offsetWidth||290, sh=stage.offsetHeight||440;
-  // 캐릭터 레이어는 스테이지 전체(100%)를 채우도록 기준 설정
   const baseW = catId === 'character' ? sw : sw * 0.8;
   const w=baseW*(pos.scale/100);
   const h=w*1.8;
@@ -1486,8 +1489,10 @@ function applyLayer(layerId, src, catId, itemId) {
   el.onerror=()=>{el.style.display='none';el.classList.remove('visible');};
 }
 
-function getPos(catId,itemId){ return positions[catId+'_'+itemId]||{...DEFAULT_POS}; }
-function setPos(catId,itemId,pos){ positions[catId+'_'+itemId]=pos; savePositionToDB(catId+'_'+itemId, pos); }
+function getPos(posKey){ return positions[posKey]||{...DEFAULT_POS}; }
+function setPos(posKey,pos){ positions[posKey]=pos; savePositionToDB(posKey, pos); }
+// 아이템 기본 포지션 (DB 저장용 키)
+function itemPosKey(catId,itemId){ return catId+'_'+itemId; }
 
 function applyAll() {
   // 배경 이모지
@@ -1495,21 +1500,12 @@ function applyAll() {
   const emo = document.getElementById('stageBgEmoji');
   emo.textContent = bgItem?.bgEmoji || '';
   emo.style.opacity = bgItem?.bgEmoji ? '.07' : '0';
-
   // 배경 이미지
-  applyLayer('bg_image', bgItem?.src||'', 'bg', state.bg);
-
-  // 캐릭터
-  const charItem = assets.character?.find(i=>i.id===state.character);
-  applyLayer('character', charItem?.src||'', 'character', state.character);
-
-  // 효과
-  const effectItem = assets.effect?.find(i=>i.id===state.effect);
-  applyLayer('effect', effectItem?.src||'', 'effect', state.effect);
-
-  // 소품
-  const propItem = assets.prop?.find(i=>i.id===state.prop);
-  applyLayer('prop', propItem?.src||'', 'prop', state.prop);
+  applyLayer('bg_image', bgItem?.src||'', 'bg', 'bg_image');
+  // 멀티 인스턴스 레이어
+  activeInstances.forEach(inst => {
+    applyLayer(inst.uid, inst.src, inst.catId, inst.uid);
+  });
 }
 
 /* ═══════════════════════════════════════
@@ -1519,13 +1515,14 @@ function isMobile(){return window.innerWidth<=620;}
 function initStageDrag() {
   const stage=document.getElementById('stage');
   stage.addEventListener('pointerdown', e=>{
+    if(pinchState) return; // 핀치 제스처 중엔 드래그 무시
     const el=e.target.closest('.char-layer.visible');
-    if(!el){deselectLayer();return;}
+    if(!el) return; // 빈 공간 탭해도 선택 유지 (패널 항상 표시)
     const layerId=el.id.replace('lyr-','');
     selectLayer(layerId);
-    const {catId,itemId}=layerToCatItem(layerId);
-    const pos=getPos(catId,itemId);
-    dragState={layerId,startX:e.clientX,startY:e.clientY,startOX:pos.offsetX,startOY:pos.offsetY};
+    const {posKey}=layerToCatItem(layerId);
+    const pos=getPos(posKey);
+    dragState={layerId,posKey,startX:e.clientX,startY:e.clientY,startOX:pos.offsetX,startOY:pos.offsetY};
     stage.style.touchAction='none'; // 드래그 시작 시에만 스크롤 차단
     stage.setPointerCapture(e.pointerId);
     stage.addEventListener('pointermove',onStageDragMove);
@@ -1536,12 +1533,11 @@ function initStageDrag() {
 function onStageDragMove(e) {
   if(!dragState) return;
   const dx=e.clientX-dragState.startX, dy=e.clientY-dragState.startY;
-  const {catId,itemId}=layerToCatItem(dragState.layerId);
-  const pos=getPos(catId,itemId);
+  const pos=getPos(dragState.posKey);
   pos.offsetX=Math.round(dragState.startOX+dx);
   pos.offsetY=Math.round(dragState.startOY+dy);
-  positions[catId+'_'+itemId]=pos;
-  applyLayerLive(dragState.layerId,catId,itemId,pos);
+  positions[dragState.posKey]=pos;
+  applyLayerLive(dragState.layerId,pos);
   syncLCSliders(pos);
 }
 function onStageDragEnd(e) {
@@ -1551,11 +1547,89 @@ function onStageDragEnd(e) {
   document.getElementById('stage').removeEventListener('pointerup',onStageDragEnd);
   dragState=null;
 }
-function applyLayerLive(layerId,catId,itemId,pos) {
+
+/* ═══════════════════════════════════════
+   드레스업 — 두 손가락 핀치(크기·회전)
+═══════════════════════════════════════ */
+function initStagePinch() {
+  const stage = document.getElementById('stage');
+
+  stage.addEventListener('touchstart', e => {
+    if (e.touches.length < 2) return;
+    if (!selLayer) return;
+    e.preventDefault(); // 브라우저 기본 핀치줌·스크롤 차단
+
+    // 단일 손가락 드래그 중이었다면 취소
+    if (dragState) {
+      stage.removeEventListener('pointermove', onStageDragMove);
+      stage.removeEventListener('pointerup', onStageDragEnd);
+      dragState = null;
+    }
+
+    const {posKey} = layerToCatItem(selLayer);
+    const pos = getPos(posKey);
+    const t1 = e.touches[0], t2 = e.touches[1];
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+
+    pinchState = {
+      posKey,
+      startDist: Math.hypot(dx, dy),
+      startAngle: Math.atan2(dy, dx) * 180 / Math.PI,
+      startScale: pos.scale || 100,
+      startRotate: pos.rotate || 0
+    };
+    stage.style.touchAction = 'none';
+  }, { passive: false });
+
+  stage.addEventListener('touchmove', e => {
+    if (!pinchState) return;
+    if (e.touches.length < 2) return;
+    e.preventDefault();
+
+    const t1 = e.touches[0], t2 = e.touches[1];
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+    // 크기: 두 손가락 간격 비율로 계산
+    const newScale = Math.round(Math.max(10, Math.min(200,
+      pinchState.startScale * (dist / pinchState.startDist)
+    )));
+
+    // 각도: 두 손가락 각도 차이로 계산
+    let dAngle = angle - pinchState.startAngle;
+    while (dAngle >  180) dAngle -= 360;
+    while (dAngle < -180) dAngle += 360;
+    const newRotate = Math.round(pinchState.startRotate + dAngle);
+
+    const pos = getPos(pinchState.posKey);
+    pos.scale = newScale;
+    pos.rotate = newRotate;
+    positions[pinchState.posKey] = pos;
+    applyLayerLive(selLayer, pos);
+    syncLCSliders(pos);
+  }, { passive: false });
+
+  const endPinch = e => {
+    if (!pinchState) return;
+    if (e.touches.length < 2) {
+      document.getElementById('stage').style.touchAction = '';
+      pinchState = null;
+    }
+  };
+  stage.addEventListener('touchend', endPinch);
+  stage.addEventListener('touchcancel', endPinch);
+}
+function applyLayerLive(layerId, pos) {
   const el=document.getElementById('lyr-'+layerId); if(!el||el.style.display==='none') return;
   const stage=document.getElementById('stage');
   const sw=stage.offsetWidth||290;
-  const baseW=sw*0.8, w=baseW*(pos.scale/100), h=w*1.8;
+  // 캐릭터 인스턴스는 sw 기준, 나머지는 sw*0.8
+  const inst = activeInstances.find(i=>i.uid===layerId);
+  const baseW = (inst&&inst.catId==='character') ? sw : sw*0.8;
+  const w=baseW*(pos.scale/100), h=w*1.8;
   el.style.width=w+'px'; el.style.height=h+'px';
   el.style.left=((sw-w)/2+pos.offsetX)+'px';
   el.style.bottom=(-pos.offsetY)+'px';
@@ -1564,8 +1638,10 @@ function applyLayerLive(layerId,catId,itemId,pos) {
   if(typeof updateTransformOverlay === 'function') updateTransformOverlay();
 }
 function layerToCatItem(layerId) {
-  if(layerId==='bg_image') return {catId:'bg', itemId:state.bg};
-  return {catId:layerId, itemId:state[layerId]||'none'};
+  if(layerId==='bg_image') return {catId:'bg', itemId:state.bg, posKey:'bg_image'};
+  const inst = activeInstances.find(i=>i.uid===layerId);
+  if(inst) return {catId:inst.catId, itemId:inst.itemId, posKey:inst.uid};
+  return {catId:'unknown', itemId:'none', posKey:layerId};
 }
 function updateTransformOverlay() {
   if (!selLayer) { document.getElementById('transformOverlay').classList.remove('show'); return; }
@@ -1590,13 +1666,12 @@ function calcZIndex(id) {
   return idx < 0 ? 10 : (idx + 1) * 10;
 }
 function applyAllZIndexes() {
-  LAYER_IDS.forEach(id=>{
+  ['bg_image', ...activeInstances.map(i=>i.uid)].forEach(id=>{
     const el=document.getElementById('lyr-'+id);
     if(el) el.style.zIndex=calcZIndex(id);
   });
 }
 function getVisibleMovable() {
-  // 현재 표시 중인 레이어(bg_image 제외)를 layerOrder 순으로 반환
   return layerOrder.filter(id=>{
     if(id==='bg_image') return false;
     const el=document.getElementById('lyr-'+id);
@@ -1632,15 +1707,27 @@ function setMobileAiBarVisible(show) {
 function selectLayer(layerId) {
   deselectLayer(); selLayer=layerId;
   const el=document.getElementById('lyr-'+layerId); if(el) el.classList.add('selected');
-  const {catId,itemId}=layerToCatItem(layerId);
-  document.getElementById('lcTitle').textContent=layerLabel(layerId)+' 조정';
+  const {posKey}=layerToCatItem(layerId);
+  // 타이틀: 인스턴스 아이템 이름 표시
+  const inst=activeInstances.find(i=>i.uid===layerId);
+  const titleLabel = inst
+    ? (assets[inst.catId]?.find(i=>i.id===inst.itemId)?.label || layerLabel(inst.catId))
+    : layerLabel(layerId);
+  document.getElementById('lcTitle').textContent=titleLabel+' 조정';
   document.getElementById('layerControls').classList.add('show');
-  syncLCSliders(getPos(catId,itemId));
+  syncLCSliders(getPos(posKey));
   updateTransformOverlay();
-  // 레이어 순서 버튼 상태: bg_image는 순서 조정 불필요
+  // 레이어 순서·삭제 버튼
   const orderBtns=document.getElementById('layerControls').querySelector('.lc-order-btns');
-  if(layerId==='bg_image'){orderBtns.style.display='none';}else{orderBtns.style.display='flex';updateOrderButtons();}
-  // 모바일: AI 바 숨기고 레이어 컨트롤 표시
+  const delBtn=document.getElementById('lcBtnDelete');
+  if(layerId==='bg_image'){
+    orderBtns.style.display='none';
+    if(delBtn) delBtn.style.display='none';
+  } else {
+    orderBtns.style.display='flex';
+    if(delBtn) delBtn.style.display='inline-flex';
+    updateOrderButtons();
+  }
   setMobileAiBarVisible(false);
 }
 function deselectLayer() {
@@ -1648,10 +1735,11 @@ function deselectLayer() {
   selLayer=null;
   document.getElementById('layerControls').classList.remove('show');
   updateTransformOverlay();
-  // 모바일: AI 바 복원
   setMobileAiBarVisible(true);
 }
 function layerLabel(id) {
+  const inst=activeInstances.find(i=>i.uid===id);
+  if(inst) return {character:'캐릭터',effect:'효과',prop:'소품'}[inst.catId]||inst.catId;
   return {bg_image:'배경',character:'캐릭터',effect:'효과',prop:'소품'}[id]||id;
 }
 function syncLCSliders(pos) {
@@ -1668,9 +1756,24 @@ function onLcScale(){if(!selLayer)return;const v=+document.getElementById('lcSca
 function onLcX(){if(!selLayer)return;const v=+document.getElementById('lcX').value;document.getElementById('lcXVal').textContent=v;applyLCChange('offsetX',v);}
 function onLcY(){if(!selLayer)return;const v=+document.getElementById('lcY').value;document.getElementById('lcYVal').textContent=v;applyLCChange('offsetY',v);}
 function onLcRotate(){if(!selLayer)return;const v=+document.getElementById('lcRotate').value;document.getElementById('lcRotateVal').textContent=v+'°';applyLCChange('rotate',v);}
-function applyLCChange(field,v){const {catId,itemId}=layerToCatItem(selLayer);const pos=getPos(catId,itemId);pos[field]=v;positions[catId+'_'+itemId]=pos;applyLayerLive(selLayer,catId,itemId,pos);}
-function resetLayerPos(){if(!selLayer)return;const {catId,itemId}=layerToCatItem(selLayer);positions[catId+'_'+itemId]={...DEFAULT_POS};syncLCSliders(DEFAULT_POS);applyLayerLive(selLayer,catId,itemId,DEFAULT_POS);}
-async function saveLayerPos(){if(!selLayer)return;const {catId,itemId}=layerToCatItem(selLayer);if(isAdmin){await savePositionToDB(catId+'_'+itemId, positions[catId+'_'+itemId]||{...DEFAULT_POS});}deselectLayer();applyAll();}
+function applyLCChange(field,v){const {posKey}=layerToCatItem(selLayer);const pos=getPos(posKey);pos[field]=v;positions[posKey]=pos;applyLayerLive(selLayer,pos);}
+function resetLayerPos(){if(!selLayer)return;const {posKey}=layerToCatItem(selLayer);positions[posKey]={...DEFAULT_POS};syncLCSliders(DEFAULT_POS);applyLayerLive(selLayer,DEFAULT_POS);}
+async function saveLayerPos(){if(!selLayer)return;const {catId,itemId,posKey}=layerToCatItem(selLayer);if(isAdmin){const dbKey=itemPosKey(catId,itemId);await savePositionToDB(dbKey,positions[posKey]||{...DEFAULT_POS});positions[dbKey]={...positions[posKey]};}deselectLayer();applyAll();}
+function deleteCurrentLayer(){
+  if(!selLayer||selLayer==='bg_image') return;
+  const idx=activeInstances.findIndex(i=>i.uid===selLayer);
+  if(idx>=0) activeInstances.splice(idx,1);
+  const oi=layerOrder.indexOf(selLayer);
+  if(oi>=0) layerOrder.splice(oi,1);
+  delete positions[selLayer];
+  const el=document.getElementById('lyr-'+selLayer);
+  if(el) el.remove();
+  selLayer=null;
+  document.getElementById('layerControls').classList.remove('show');
+  document.getElementById('transformOverlay').classList.remove('show');
+  setMobileAiBarVisible(true);
+  ['character','effect','prop'].forEach(c=>buildOpts(c));
+}
 
 /* ═══════════════════════════════════════
    드레스업 — 패널 빌드
@@ -1693,10 +1796,14 @@ function buildOpts(catId) {
   const cont=document.getElementById('opts-'+catId); cont.innerHTML='';
   (assets[catId]||[]).forEach(item=>{
     const div=document.createElement('div');
-    div.className='opt-item'+(state[catId]===item.id?' sel':'');
+    // bg는 단일 선택 표시, 나머지는 인스턴스 카운트 표시
+    const cnt = catId==='bg' ? 0 : activeInstances.filter(i=>i.catId===catId&&i.itemId===item.id).length;
+    const isBgSel = catId==='bg' && state.bg===item.id;
+    div.className='opt-item'+(isBgSel?' sel':'')+(cnt>0?' has-inst':'');
     div.onclick=()=>selectItem(catId,item.id,div);
     const ts=item.src?`<img src="${item.src}" alt="${item.label}" onerror="this.style.display='none'">${item.emoji}`:item.emoji;
-    div.innerHTML=`<button class="del-btn" onclick="event.stopPropagation();delItem('${catId}','${item.id}')">✕</button><div class="opt-thumb">${ts}</div><span class="opt-label">${item.label}</span><div class="edit-badge" onclick="event.stopPropagation();openUpload('${catId}','${item.id}',false)">✏️</div>`;
+    const cntBadge=cnt>0?`<span class="inst-badge">${cnt}</span>`:'';
+    div.innerHTML=`<button class="del-btn" onclick="event.stopPropagation();delItem('${catId}','${item.id}')">✕</button><div class="opt-thumb">${ts}${cntBadge}</div><span class="opt-label">${item.label}</span><div class="edit-badge" onclick="event.stopPropagation();openUpload('${catId}','${item.id}',false)">✏️</div>`;
     cont.appendChild(div);
   });
   const add=document.createElement('div');
@@ -1706,17 +1813,51 @@ function buildOpts(catId) {
 }
 function togglePanel(id){const p=document.getElementById('ppanel-'+id);p.classList.toggle('collapsed');p.querySelector('.panel-arrow').textContent=p.classList.contains('collapsed')?'▶':'▼';}
 function selectItem(catId,id,el){
-  state[catId]=id;
-  document.querySelectorAll('#opts-'+catId+' .opt-item').forEach(e=>e.classList.remove('sel'));
-  el.classList.add('sel');
-  applyAll();
+  if(catId==='bg'){
+    // 배경은 단일 교체
+    state.bg=id;
+    document.querySelectorAll('#opts-bg .opt-item').forEach(e=>e.classList.remove('sel'));
+    el.classList.add('sel');
+    applyAll();
+    return;
+  }
+  if(id==='none') return; // '없음' 항목은 무시
+  // 캐릭터·효과·소품: 새 인스턴스 추가
+  const uid='inst_'+(++instanceCounter);
+  const item=assets[catId]?.find(i=>i.id===id);
+  // 기본 포지션 복사 (DB 로드 포지션 or DEFAULT)
+  const defaultPos=positions[itemPosKey(catId,id)]||{...DEFAULT_POS};
+  // 같은 catId의 기존 인스턴스 수만큼 오프셋 → 겹침 방지
+  const sameCount=activeInstances.filter(i=>i.catId===catId).length;
+  const stackOffset=sameCount*30;
+  positions[uid]={...defaultPos,offsetX:(defaultPos.offsetX||0)+stackOffset,offsetY:(defaultPos.offsetY||0)};
+  activeInstances.push({uid,catId,itemId:id,src:item?.src||''});
+  layerOrder.push(uid);
+  // DOM 생성
+  const stage=document.getElementById('stage');
+  const img=document.createElement('img');
+  img.id='lyr-'+uid; img.className='char-layer';
+  img.alt=''; img.draggable=false;
+  stage.appendChild(img);
+  applyAllZIndexes();
+  applyLayer(uid,item?.src||'',catId,uid);
+  buildOpts(catId);
+  selectLayer(uid);
 }
 async function delItem(catId,itemId){
   if(!isAdmin) return;
   const item=assets[catId]?.find(i=>i.id===itemId);
   if(!item||!confirm(`"${item.label}" 삭제할까요?`)) return;
   assets[catId]=assets[catId].filter(i=>i.id!==itemId);
-  if(state[catId]===itemId) state[catId]='none';
+  // 해당 아이템의 활성 인스턴스 모두 제거
+  const toRemove=activeInstances.filter(i=>i.catId===catId&&i.itemId===itemId);
+  toRemove.forEach(i=>{
+    const el=document.getElementById('lyr-'+i.uid);if(el)el.remove();
+    delete positions[i.uid];
+    const oi=layerOrder.indexOf(i.uid);if(oi>=0)layerOrder.splice(oi,1);
+  });
+  activeInstances=activeInstances.filter(i=>!(i.catId===catId&&i.itemId===itemId));
+  if(selLayer&&toRemove.find(i=>i.uid===selLayer)){selLayer=null;document.getElementById('layerControls').classList.remove('show');}
   await deleteItemFromDB(itemId); buildOpts(catId); applyAll();
 }
 
@@ -1741,7 +1882,7 @@ function openUpload(catId,itemId,isNew) {
   }
   document.getElementById('uploadZoneBack').innerHTML=`<div class="upload-hint"><span>💇</span>뒷머리 PNG</div>`;
   const pid=isNew?'new':itemId;
-  const pos=getPos(catId,pid);
+  const pos=getPos(itemPosKey(catId,pid));
   document.getElementById('posScale').value=pos.scale;
   document.getElementById('posX').value=pos.offsetX;
   document.getElementById('posY').value=pos.offsetY;
@@ -1880,7 +2021,7 @@ function exportDressup() {
   const ctx=canvas.getContext('2d');
   ctx.scale(2,2);
   ctx.fillStyle='#FFF8FE'; ctx.fillRect(0,0,W,H);
-  const order=['bg_image','character','prop','effect'];
+  const order=[...layerOrder];
   function drawNext(i){
     if(i>=order.length){
       const name=document.getElementById('nameInput').value||'캐릭터';
@@ -1893,8 +2034,8 @@ function exportDressup() {
     if(el&&el.src&&el.style.display!=='none'){
       const img=new Image(); img.crossOrigin='anonymous';
       img.onload=()=>{
-        const {catId,itemId}=layerToCatItem(layerId);
-        const pos=getPos(catId,itemId);
+        const {catId,posKey}=layerToCatItem(layerId);
+        const pos=getPos(posKey);
         const baseW=catId==='character'?W:W*0.8;
         const w=baseW*(pos.scale/100), h=w*1.8;
         const left=(W-w)/2+pos.offsetX;
@@ -1925,7 +2066,7 @@ function captureDressupThumb(cb) {
   const ctx=canvas.getContext('2d');
   ctx.scale(2, 2);
   ctx.fillStyle='#FFF8FE'; ctx.fillRect(0,0,W,H);
-  const order=['bg_image','character','prop','effect'];
+  const order=[...layerOrder];
   function drawNext(i){
     if(i>=order.length){cb(canvas);return;}
     const layerId=order[i];
@@ -1933,8 +2074,8 @@ function captureDressupThumb(cb) {
     if(el&&el.src&&el.style.display!=='none'){
       const img=new Image(); img.crossOrigin='anonymous';
       img.onload=()=>{
-        const {catId,itemId}=layerToCatItem(layerId);
-        const pos=getPos(catId,itemId);
+        const {catId,posKey}=layerToCatItem(layerId);
+        const pos=getPos(posKey);
         const baseW=catId==='character'?W:W*0.8;
         const w=baseW*(pos.scale/100), h=w*1.8;
         const left=(W-w)/2+pos.offsetX;
@@ -2358,7 +2499,15 @@ document.querySelectorAll('.modal-overlay').forEach(o=>{
    초기화
 ═══════════════════════════════════════ */
 function resetAll(){
-  Object.keys(state).forEach(k=>state[k]='none');
+  state.bg='none';
+  // 모든 인스턴스 DOM 제거
+  activeInstances.forEach(inst=>{
+    const el=document.getElementById('lyr-'+inst.uid);
+    if(el) el.remove();
+  });
+  activeInstances=[];
+  instanceCounter=0;
+  layerOrder=['bg_image'];
   document.getElementById('nameInput').value='';
   document.getElementById('nameTag').textContent='나의 캐릭터';
   document.getElementById('result-dressup').classList.remove('show');
