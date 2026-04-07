@@ -292,16 +292,16 @@ body.admin .add-btn{display:flex}
    모바일 전용 UI (≤620px)
 ══════════════════════════════ */
 @media(max-width:620px){
-  /* 드레스업 패널: 수직 단열 */
-  #panel-dressup{flex-direction:column;align-items:center;padding:10px 10px calc(130px + env(safe-area-inset-bottom));gap:8px}
+  /* 드레스업 패널: 수직 단열 / 하단 시트 높이 + AI바 + safe-area 확보 */
+  #panel-dressup{flex-direction:column;align-items:center;padding:10px 10px calc(220px + env(safe-area-inset-bottom));gap:8px}
 
   /* 캔버스 컬럼: sticky 해제 */
-  .canvas-col{position:static;width:100%;align-items:center}
+  .canvas-col{position:static;width:100%;align-items:center;gap:8px}
   .stage-wrap{width:100%;display:flex;flex-direction:column;align-items:center}
 
-  /* 스테이지: 화면 폭 활용, 비율 유지 */
-  .stage{width:calc(100vw - 20px);max-width:360px;height:auto;aspect-ratio:29/44}
-  .name-input{max-width:360px;width:calc(100vw - 20px)}
+  /* 스테이지: 화면 폭 활용 (큰 폰까지 대응) */
+  .stage{width:min(calc(100vw - 16px),420px);height:auto;aspect-ratio:29/44}
+  .name-input{max-width:420px;width:min(calc(100vw - 16px),420px);padding:11px 14px;font-size:14px}
 
   /* 옵션 컬럼 */
   .options-col{width:100%;min-width:0;max-width:none}
@@ -310,18 +310,20 @@ body.admin .add-btn{display:flex}
   .panel{display:none}
   .panel.mobile-active{display:block}
 
-  /* 아이템 그리드: 3열 + 더 큰 카드 */
-  .opts{grid-template-columns:repeat(3,1fr);gap:8px}
-  .opt-item{min-height:88px;padding:9px 4px}
-  .opt-thumb{width:54px;height:54px;font-size:26px}
+  /* 아이템 그리드: auto-fill 로 큰 폰에서 4열까지 자연스럽게 확장 */
+  .opts{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+  .opt-item{min-height:96px;padding:10px 4px}
+  .opt-thumb{width:58px;height:58px;font-size:28px}
   .opt-label{font-size:11px}
 
   /* AI 섹션: 숨김 (하단 바로 대체) */
   .ai-section{display:none}
   .result-wrap{max-width:none}
 
-  /* 버튼 행: AI 변신 버튼 숨김 (하단 바 대체) */
+  /* 버튼 행: AI 변신 버튼 숨김 (하단 바 대체) — 남은 버튼은 터치 영역 확보 */
+  .canvas-col .btn-row{gap:10px;width:min(calc(100vw - 16px),420px)}
   .canvas-col .btn-row .btn-purple{display:none}
+  .canvas-col .btn-row .btn{flex:1;padding:13px 12px;font-size:13px;min-height:46px}
   .btn{padding:8px 11px;font-size:12px}
 
   /* 그리기 패널 */
@@ -345,19 +347,27 @@ body.admin .add-btn{display:flex}
   /* 브러시 크기 버튼: 터치 영역 확대 */
   .sz-btn{width:42px;height:42px}
 
-  /* 레이어 컨트롤: 모바일에서 하단 fixed 바로 표시 */
+  /* 레이어 컨트롤: 모바일에서 하단 fixed 시트 */
   .layer-controls{
     position:fixed;bottom:0;left:0;right:0;width:auto;
     z-index:450;margin-top:0;
     border-left:none;border-right:none;border-bottom:none;
-    padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    padding:8px 12px calc(8px + env(safe-area-inset-bottom));
     box-shadow:0 -4px 0 var(--c-purple);
   }
-  .layer-controls.show{display:flex;flex-direction:column;gap:4px}
+  .layer-controls.show{display:flex;flex-direction:column;gap:5px}
+  .layer-controls .lc-header{margin-bottom:2px}
+  .layer-controls .lc-title{font-size:11px}
   /* 슬라이더 2열 그리드로 세로 공간 절약 */
-  .lc-sliders-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}
-  .lc-row{margin-bottom:0}
-  .lc-btn{min-height:44px;font-size:13px;padding:10px 14px}
+  .lc-sliders-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px}
+  .lc-row{margin-bottom:0;gap:6px}
+  .lc-label{min-width:28px;font-size:10px}
+  .lc-val{min-width:28px;font-size:10px}
+  /* 순서 버튼 + 액션 버튼을 한 행으로 통합 → 시트 높이 절감 */
+  .lc-order-btns{margin-bottom:0;gap:6px}
+  .lc-btns{margin-top:2px;gap:6px;flex-wrap:wrap}
+  .lc-btn{min-height:42px;font-size:12px;padding:8px 10px;flex:1 1 auto}
+  .lc-btn-order{flex:1 1 calc(50% - 3px)}
   .lc-close-btn{min-width:44px;min-height:44px;font-size:20px;display:flex;align-items:center;justify-content:center}
 }
 
@@ -371,7 +381,7 @@ body.admin .add-btn{display:flex}
   }
   .mobile-cat-tabs::-webkit-scrollbar{display:none}
   .mct-btn{
-    flex-shrink:0;padding:9px 18px;
+    flex-shrink:0;padding:12px 20px;min-height:46px;
     border:2px solid var(--c-purple);
     background:var(--c-card);font-family:var(--f-ui);font-size:13px;font-weight:700;
     cursor:pointer;color:#666;transition:.15s;white-space:nowrap;text-transform:uppercase
@@ -1723,6 +1733,15 @@ function selectLayer(layerId) {
   if(delBtn) delBtn.style.display = (layerId==='bg_image') ? 'none' : 'inline-flex';
   updateOrderButtons();
   setMobileAiBarVisible(false);
+  // 모바일: 하단 시트가 캔버스를 가리지 않도록 스테이지를 화면 상단으로 스크롤
+  if(isMobile()){
+    const stage=document.getElementById('stage');
+    if(stage){
+      const rect=stage.getBoundingClientRect();
+      const targetTop=Math.max(0, window.scrollY + rect.top - 12);
+      window.scrollTo({top:targetTop, behavior:'smooth'});
+    }
+  }
 }
 function deselectLayer() {
   if(selLayer){const el=document.getElementById('lyr-'+selLayer);if(el)el.classList.remove('selected');}
@@ -1978,7 +1997,7 @@ async function saveUpload(){
       const newItem = { id:newId, label, emoji, src:frontUrl, srcBack:backUrl, bgEmoji:'' };
       assets[catId].push(newItem);
       await saveItemToDB(newItem, catId);
-      setPos(catId, newId, pos);
+      setPos(itemPosKey(catId, newId), pos);
 
     } else {
       let frontUrl = assets[catId]?.find(i=>i.id===itemId)?.src || '';
@@ -1990,7 +2009,7 @@ async function saveUpload(){
       const item = assets[catId]?.find(i=>i.id===itemId);
       if(item){ item.src = frontUrl; item.srcBack = backUrl; }
       await saveItemToDB({...item, src:frontUrl, srcBack:backUrl}, catId);
-      setPos(catId, itemId, pos);
+      setPos(itemPosKey(catId, itemId), pos);
     }
 
     buildOpts(catId);
