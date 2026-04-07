@@ -1500,7 +1500,11 @@ function applyAll() {
   const emo = document.getElementById('stageBgEmoji');
   emo.textContent = bgItem?.bgEmoji || '';
   emo.style.opacity = bgItem?.bgEmoji ? '.07' : '0';
-  // 배경 이미지
+  // 배경 이미지 — DB에 저장된 아이템별 포지션을 bg_image 키로 동기화
+  if(state.bg && state.bg!=='none'){
+    const dbKey=itemPosKey('bg',state.bg);
+    if(positions[dbKey]) positions['bg_image']={...positions[dbKey]};
+  }
   applyLayer('bg_image', bgItem?.src||'', 'bg', 'bg_image');
   // 멀티 인스턴스 레이어
   activeInstances.forEach(inst => {
