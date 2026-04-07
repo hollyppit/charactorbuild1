@@ -1948,7 +1948,7 @@ function selectItem(catId,id,el){
   applyAllZIndexes();
   applyLayer(uid,item?.src||'',catId,uid);
   buildOpts(catId);
-  selectLayer(uid);
+  setPreviewLayer(uid);
 }
 async function delItem(catId,itemId){
   if(!isAdmin) return;
