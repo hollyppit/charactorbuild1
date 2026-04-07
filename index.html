@@ -1425,7 +1425,6 @@ function ensureLayers() {
     const img=document.createElement('img');
     img.id='lyr-bg_image'; img.className='char-layer z-bg_image';
     img.alt=''; img.draggable=false;
-    img.style.zIndex=1;
     stage.appendChild(img);
   }
   if(!document.getElementById('nameTag')){
@@ -1483,8 +1482,9 @@ function applyLayer(layerId, src, catId, posKey) {
   const left=(sw-w)/2+pos.offsetX;
   const bottom=-pos.offsetY;
   const rot=pos.rotate||0;
+  const zi=calcZIndex(layerId);
   el.src=src;
-  el.style.cssText=`display:block;width:${w}px;height:${h}px;position:absolute;left:${left}px;bottom:${bottom}px;object-fit:contain;object-position:bottom center;transform:rotate(${rot}deg);transform-origin:center bottom;`;
+  el.style.cssText=`display:block;width:${w}px;height:${h}px;position:absolute;left:${left}px;bottom:${bottom}px;object-fit:contain;object-position:bottom center;transform:rotate(${rot}deg);transform-origin:center bottom;z-index:${zi};`;
   el.classList.add('visible');
   el.onerror=()=>{el.style.display='none';el.classList.remove('visible');};
 }
@@ -1660,8 +1660,6 @@ function updateTransformOverlay() {
 
 /* ── 레이어 z-order 관리 ── */
 function calcZIndex(id) {
-  // bg_image는 항상 1 고정
-  if(id==='bg_image') return 1;
   const idx = layerOrder.indexOf(id);
   return idx < 0 ? 10 : (idx + 1) * 10;
 }
@@ -1679,24 +1677,21 @@ function getVisibleMovable() {
   });
 }
 function moveLayerOrder(dir) {
-  // dir: +1=앞으로, -1=뒤로 (bg_image 제외)
-  if(!selLayer || selLayer==='bg_image') return;
-  // layerOrder 전체 배열에서 이동 (보이지 않는 레이어도 순서 유지)
-  const movable = layerOrder.filter(id=>id!=='bg_image');
-  const idx = movable.indexOf(selLayer);
+  // dir: +1=앞으로, -1=뒤로
+  if(!selLayer) return;
+  const idx = layerOrder.indexOf(selLayer);
   const newIdx = idx + dir;
-  if(newIdx < 0 || newIdx >= movable.length) return;
-  movable.splice(idx,1); movable.splice(newIdx,0,selLayer);
-  layerOrder = ['bg_image', ...movable];
+  if(newIdx < 0 || newIdx >= layerOrder.length) return;
+  layerOrder.splice(idx,1); layerOrder.splice(newIdx,0,selLayer);
   applyAllZIndexes();
+  applyAll();
   updateOrderButtons();
 }
 function updateOrderButtons() {
-  if(!selLayer || selLayer==='bg_image') return;
-  const visible = getVisibleMovable();
-  const idx = visible.indexOf(selLayer);
+  if(!selLayer) return;
+  const idx = layerOrder.indexOf(selLayer);
   document.getElementById('lcBtnBack').disabled  = (idx <= 0);
-  document.getElementById('lcBtnFront').disabled = (idx < 0 || idx >= visible.length-1);
+  document.getElementById('lcBtnFront').disabled = (idx < 0 || idx >= layerOrder.length-1);
 }
 
 function setMobileAiBarVisible(show) {
@@ -1720,14 +1715,9 @@ function selectLayer(layerId) {
   // 레이어 순서·삭제 버튼
   const orderBtns=document.getElementById('layerControls').querySelector('.lc-order-btns');
   const delBtn=document.getElementById('lcBtnDelete');
-  if(layerId==='bg_image'){
-    orderBtns.style.display='none';
-    if(delBtn) delBtn.style.display='none';
-  } else {
-    orderBtns.style.display='flex';
-    if(delBtn) delBtn.style.display='inline-flex';
-    updateOrderButtons();
-  }
+  orderBtns.style.display='flex';
+  if(delBtn) delBtn.style.display = (layerId==='bg_image') ? 'none' : 'inline-flex';
+  updateOrderButtons();
   setMobileAiBarVisible(false);
 }
 function deselectLayer() {
