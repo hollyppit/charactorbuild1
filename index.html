@@ -1195,6 +1195,9 @@ body.admin .add-btn{display:flex}
   </div>
 </div>
 
+<!-- 사용자 배경 업로드용 숨김 input -->
+<input type="file" id="userBgFileInput" accept="image/*" style="display:none" onchange="onUserBgUpload(event)">
+
 <!-- 모바일 하단 고정 AI 바 (620px 이하에서만 표시) -->
 <div class="mobile-ai-bar" id="mobileAiBar">
   <div class="mai-desc-row">
@@ -1624,6 +1627,24 @@ function enterEditFromPreview(){
   clearPreviewLayer();
   selectLayer(id);
 }
+function onUserBgUpload(e){
+  const file=e.target.files&&e.target.files[0];
+  e.target.value='';
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const dataUrl=ev.target.result;
+    if(!assets.bg) assets.bg=[];
+    const id='user_bg';
+    let item=assets.bg.find(i=>i.id===id);
+    if(item){ item.src=dataUrl; }
+    else { item={id,label:'내 배경',emoji:'🖼️',src:dataUrl,bgEmoji:''}; assets.bg.push(item); }
+    state.bg=id;
+    buildOpts('bg');
+    applyAll();
+  };
+  reader.readAsDataURL(file);
+}
 function deletePreviewLayer(){
   if(!previewLayer) return;
   const id=previewLayer;
@@ -1892,7 +1913,10 @@ function buildPanels() {
   CATEGORIES.forEach(cat=>{
     const panel=document.createElement('div');
     panel.className='panel'; panel.id='ppanel-'+cat.id;
-    panel.innerHTML=`<div class="panel-head" onclick="togglePanel('${cat.id}')"><span>${cat.icon}</span><span class="panel-head-title">${cat.label}</span><span class="panel-arrow">▼</span></div><div class="panel-body"><div class="opts" id="opts-${cat.id}"></div></div>`;
+    const userBgBtn = cat.id==='bg'
+      ? `<div style="margin-bottom:8px"><button class="btn btn-blue" style="width:100%;padding:11px" onclick="document.getElementById('userBgFileInput').click()">📁 내 배경 이미지 올리기</button></div>`
+      : '';
+    panel.innerHTML=`<div class="panel-head" onclick="togglePanel('${cat.id}')"><span>${cat.icon}</span><span class="panel-head-title">${cat.label}</span><span class="panel-arrow">▼</span></div><div class="panel-body">${userBgBtn}<div class="opts" id="opts-${cat.id}"></div></div>`;
     col.insertBefore(panel,ai);
     buildOpts(cat.id);
   });
