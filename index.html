@@ -453,19 +453,23 @@ body.admin .add-btn{display:flex}
 }
 .transform-overlay.show { display: block; }
 
-/* 미리보기 → 편집하기 버튼 (스테이지 위 플로팅) */
-.stage-edit-btn{
+/* 미리보기 → 편집/삭제 버튼 (스테이지 위 플로팅) */
+.stage-preview-actions{
   display:none;position:absolute;bottom:10px;left:50%;
   transform:translateX(-50%);
+  z-index:300;gap:6px;align-items:center
+}
+.stage-preview-actions.show{display:inline-flex}
+.spa-btn{
   background:var(--c-yellow);color:var(--c-black);
   font-family:var(--f-display-en);font-size:13px;letter-spacing:.05em;
-  padding:12px 20px;border:var(--border-thin);box-shadow:var(--shadow-solid-sm);
-  cursor:pointer;z-index:300;text-transform:uppercase;
-  align-items:center;gap:8px;white-space:nowrap;min-height:46px
+  padding:12px 18px;border:var(--border-thin);box-shadow:var(--shadow-solid-sm);
+  cursor:pointer;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-height:46px
 }
-.stage-edit-btn.show{display:inline-flex}
-.stage-edit-btn:active{transform:translate(-50%,2px);box-shadow:1px 1px 0 var(--c-black)}
-.stage-edit-btn .seb-label{font-family:var(--f-ui);font-size:11px;font-weight:700;opacity:.75;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.spa-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--c-black)}
+.spa-btn-del{background:#E63946;color:#fff}
+.spa-label{font-family:var(--f-ui);font-size:11px;font-weight:700;opacity:.75;max-width:100px;overflow:hidden;text-overflow:ellipsis}
 .char-layer.preview{outline:3px dashed var(--c-yellow);outline-offset:2px}
 
 .t-handle {
@@ -858,9 +862,12 @@ body.admin .add-btn{display:flex}
     <div class="stage-wrap">
       <div class="stage" id="stage">
         <div class="stage-bg-emoji" id="stageBgEmoji">🌸</div>
-        <button class="stage-edit-btn" id="stageEditBtn" onclick="enterEditFromPreview()">
-          <span>✏️ 편집하기</span><span class="seb-label" id="sebLabel"></span>
-        </button>
+        <div class="stage-preview-actions" id="stagePreviewActions">
+          <button class="spa-btn" onclick="enterEditFromPreview()">
+            <span>✏️ 편집하기</span><span class="spa-label" id="sebLabel"></span>
+          </button>
+          <button class="spa-btn spa-btn-del" id="spaDelBtn" onclick="deletePreviewLayer()">🗑 삭제</button>
+        </div>
         <div class="transform-overlay" id="transformOverlay">
           <div class="t-handle tl" id="handleTL"></div>
           <div class="t-handle tr" id="handleTR"></div>
@@ -1553,7 +1560,7 @@ function initStageDrag() {
   stage.addEventListener('pointerdown', e=>{
     if(pinchState) return; // 핀치 제스처 중엔 드래그 무시
     // 편집하기 버튼 자체 탭은 무시 (버튼 onclick 으로 처리)
-    if(e.target.closest('.stage-edit-btn')) return;
+    if(e.target.closest('.stage-preview-actions')) return;
     const el=e.target.closest('.char-layer.visible');
 
     // 편집 모드: 선택된 레이어만 드래그, 다른 탭 무시
@@ -1587,9 +1594,10 @@ function setPreviewLayer(layerId){
   previewLayer=layerId;
   const el=document.getElementById('lyr-'+layerId);
   if(el) el.classList.add('preview');
-  const btn=document.getElementById('stageEditBtn');
+  const wrap=document.getElementById('stagePreviewActions');
   const lblEl=document.getElementById('sebLabel');
-  if(btn){
+  const delBtn=document.getElementById('spaDelBtn');
+  if(wrap){
     if(lblEl){
       const inst=activeInstances.find(i=>i.uid===layerId);
       const label=inst
@@ -1597,7 +1605,8 @@ function setPreviewLayer(layerId){
         : layerLabel(layerId);
       lblEl.textContent=label?('· '+label):'';
     }
-    btn.classList.add('show');
+    if(delBtn) delBtn.style.display = 'inline-flex';
+    wrap.classList.add('show');
   }
 }
 function clearPreviewLayer(){
@@ -1606,14 +1615,27 @@ function clearPreviewLayer(){
     if(prev) prev.classList.remove('preview');
   }
   previewLayer=null;
-  const btn=document.getElementById('stageEditBtn');
-  if(btn) btn.classList.remove('show');
+  const wrap=document.getElementById('stagePreviewActions');
+  if(wrap) wrap.classList.remove('show');
 }
 function enterEditFromPreview(){
   if(!previewLayer) return;
   const id=previewLayer;
   clearPreviewLayer();
   selectLayer(id);
+}
+function deletePreviewLayer(){
+  if(!previewLayer) return;
+  const id=previewLayer;
+  clearPreviewLayer();
+  if(id==='bg_image'){
+    state.bg='none';
+    applyAll();
+    document.querySelectorAll('#opts-bg .opt-item').forEach(e=>e.classList.remove('sel'));
+    return;
+  }
+  selLayer=id;
+  deleteCurrentLayer();
 }
 function onStageDragMove(e) {
   if(!dragState) return;
