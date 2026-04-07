@@ -453,6 +453,21 @@ body.admin .add-btn{display:flex}
 }
 .transform-overlay.show { display: block; }
 
+/* 미리보기 → 편집하기 버튼 (스테이지 위 플로팅) */
+.stage-edit-btn{
+  display:none;position:absolute;bottom:10px;left:50%;
+  transform:translateX(-50%);
+  background:var(--c-yellow);color:var(--c-black);
+  font-family:var(--f-display-en);font-size:13px;letter-spacing:.05em;
+  padding:12px 20px;border:var(--border-thin);box-shadow:var(--shadow-solid-sm);
+  cursor:pointer;z-index:300;text-transform:uppercase;
+  align-items:center;gap:8px;white-space:nowrap;min-height:46px
+}
+.stage-edit-btn.show{display:inline-flex}
+.stage-edit-btn:active{transform:translate(-50%,2px);box-shadow:1px 1px 0 var(--c-black)}
+.stage-edit-btn .seb-label{font-family:var(--f-ui);font-size:11px;font-weight:700;opacity:.75;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.char-layer.preview{outline:3px dashed var(--c-yellow);outline-offset:2px}
+
 .t-handle {
   position: absolute;
   width: 14px;
@@ -843,6 +858,9 @@ body.admin .add-btn{display:flex}
     <div class="stage-wrap">
       <div class="stage" id="stage">
         <div class="stage-bg-emoji" id="stageBgEmoji">🌸</div>
+        <button class="stage-edit-btn" id="stageEditBtn" onclick="enterEditFromPreview()">
+          <span>✏️ 편집하기</span><span class="seb-label" id="sebLabel"></span>
+        </button>
         <div class="transform-overlay" id="transformOverlay">
           <div class="t-handle tl" id="handleTL"></div>
           <div class="t-handle tr" id="handleTR"></div>
@@ -1534,19 +1552,68 @@ function initStageDrag() {
   const stage=document.getElementById('stage');
   stage.addEventListener('pointerdown', e=>{
     if(pinchState) return; // 핀치 제스처 중엔 드래그 무시
+    // 편집하기 버튼 자체 탭은 무시 (버튼 onclick 으로 처리)
+    if(e.target.closest('.stage-edit-btn')) return;
     const el=e.target.closest('.char-layer.visible');
-    if(!el) return; // 빈 공간 탭해도 선택 유지 (패널 항상 표시)
+
+    // 편집 모드: 선택된 레이어만 드래그, 다른 탭 무시
+    if(selLayer){
+      if(!el || el.id !== 'lyr-'+selLayer) return;
+      const layerId=selLayer;
+      const {posKey}=layerToCatItem(layerId);
+      const pos=getPos(posKey);
+      dragState={layerId,posKey,startX:e.clientX,startY:e.clientY,startOX:pos.offsetX,startOY:pos.offsetY};
+      stage.style.touchAction='none';
+      stage.setPointerCapture(e.pointerId);
+      stage.addEventListener('pointermove',onStageDragMove);
+      stage.addEventListener('pointerup',onStageDragEnd);
+      e.preventDefault();
+      return;
+    }
+
+    // 미리보기 모드: 탭하면 하이라이트 + 편집 버튼만 표시
+    if(!el){ clearPreviewLayer(); return; }
     const layerId=el.id.replace('lyr-','');
-    selectLayer(layerId);
-    const {posKey}=layerToCatItem(layerId);
-    const pos=getPos(posKey);
-    dragState={layerId,posKey,startX:e.clientX,startY:e.clientY,startOX:pos.offsetX,startOY:pos.offsetY};
-    stage.style.touchAction='none'; // 드래그 시작 시에만 스크롤 차단
-    stage.setPointerCapture(e.pointerId);
-    stage.addEventListener('pointermove',onStageDragMove);
-    stage.addEventListener('pointerup',onStageDragEnd);
-    e.preventDefault();
+    setPreviewLayer(layerId);
   });
+}
+
+let previewLayer=null;
+function setPreviewLayer(layerId){
+  if(previewLayer && previewLayer!==layerId){
+    const prev=document.getElementById('lyr-'+previewLayer);
+    if(prev) prev.classList.remove('preview');
+  }
+  previewLayer=layerId;
+  const el=document.getElementById('lyr-'+layerId);
+  if(el) el.classList.add('preview');
+  const btn=document.getElementById('stageEditBtn');
+  const lblEl=document.getElementById('sebLabel');
+  if(btn){
+    if(lblEl){
+      const inst=activeInstances.find(i=>i.uid===layerId);
+      const label=inst
+        ? (assets[inst.catId]?.find(i=>i.id===inst.itemId)?.label||layerLabel(inst.catId))
+        : layerLabel(layerId);
+      lblEl.textContent=label?('· '+label):'';
+    }
+    btn.classList.add('show');
+  }
+}
+function clearPreviewLayer(){
+  if(previewLayer){
+    const prev=document.getElementById('lyr-'+previewLayer);
+    if(prev) prev.classList.remove('preview');
+  }
+  previewLayer=null;
+  const btn=document.getElementById('stageEditBtn');
+  if(btn) btn.classList.remove('show');
+}
+function enterEditFromPreview(){
+  if(!previewLayer) return;
+  const id=previewLayer;
+  clearPreviewLayer();
+  selectLayer(id);
 }
 function onStageDragMove(e) {
   if(!dragState) return;
@@ -1718,7 +1785,7 @@ function setMobileAiBarVisible(show) {
   if(bar) bar.style.transform=show?'':'translateY(100%)';
 }
 function selectLayer(layerId) {
-  deselectLayer(); selLayer=layerId;
+  deselectLayer(); clearPreviewLayer(); selLayer=layerId;
   const el=document.getElementById('lyr-'+layerId); if(el) el.classList.add('selected');
   const {posKey}=layerToCatItem(layerId);
   // 타이틀: 인스턴스 아이템 이름 표시
