@@ -1421,7 +1421,11 @@ function switchMode(mode, btn) {
   if(mode==='storyboard') setTimeout(initSBCanvas, 50);
   // 모바일 하단 바: 스토리보드는 자체 버튼 사용
   const mobileBar = document.getElementById('mobileAiBar');
-  if(mobileBar) mobileBar.style.display = mode==='storyboard' ? 'none' : '';
+  if(mobileBar){
+    mobileBar.style.display = mode==='storyboard' ? 'none' : '';
+    // 다른 모드 진입 시 드레스업 레이어 선택 상태로 숨겨졌던 transform 초기화
+    mobileBar.style.transform = '';
+  }
   if(mode!=='storyboard') syncMobileStyleBtns(aiStyle[mode]);
 }
 
