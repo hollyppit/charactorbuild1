@@ -1385,7 +1385,7 @@ let selLayer = null, dragState = null, pinchState = null;
 
 // 그림판
 let drawTool = 'pen', brushSize = 8, painting = false, lastX=0, lastY=0;
-let drawHistory = [], MAX_HIST = 20;
+let drawHistory = [], drawRedo = [], MAX_HIST = 20;
 
 /* ═══════════════════════════════════════
    localStorage
@@ -2357,26 +2357,38 @@ function setPalColor(c,el){
   document.querySelectorAll('#panel-draw .pal-dot').forEach(d=>d.classList.remove('active'));
   el.classList.add('active');
 }
-// Ctrl+Z / Cmd+Z — 활성 패널에 따라 undo
+// Ctrl+Z / Cmd+Z — undo, Ctrl+Shift+Z — redo
 document.addEventListener('keydown', e=>{
-  if(!(e.ctrlKey||e.metaKey) || e.key!=='z' && e.key!=='Z') return;
+  if(!(e.ctrlKey||e.metaKey) || (e.key!=='z' && e.key!=='Z')) return;
   const tag=(e.target.tagName||'').toLowerCase();
   if(tag==='input'||tag==='textarea'||e.target.isContentEditable) return;
   const active=document.querySelector('.mode-panel.active');
   if(!active) return;
-  if(active.id==='panel-draw'){ e.preventDefault(); undoDraw(); }
-  else if(active.id==='panel-storyboard'){ e.preventDefault(); undoSB(); }
+  const isRedo = e.shiftKey;
+  if(active.id==='panel-draw'){ e.preventDefault(); isRedo ? redoDraw() : undoDraw(); }
+  else if(active.id==='panel-storyboard'){ e.preventDefault(); isRedo ? redoSB() : undoSB(); }
 });
 
 function saveDrawHistory(){
   const canvas=document.getElementById('drawCanvas');
   drawHistory.push(canvas.toDataURL());
   if(drawHistory.length>MAX_HIST) drawHistory.shift();
+  drawRedo = [];
 }
 function undoDraw(){
   if(!drawHistory.length) return;
   const canvas=document.getElementById('drawCanvas');
+  drawRedo.push(canvas.toDataURL());
+  if(drawRedo.length>MAX_HIST) drawRedo.shift();
   const img=new Image(); img.src=drawHistory.pop();
+  img.onload=()=>{drawCtx.clearRect(0,0,canvas.width,canvas.height);drawCtx.drawImage(img,0,0);};
+}
+function redoDraw(){
+  if(!drawRedo.length) return;
+  const canvas=document.getElementById('drawCanvas');
+  drawHistory.push(canvas.toDataURL());
+  if(drawHistory.length>MAX_HIST) drawHistory.shift();
+  const img=new Image(); img.src=drawRedo.pop();
   img.onload=()=>{drawCtx.clearRect(0,0,canvas.width,canvas.height);drawCtx.drawImage(img,0,0);};
 }
 function clearDraw(){
@@ -2735,7 +2747,7 @@ init();
 /* ═══════════════════════════════════════
    🎬 스토리보드
 ═══════════════════════════════════════ */
-let sbCtx, sbPainting = false, sbHistory = [], sbTool = 'pen', sbBrushSize = 3, sbColor = '#1A1A2E';
+let sbCtx, sbPainting = false, sbHistory = [], sbRedo = [], sbTool = 'pen', sbBrushSize = 3, sbColor = '#1A1A2E';
 let sbCharPhotoB64 = null, sbGenre = 'action';
 
 /* ── 재생성용 마지막 AI 호출 상태 ── */
@@ -2784,6 +2796,7 @@ function sbStartPaint(e) {
   sbPainting = true;
   sbHistory.push(document.getElementById('sbCanvas').toDataURL());
   if (sbHistory.length > 30) sbHistory.shift();
+  sbRedo = [];
   const {x, y} = sbGetPos(e);
   if (sbTool === 'fill') {
     sbFloodFill(sbCtx, Math.round(x), Math.round(y), sbColor);
@@ -2841,13 +2854,27 @@ function setSBColor(hex, dot) {
 
 function undoSB() {
   if (!sbHistory.length) return;
+  const c = document.getElementById('sbCanvas');
+  sbRedo.push(c.toDataURL());
+  if (sbRedo.length > 30) sbRedo.shift();
   const img = new Image();
   img.onload = () => {
-    const c = document.getElementById('sbCanvas');
     sbCtx.clearRect(0,0,c.width,c.height);
     sbCtx.drawImage(img,0,0);
   };
   img.src = sbHistory.pop();
+}
+function redoSB() {
+  if (!sbRedo.length) return;
+  const c = document.getElementById('sbCanvas');
+  sbHistory.push(c.toDataURL());
+  if (sbHistory.length > 30) sbHistory.shift();
+  const img = new Image();
+  img.onload = () => {
+    sbCtx.clearRect(0,0,c.width,c.height);
+    sbCtx.drawImage(img,0,0);
+  };
+  img.src = sbRedo.pop();
 }
 
 function clearSB() {
