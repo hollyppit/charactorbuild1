@@ -2521,6 +2521,7 @@ async function doAI(mode) {
 
     clearInterval(iv);
     loading.classList.remove('show');
+    _regenResultB64 = data.image; // 재생성 베이스: 완성된 AI 결과
     showAIResult(mode, style, data.image);
 
   } catch (e) {
@@ -2688,7 +2689,7 @@ let sbCtx, sbPainting = false, sbHistory = [], sbTool = 'pen', sbBrushSize = 3, 
 let sbCharPhotoB64 = null, sbGenre = 'action';
 
 /* ── 재생성용 마지막 AI 호출 상태 ── */
-let _regenMode = null, _regenStyle = null, _regenImageB64 = null;
+let _regenMode = null, _regenStyle = null, _regenImageB64 = null, _regenResultB64 = null;
 let _regenSBGenre = null, _regenSBSketchB64 = null, _regenSBCharPhotoB64 = null, _regenSBSceneDesc = null;
 
 function initSBCanvas() {
@@ -2998,7 +2999,8 @@ async function regenAI() {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           type: 'upscale',
-          image: _regenImageB64,
+          regen: true,
+          image: _regenResultB64 || _regenImageB64,
           style: _regenStyle,
           mode: _regenMode,
           userPrompt: sanitizeUserPrompt(feedback)
@@ -3007,6 +3009,7 @@ async function regenAI() {
       const data = await res.json();
       if (!res.ok || !data.image) throw new Error(data.error || '이미지 생성 실패');
       clearInterval(iv); loading.classList.remove('show');
+      _regenResultB64 = data.image; // 다음 재생성을 위해 갱신
       showAIResult(_regenMode, _regenStyle, data.image);
     }
   } catch(e) {

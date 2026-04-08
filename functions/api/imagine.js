@@ -8,7 +8,7 @@ export async function onRequest(context) {
   if (context.request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { image, style, mode, userPrompt: rawPrompt } = await context.request.json();
+    const { image, style, mode, userPrompt: rawPrompt, regen } = await context.request.json();
     const GEMINI_KEY = context.env.GEMINI_KEY;
     const ANTHROPIC_KEY = context.env.ANTHROPIC_API_KEY;
     const base64 = image.includes(',') ? image.split(',')[1] : image;
@@ -38,8 +38,27 @@ export async function onRequest(context) {
     })();
 
     let finalPrompt = '';
+    let useImageInput = true; // Gemini 호출 시 원본 이미지 첨부 여부
 
-    if (mode === 'dressup') {
+    if (regen) {
+      // 재생성 모드: 이미 완성된 AI 결과 이미지를 부분 편집
+      const instruction = userPrompt || 'improve the image slightly';
+      finalPrompt = `You are editing an already-finished illustration. Follow this user instruction and change ONLY what it asks to change:
+
+USER INSTRUCTION: "${instruction}"
+
+STRICT RULES:
+- Keep the character 100% identical: same face, same hairstyle, same hair color, same eyes, same outfit, same pose, same body proportions.
+- Keep the exact same art style, rendering, color palette, and lighting as the reference image.
+- Only modify the specific element the user mentioned (e.g. if they say "change the background to a forest", ONLY change the background; leave the character untouched).
+- If the instruction is ambiguous, make the smallest possible change.
+- Do NOT redraw the whole image. This is a targeted edit, not a regeneration.
+- Output must look like the same artwork with just the requested tweak.
+
+Safe for all ages, no violence, no sexual content.`;
+      useImageInput = true; // 결과 이미지를 편집 베이스로 사용
+    } else if (mode === 'dressup') {
+      useImageInput = false; // 분석 결과로 텍스트만 보내 스타일 변환 일관성 확보
       let sceneDesc = 'a cute character in a scenic environment';
 
       const userContextNote = userPrompt
@@ -200,7 +219,8 @@ Transform this image into a hyper-realistic cinematic photograph. Use the refere
 
 Repaint this image as a museum-quality oil painting masterpiece. Use the reference image for subject and composition only — render the final result entirely as an oil painting. Van Gogh impasto brushstrokes, rich textured paint layers, emotional color palette, visible canvas texture. Fine art gallery quality.${userDescLine}`,
       };
-      finalPrompt = styleMap[style] || styleMap.cartoon;
+      const hardRule = `ABSOLUTE RULE: You MUST generate a completely NEW image from scratch. Do NOT return, copy, preserve, or lightly edit the reference image. The reference is ONLY for understanding subject and composition — the final image must be 100% re-rendered in the target style below. If you output anything resembling the original rendering, the task has FAILED.\n\n`;
+      finalPrompt = hardRule + (styleMap[style] || styleMap.cartoon);
 
       const safetyLine = "Full body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
       finalPrompt += `\n\n${safetyLine}`;
@@ -218,10 +238,14 @@ Repaint this image as a museum-quality oil painting masterpiece. Use the referen
       try {
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
 
-        const parts = [
-          { inlineData: { mimeType: 'image/png', data: base64 } },
-          { text: finalPrompt }
-        ];
+        const parts = useImageInput
+          ? [
+              { inlineData: { mimeType: 'image/png', data: base64 } },
+              { text: finalPrompt }
+            ]
+          : [
+              { text: finalPrompt }
+            ];
 
         const res = await fetch(endpoint, {
           method: 'POST',
