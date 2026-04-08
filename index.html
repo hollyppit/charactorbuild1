@@ -1256,6 +1256,55 @@ body.admin .add-btn{display:flex}
 /* ═══════════════════════════════════════
    상수 & 설정
 ═══════════════════════════════════════ */
+/* ───── 모바일 친화 이미지 저장 헬퍼 ─────
+   iOS Safari는 a.download을 무시하기 때문에
+   ① navigator.share(files)로 네이티브 공유 시트 호출 → '이미지 저장' 선택
+   ② 지원 안 하면 새 창에 이미지를 띄워 길게 눌러 저장 */
+async function saveImageUniversal(source, filename){
+  let blob;
+  try{
+    if(source instanceof Blob){ blob = source; }
+    else if(typeof source === 'string' && source.startsWith('data:')){
+      const res = await fetch(source); blob = await res.blob();
+    } else {
+      const res = await fetch(source); blob = await res.blob();
+    }
+  }catch(e){ console.error('blob 생성 실패', e); }
+
+  // ① Web Share API (파일 포함) — 모바일에서 가장 잘 동작
+  try{
+    if(blob && navigator.canShare){
+      const file = new File([blob], filename, {type: blob.type || 'image/png'});
+      if(navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title: filename});
+        return true;
+      }
+    }
+  }catch(e){
+    if(e && e.name === 'AbortError') return false; // 사용자가 취소
+    console.warn('share 실패, 폴백 시도', e);
+  }
+
+  // ② 데스크톱 / 안드로이드 크롬 — a.download
+  try{
+    const url = blob ? URL.createObjectURL(blob) : source;
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    if(blob) setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    // iOS Safari에선 download이 무시되므로 한 번 더 새 창 폴백
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if(isIOS){
+      const w = window.open(); if(w){ w.document.write(`<img src="${blob?URL.createObjectURL(blob):source}" style="max-width:100%"><p style="font-family:sans-serif;text-align:center">이미지를 길게 눌러 저장해 주세요</p>`); }
+    }
+    return true;
+  }catch(e){
+    console.error('저장 폴백 실패', e);
+    try{ window.open(typeof source==='string'?source:URL.createObjectURL(blob), '_blank'); }catch(_){}
+    return false;
+  }
+}
+
 const SUPABASE_URL = 'https://vhhfaeyhlubvhezyagwd.supabase.co';
 const SUPABASE_STORAGE = `${SUPABASE_URL}/storage/v1/object/public/char-assets`;
 const ADMIN_PW    = 'admin1234';
@@ -2155,8 +2204,7 @@ function exportDressup() {
   function drawNext(i){
     if(i>=order.length){
       const name=document.getElementById('nameInput').value||'캐릭터';
-      const a=document.createElement('a');
-      a.download=name+'.png'; a.href=canvas.toDataURL('image/png'); a.click();
+      canvas.toBlob(b=>saveImageUniversal(b, name+'.png'), 'image/png');
       return;
     }
     const layerId=order[i];
@@ -2327,7 +2375,7 @@ function clearDraw(){
 }
 function saveDrawing(){
   const canvas=document.getElementById('drawCanvas');
-  const a=document.createElement('a'); a.download='내그림.png'; a.href=canvas.toDataURL('image/png'); a.click();
+  canvas.toBlob(b=>saveImageUniversal(b,'내그림.png'),'image/png');
 }
 
 /* 채우기 (flood fill) */
@@ -2568,16 +2616,7 @@ function showAIResult(mode, style, imageUrl) {
     saveBtn.disabled = true;
     saveBtn.textContent = '⌛ 저장 중...';
     try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `StudioBold_AI_${styleLabel}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+      await saveImageUniversal(imageUrl, `StudioBold_AI_${styleLabel}.png`);
       saveBtn.textContent = '✅ 저장 완료!';
     } catch (e) {
       console.error('Download failed:', e);
@@ -2810,10 +2849,7 @@ function clearSB() {
 
 function saveSBSketch() {
   const c = document.getElementById('sbCanvas');
-  const a = document.createElement('a');
-  a.href = c.toDataURL('image/png');
-  a.download = 'StudioBold_Storyboard.png';
-  a.click();
+  c.toBlob(b=>saveImageUniversal(b,'StudioBold_Storyboard.png'),'image/png');
 }
 
 function sbFloodFill(ctx, x, y, hex) {
@@ -2936,14 +2972,7 @@ function showSBResult(imageUrl) {
     saveBtn.disabled = true;
     saveBtn.textContent = '⌛ 저장 중...';
     try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `StudioBold_Movie_${sbGenre}.png`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(()=>URL.revokeObjectURL(blobUrl), 100);
+      await saveImageUniversal(imageUrl, `StudioBold_Movie_${sbGenre}.png`);
       saveBtn.textContent = '✅ 저장 완료!';
     } catch(e) {
       window.open(imageUrl, '_blank');
