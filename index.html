@@ -2357,6 +2357,17 @@ function setPalColor(c,el){
   document.querySelectorAll('#panel-draw .pal-dot').forEach(d=>d.classList.remove('active'));
   el.classList.add('active');
 }
+// Ctrl+Z / Cmd+Z — 활성 패널에 따라 undo
+document.addEventListener('keydown', e=>{
+  if(!(e.ctrlKey||e.metaKey) || e.key!=='z' && e.key!=='Z') return;
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||e.target.isContentEditable) return;
+  const active=document.querySelector('.mode-panel.active');
+  if(!active) return;
+  if(active.id==='panel-draw'){ e.preventDefault(); undoDraw(); }
+  else if(active.id==='panel-storyboard'){ e.preventDefault(); undoSB(); }
+});
+
 function saveDrawHistory(){
   const canvas=document.getElementById('drawCanvas');
   drawHistory.push(canvas.toDataURL());
