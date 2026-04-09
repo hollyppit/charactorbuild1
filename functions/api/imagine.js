@@ -198,32 +198,72 @@ Required art style: Impressionist master painting. Bold visible brushstrokes lik
       finalPrompt += safetyLine;
 
     } else {
+      // 직접 그리기 모드: 낙서/스케치의 형태를 최대한 보존한 채 퀄리티만 업
+      useImageInput = true;
+
+      // ── 1단계: 비전으로 "뭘 그린 건지" 해석 ──
+      let sketchInterpretation = 'a hand-drawn sketch';
+      const userHint = userPrompt ? `\n\nThe person who drew this says: "${userPrompt}". Use this as a strong hint.` : '';
+      const INTERPRET_PROMPT = `This is a rough hand-drawn sketch (could be by a child or amateur). Your job is to figure out what the artist intended to draw.
+
+Describe in plain English:
+1. What subject/object is depicted (character, animal, scene, etc.)
+2. Rough pose / layout / composition (where things are placed, what direction they face)
+3. Any identifying features (colors used, notable shapes)
+
+Be generous in interpretation — even crude stick figures count. Do NOT describe it as "a drawing" or "a sketch"; describe WHAT the drawing is OF. Max 120 words.${userHint}`;
+
+      try {
+        const OPENAI_KEY = context.env.OPENAI_API_KEY;
+        const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            max_tokens: 300,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}`, detail: 'low' } },
+                { type: 'text', text: INTERPRET_PROMPT }
+              ]
+            }]
+          })
+        });
+        if (oaiRes.ok) {
+          const d = await oaiRes.json();
+          const r = d.choices?.[0]?.message?.content || '';
+          if (r.length > 10) sketchInterpretation = r;
+        }
+      } catch(e) { console.warn('스케치 해석 실패', e.message); }
+
       const userDescLine = userPrompt
-        ? `\n\nUSER CUSTOMIZATION (HIGHEST PRIORITY): "${userPrompt}". Apply this to the character — change the outfit, clothing, setting, or appearance as described. This overrides the original character's clothing and accessories.`
+        ? `\n\nUSER NOTE: "${userPrompt}". Honor this description.`
         : '';
 
       const styleMap = {
-        cartoon: `STYLE: ANIME / MANGA ILLUSTRATION ONLY. Do NOT use realistic photography, 3D CGI, or painted brushstroke style.
-
-Completely redraw this image as a high-quality anime illustration. Use the reference image for subject and composition only — render the final result entirely in Japanese anime / Studio Ghibli style. Large expressive eyes, vibrant cel-shading, clean crisp line art, colorful anime background, high detail digital art.${userDescLine}`,
-
-        '3d': `STYLE: PIXAR 3D CGI RENDER ONLY. Do NOT use anime illustration, realistic photography, or painted brushstroke style.
-
-Completely recreate this image as a Pixar-style 3D CGI render. Use the reference image for subject and composition only — render the final result entirely in Pixar / Illumination CGI movie quality. Subsurface scattering, volumetric cinematic lighting, ray-traced shadows, smooth polished 3D surfaces.${userDescLine}`,
-
-        realistic: `CRITICAL: Generate a 100% PHOTOREALISTIC PHOTOGRAPH. The reference image is a stylized illustration — completely IGNORE its art style. Do NOT reproduce any illustrated, anime, cartoon, or drawn elements. The output must look like a real photograph taken with a camera.
-
-Transform this image into a hyper-realistic cinematic photograph. Use the reference image for subject and composition only — render everything as real photographic imagery. Real human skin, natural eyes (NOT anime-style), cinematic lighting, bokeh background, film grain, 8K detail. Shot on professional cinema camera.${userDescLine}`,
-
-        painting: `STYLE: OIL PAINTING / FINE ART ONLY. Do NOT use anime illustration, 3D CGI render, or realistic photography style.
-
-Repaint this image as a museum-quality oil painting masterpiece. Use the reference image for subject and composition only — render the final result entirely as an oil painting. Van Gogh impasto brushstrokes, rich textured paint layers, emotional color palette, visible canvas texture. Fine art gallery quality.${userDescLine}`,
+        cartoon: `STYLE: ANIME / MANGA ILLUSTRATION. High-quality Japanese anime, large expressive eyes, cel-shading, clean line art, vibrant colors.`,
+        '3d':     `STYLE: PIXAR 3D CGI RENDER. Smooth polished 3D surfaces, subsurface scattering, volumetric cinematic lighting, ray-traced shadows.`,
+        realistic:`STYLE: PHOTOREALISTIC PHOTOGRAPH. Real human skin, natural lighting, cinematic depth of field, shot on professional camera, 8K detail.`,
+        painting: `STYLE: WATERCOLOR PAINTING. Soft watercolor washes, gentle pigment bleeds, delicate paper texture, artistic brushwork.`,
       };
-      const hardRule = `ABSOLUTE RULE: You MUST generate a completely NEW image from scratch. Do NOT return, copy, preserve, or lightly edit the reference image. The reference is ONLY for understanding subject and composition — the final image must be 100% re-rendered in the target style below. If you output anything resembling the original rendering, the task has FAILED.\n\n`;
-      finalPrompt = hardRule + (styleMap[style] || styleMap.cartoon);
 
-      const safetyLine = "IMPORTANT: Output in vertical portrait orientation (9:16 aspect ratio, mobile phone optimized). Full body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
-      finalPrompt += `\n\n${safetyLine}`;
+      finalPrompt = `You are upgrading a rough hand-drawn sketch into a polished illustration. The reference image is a crude drawing — your job is to REDRAW IT in high quality while KEEPING THE ORIGINAL FORM AND LAYOUT.
+
+WHAT THE SKETCH DEPICTS (interpretation):
+${sketchInterpretation}
+
+${styleMap[style] || styleMap.cartoon}
+
+STRICT RULES (VERY IMPORTANT):
+- PRESERVE the exact composition, pose, and placement of every element from the sketch. If the character is on the left facing right, keep it on the left facing right. If the sun is in the top corner, keep it in the top corner.
+- PRESERVE the overall shapes, proportions, and silhouette the artist drew. A round head stays round; a tall body stays tall.
+- PRESERVE the color choices the artist used wherever possible (e.g. if the shirt is drawn red, keep it red).
+- Do NOT add new major elements that were not in the sketch. Do NOT remove elements that were drawn.
+- ONLY upgrade: line quality, shading, lighting, texture, detail, and overall polish.
+- Think of this as "what the artist WOULD have drawn if they had professional skill" — same scene, same intent, just rendered beautifully.${userDescLine}
+
+IMPORTANT: Output in vertical portrait orientation (9:16 aspect ratio, mobile phone optimized). Safe for all ages, no violence, no sexual content, child-friendly illustration.`;
     }
 
     const models = [
