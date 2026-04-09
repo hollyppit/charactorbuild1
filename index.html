@@ -1241,7 +1241,6 @@ body.admin .add-btn{display:flex}
       <div class="res-action-btns">
         <button class="btn btn-purple" id="regenBtn" onclick="regenAI()">🔄 재생성</button>
         <button class="btn btn-green" id="aiResultSaveBtn">💾 내 갤러리에 저장하기</button>
-        <button class="btn btn-blue" id="aiResultShareBtn">📤 문자/공유하기</button>
       </div>
       <div style="font-size:11px; color:var(--muted); text-align:center;">* 저장이 안 될 경우 이미지를 길게 눌러 직접 저장해 주세요.</div>
     </div>
@@ -1257,50 +1256,7 @@ body.admin .add-btn{display:flex}
 /* ═══════════════════════════════════════
    상수 & 설정
 ═══════════════════════════════════════ */
-/* ───── 모바일 친화 이미지 저장 헬퍼 ─────
-   iOS Safari는 a.download을 무시하기 때문에
-   ① navigator.share(files)로 네이티브 공유 시트 호출 → '이미지 저장' 선택
-   ② 지원 안 하면 새 창에 이미지를 띄워 길게 눌러 저장 */
-async function shareImageUniversal(source, filename){
-  let blob;
-  try{
-    if(source instanceof Blob){ blob = source; }
-    else { const res = await fetch(source); blob = await res.blob(); }
-  }catch(e){ console.error('blob 생성 실패', e); }
-
-  // 모바일: Web Share API로 파일 공유 → 사용자가 메시지/카톡/메일 등 선택
-  try{
-    if(blob && navigator.canShare){
-      const file = new File([blob], filename, {type: blob.type || 'image/png'});
-      if(navigator.canShare({files:[file]})){
-        await navigator.share({
-          files:[file],
-          title: filename,
-          text: '스튜디오 볼드에서 만든 그림이에요 🎨'
-        });
-        return true;
-      }
-    }
-  }catch(e){
-    if(e && e.name === 'AbortError') return false;
-    console.warn('share 실패, 폴백', e);
-  }
-
-  // 데스크톱 폴백: 이미지 다운로드 + 안내
-  try{
-    const url = blob ? URL.createObjectURL(blob) : source;
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    if(blob) setTimeout(()=>URL.revokeObjectURL(url), 1000);
-    alert('데스크톱 브라우저에서는 문자 직접 전송이 지원되지 않아요.\n이미지를 다운로드했으니 모바일로 옮겨 보내거나, 휴대폰에서 이 페이지를 열어 다시 시도해 주세요. 📱');
-    return true;
-  }catch(e){
-    console.error('공유 폴백 실패', e);
-    return false;
-  }
-}
-
+/* ───── 이미지 저장 헬퍼 ───── */
 async function saveImageUniversal(source, filename){
   let blob;
   try{
@@ -1312,7 +1268,7 @@ async function saveImageUniversal(source, filename){
     }
   }catch(e){ console.error('blob 생성 실패', e); }
 
-  // ① Web Share API (파일 포함) — 모바일에서 가장 잘 동작
+  // ① 모바일: Web Share API로 파일 공유 → '이미지 저장' 선택
   try{
     if(blob && navigator.canShare){
       const file = new File([blob], filename, {type: blob.type || 'image/png'});
@@ -1322,7 +1278,7 @@ async function saveImageUniversal(source, filename){
       }
     }
   }catch(e){
-    if(e && e.name === 'AbortError') return false; // 사용자가 취소
+    if(e && e.name === 'AbortError') return false;
     console.warn('share 실패, 폴백 시도', e);
   }
 
@@ -2690,24 +2646,6 @@ function showAIResult(mode, style, imageUrl) {
       setTimeout(() => {
         saveBtn.disabled = false;
         saveBtn.textContent = '💾 내 갤러리에 저장하기';
-      }, 2000);
-    }
-  };
-
-  const shareBtn = document.getElementById('aiResultShareBtn');
-  shareBtn.onclick = async () => {
-    shareBtn.disabled = true;
-    shareBtn.textContent = '⌛ 준비 중...';
-    try {
-      const ok = await shareImageUniversal(imageUrl, `StudioBold_AI_${styleLabel}.png`);
-      shareBtn.textContent = ok ? '✅ 공유창 열림' : '📤 문자/공유하기';
-    } catch (e) {
-      console.error('Share failed:', e);
-      shareBtn.textContent = '⚠️ 공유 실패';
-    } finally {
-      setTimeout(() => {
-        shareBtn.disabled = false;
-        shareBtn.textContent = '📤 문자/공유하기';
       }, 2000);
     }
   };
