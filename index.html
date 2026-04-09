@@ -1266,38 +1266,43 @@ async function saveImageUniversal(source, filename){
     }
   }catch(e){ console.error('blob 생성 실패', e); }
 
-  // ① 모바일: Web Share API로 파일 공유 → '이미지 저장' 선택
-  try{
-    if(blob && navigator.canShare){
-      const file = new File([blob], filename, {type: blob.type || 'image/png'});
-      if(navigator.canShare({files:[file]})){
-        await navigator.share({files:[file], title: filename});
-        return true;
-      }
-    }
-  }catch(e){
-    if(e && e.name === 'AbortError') return false;
-    console.warn('share 실패, 폴백 시도', e);
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  // ① 안드로이드 등: 바로 다운로드 폴더에 저장
+  if(!isIOS){
+    try{
+      const url = blob ? URL.createObjectURL(blob) : source;
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      if(blob) setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    }catch(e){ console.warn('a.download 실패', e); }
   }
 
-  // ② 데스크톱 / 안드로이드 크롬 — a.download
-  try{
-    const url = blob ? URL.createObjectURL(blob) : source;
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    if(blob) setTimeout(()=>URL.revokeObjectURL(url), 1000);
-    // iOS Safari에선 download이 무시되므로 한 번 더 새 창 폴백
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if(isIOS){
-      const w = window.open(); if(w){ w.document.write(`<img src="${blob?URL.createObjectURL(blob):source}" style="max-width:100%"><p style="font-family:sans-serif;text-align:center">이미지를 길게 눌러 저장해 주세요</p>`); }
+  // ② iOS: Web Share API로 사진앱에 저장(공유 시트 → '이미지 저장')
+  if(isIOS){
+    try{
+      if(blob && navigator.canShare){
+        const file = new File([blob], filename, {type: blob.type || 'image/png'});
+        if(navigator.canShare({files:[file]})){
+          await navigator.share({files:[file], title: filename});
+          return true;
+        }
+      }
+    }catch(e){
+      if(e && e.name === 'AbortError') return false;
+      console.warn('share 실패, 폴백 시도', e);
     }
-    return true;
-  }catch(e){
-    console.error('저장 폴백 실패', e);
-    try{ window.open(typeof source==='string'?source:URL.createObjectURL(blob), '_blank'); }catch(_){}
-    return false;
+    // iOS Safari 폴백: 새 창에 이미지 띄워서 길게 눌러 저장
+    try{
+      const w = window.open();
+      if(w){ w.document.write(`<img src="${blob?URL.createObjectURL(blob):source}" style="max-width:100%"><p style="font-family:sans-serif;text-align:center">이미지를 길게 눌러 저장해 주세요</p>`); }
+      return true;
+    }catch(e){ console.error('iOS 폴백 실패', e); return false; }
   }
+
+  return true;
 }
 
 const SUPABASE_URL = 'https://vhhfaeyhlubvhezyagwd.supabase.co';
