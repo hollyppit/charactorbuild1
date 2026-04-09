@@ -203,7 +203,9 @@ Required art style: Impressionist master painting. Bold visible brushstrokes lik
 
       // ── 1단계: 비전으로 "뭘 그린 건지" 해석 ──
       let sketchInterpretation = 'a hand-drawn sketch';
-      const userHint = userPrompt ? `\n\nThe person who drew this says: "${userPrompt}". Use this as a strong hint.` : '';
+      const userHint = userPrompt
+        ? `\n\n⚠️ AUTHORITATIVE CONTEXT FROM THE ARTIST: "${userPrompt}"\nThis is what the artist explicitly said they drew. You MUST treat this as ground truth. Your interpretation must match this description — do not contradict it, even if the sketch is unclear. Align every detail of your description with what the artist said.`
+        : '';
       const INTERPRET_PROMPT = `This is a rough hand-drawn sketch (could be by a child or amateur). Your job is to figure out what the artist intended to draw.
 
 Describe in plain English:
@@ -238,7 +240,7 @@ Be generous in interpretation — even crude stick figures count. Do NOT describ
       } catch(e) { console.warn('스케치 해석 실패', e.message); }
 
       const userDescLine = userPrompt
-        ? `\n\nUSER NOTE: "${userPrompt}". Honor this description.`
+        ? `\n\n⚠️ ARTIST'S OWN DESCRIPTION (HIGHEST PRIORITY — MUST FOLLOW): "${userPrompt}"\nThis is what the artist said they drew. The final image MUST clearly depict this. If the sketch looks ambiguous, trust this description over your visual interpretation. Every element the artist mentioned must appear in the final image.`
         : '';
 
       const styleMap = {
