@@ -194,7 +194,7 @@ Required art style: Impressionist master painting. Bold visible brushstrokes lik
       finalPrompt = styleInstructions[style] || styleInstructions.cartoon;
       finalPrompt += userCustomization;
 
-      const safetyLine = "\n\nFull body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
+      const safetyLine = "\n\nIMPORTANT: Output in vertical portrait orientation (9:16 aspect ratio, mobile phone optimized). Full body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
       finalPrompt += safetyLine;
 
     } else {
@@ -222,7 +222,7 @@ Repaint this image as a museum-quality oil painting masterpiece. Use the referen
       const hardRule = `ABSOLUTE RULE: You MUST generate a completely NEW image from scratch. Do NOT return, copy, preserve, or lightly edit the reference image. The reference is ONLY for understanding subject and composition — the final image must be 100% re-rendered in the target style below. If you output anything resembling the original rendering, the task has FAILED.\n\n`;
       finalPrompt = hardRule + (styleMap[style] || styleMap.cartoon);
 
-      const safetyLine = "Full body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
+      const safetyLine = "IMPORTANT: Output in vertical portrait orientation (9:16 aspect ratio, mobile phone optimized). Full body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
       finalPrompt += `\n\n${safetyLine}`;
     }
 
@@ -252,7 +252,10 @@ Repaint this image as a museum-quality oil painting masterpiece. Use the referen
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts }],
-            generationConfig: { responseModalities: ['IMAGE'] },
+            generationConfig: {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: '9:16' },
+            },
           }),
         });
 

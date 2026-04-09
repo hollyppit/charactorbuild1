@@ -183,7 +183,7 @@ ${sketchDesc}
 
 VISUAL STYLE: ${genreStyle}${charSection}${sceneSection}
 
-TECHNICAL REQUIREMENTS: Cinematic widescreen composition, professional cinematography, movie-quality lighting and depth of field. This must look like an actual frame from a major motion picture. Full scene, safe for all ages, no violence depiction, no sexual content.
+TECHNICAL REQUIREMENTS: Vertical portrait orientation (9:16 aspect ratio, mobile phone optimized). Cinematic vertical composition, professional cinematography, movie-quality lighting and depth of field. This must look like an actual frame from a major motion picture. Full scene, safe for all ages, no violence depiction, no sexual content.
 CRITICAL: Do NOT include any text, words, letters, subtitles, watermarks, captions, or written labels anywhere in the image. Pure visual scene only.`;
 
     // ── Step 4: Gemini로 이미지 생성 ──
@@ -207,7 +207,10 @@ CRITICAL: Do NOT include any text, words, letters, subtitles, watermarks, captio
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts }],
-            generationConfig: { responseModalities: ['IMAGE'] },
+            generationConfig: {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: '9:16' },
+            },
           }),
         });
 
