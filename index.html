@@ -493,6 +493,99 @@ body.admin .add-btn{display:flex}
   .t-handle.br{bottom:-14px;right:-14px}
 }
 
+/* ══════════════════════════════
+   Easy 모드
+══════════════════════════════ */
+.easy-toggle-wrap{text-align:center;margin-bottom:8px}
+.easy-toggle-btn{
+  padding:10px 24px;border:3px solid var(--c-purple);
+  background:var(--c-card);color:var(--c-white);
+  font-family:var(--f-display-kr);font-size:15px;
+  cursor:pointer;transition:.15s;letter-spacing:.02em;
+  border-radius:0
+}
+.easy-toggle-btn.easy-active{
+  background:var(--c-yellow);color:var(--c-black);
+  border-color:var(--c-black);box-shadow:var(--shadow-solid-sm)
+}
+body.easy-mode .panel-body .add-btn{display:none!important}
+body.easy-mode .lc-order-btns{display:none!important}
+body.easy-mode .opts{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:10px}
+body.easy-mode .opt-item{min-height:90px;border-width:3px}
+body.easy-mode .opt-item.sel{border-width:4px}
+body.easy-mode .opt-thumb{width:56px;height:56px;font-size:26px}
+body.easy-mode .char-layer.visible{cursor:grab}
+body.easy-mode .t-handle{width:32px;height:32px}
+body.easy-mode .t-handle.tl{top:-16px;left:-16px}
+body.easy-mode .t-handle.tr{top:-16px;right:-16px}
+body.easy-mode .t-handle.bl{bottom:-16px;left:-16px}
+body.easy-mode .t-handle.br{bottom:-16px;right:-16px}
+/* Easy 모드 선택된 아이템 하이라이트 강화 */
+body.easy-mode .opt-item.easy-sel{
+  border-color:var(--c-yellow);background:#2d1500;
+  box-shadow:0 0 0 3px var(--c-yellow),var(--shadow-yellow);
+  transform:translate(-2px,-2px)
+}
+body.easy-mode .opt-item.easy-sel .opt-label{color:var(--c-yellow)}
+
+/* Easy 모드 안내 배너 */
+.easy-guide{
+  display:none;background:rgba(161,28,238,.15);
+  border:2px solid var(--c-purple);padding:10px 14px;
+  font-family:var(--f-ui);font-size:12px;font-weight:600;
+  color:var(--c-white);text-align:center;line-height:1.5;
+  margin-bottom:6px
+}
+body.easy-mode .easy-guide{display:block}
+
+/* Easy 모드 — 레이어 컨트롤 간소화 */
+body.easy-mode .lc-sliders-grid{grid-template-columns:1fr;gap:6px}
+body.easy-mode .lc-row{gap:10px}
+body.easy-mode .lc-slider{height:28px}
+body.easy-mode .lc-label{font-size:13px;min-width:36px}
+body.easy-mode .lc-val{font-size:12px;min-width:36px}
+body.easy-mode .lc-btn{min-height:46px;font-size:13px}
+
+/* Easy 모드 — 트랜스폼 오버레이 테두리 강화 */
+body.easy-mode .transform-overlay{border:3px dashed var(--c-yellow)}
+body.easy-mode .t-save-btn{display:none}
+
+/* ── Easy 모드 모바일 전용 ── */
+@media(max-width:620px){
+  /* 토글 버튼: 풀폭 & 크게 */
+  .easy-toggle-wrap{padding:0 8px}
+  .easy-toggle-btn{
+    width:100%;padding:14px 24px;font-size:17px;
+    min-height:52px
+  }
+  /* 안내 배너: 마진 */
+  .easy-guide{margin:0 8px 6px;font-size:13px;padding:12px 14px}
+  /* Easy 모드에서 아이템 그리드 확대 */
+  body.easy-mode .opts{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+  body.easy-mode .opt-item{min-height:100px;padding:12px 6px}
+  body.easy-mode .opt-thumb{width:64px;height:64px;font-size:30px}
+  body.easy-mode .opt-thumb img{border-radius:4px}
+  body.easy-mode .opt-label{font-size:13px;font-weight:700}
+  /* 터치 핸들 더 크게 */
+  body.easy-mode .t-handle{width:40px;height:40px;border-width:3px}
+  body.easy-mode .t-handle.tl{top:-20px;left:-20px}
+  body.easy-mode .t-handle.tr{top:-20px;right:-20px}
+  body.easy-mode .t-handle.bl{bottom:-20px;left:-20px}
+  body.easy-mode .t-handle.br{bottom:-20px;right:-20px}
+  /* 레이어 컨트롤: Easy 모드에서 슬라이더 크게 */
+  body.easy-mode .lc-slider{height:36px}
+  body.easy-mode .lc-label{font-size:14px}
+  body.easy-mode .lc-val{font-size:13px}
+  body.easy-mode .lc-btn{min-height:50px;font-size:14px;padding:10px 12px}
+  body.easy-mode .lc-title{font-size:14px}
+  /* Easy 모드에서 스테이지 테두리 강조 */
+  body.easy-mode .stage{border-color:var(--c-yellow);border-width:5px}
+  /* 카테고리 탭 확대 */
+  body.easy-mode .mct-btn{padding:14px 22px;min-height:52px;font-size:15px;border-width:3px}
+  /* Easy 모드: 스테이지 터치 시 페이지 스크롤 방지 → 드래그 우선 */
+  body.easy-mode .stage{touch-action:none}
+}
+
 .t-save-btn {
   position: absolute;
   top: -32px;
@@ -857,6 +950,15 @@ body.admin .add-btn{display:flex}
 ══════════════════════════════ -->
 <div class="mode-panel active" id="panel-dressup">
 
+  <!-- Easy 모드 토글 -->
+  <div class="easy-toggle-wrap">
+    <button class="easy-toggle-btn" id="easyToggleBtn" onclick="toggleEasyMode()">🌟 Easy 모드</button>
+  </div>
+  <div class="easy-guide" id="easyGuide">
+    👆 그림을 터치해서 움직여 보세요!<br>
+    🤏 두 손가락으로 크기와 각도를 바꿀 수 있어요
+  </div>
+
   <!-- 스테이지 -->
   <div class="canvas-col">
     <div class="stage-wrap">
@@ -890,7 +992,7 @@ body.admin .add-btn{display:flex}
           <div class="lc-row"><span class="lc-label">상하</span><input type="range" class="lc-slider" id="lcY" min="-200" max="100" value="0" oninput="onLcY()"><span class="lc-val" id="lcYVal">0</span></div>
           <div class="lc-row"><span class="lc-label">각도</span><input type="range" class="lc-slider" id="lcRotate" min="-180" max="180" value="0" oninput="onLcRotate()"><span class="lc-val" id="lcRotateVal">0°</span></div>
         </div>
-        <div class="lc-btns"><button class="lc-btn lc-btn-reset" onclick="resetLayerPos()">↺ 초기화</button><button class="lc-btn" id="lcBtnDelete" style="background:#E63946;color:#fff;display:none" onclick="deleteCurrentLayer()">🗑 삭제</button><button class="lc-btn lc-btn-save lc-admin-only" onclick="saveLayerPos()">✅ DB저장</button><button class="lc-btn lc-user-only" style="background:var(--blue);color:#fff" onclick="deselectLayer()">✓ 완료</button></div>
+        <div class="lc-btns"><button class="lc-btn lc-btn-reset" onclick="resetLayerPos()">↺ 초기화</button><button class="lc-btn" id="lcBtnDelete" style="background:#E63946;color:#fff;display:none" onclick="deleteCurrentLayer()">🗑 삭제</button><button class="lc-btn lc-btn-save lc-admin-only" onclick="saveLayerPos()">✅ DB저장</button><button class="lc-btn lc-user-only" id="lcBtnDone" style="background:var(--blue);color:#fff" onclick="deselectLayer()">✓ 완료</button></div>
       </div>
     </div>
     <input class="name-input" id="nameInput" placeholder="캐릭터 이름 입력" maxlength="12"
@@ -1371,6 +1473,7 @@ let positions = {};
 let state     = {bg:'none'};
 let isAdmin   = false;
 let currentMode = 'dressup';
+let easyMode  = false;
 
 // AI 스타일 (모드별)
 let aiStyle = {dressup:'cartoon', draw:'cartoon'};
@@ -1630,6 +1733,22 @@ function initStageDrag() {
       return;
     }
 
+    // Easy 모드: 탭 즉시 편집 모드 진입 + 드래그 시작
+    if(easyMode && el){
+      const layerId=el.id.replace('lyr-','');
+      if(selLayer!==layerId) selectLayer(layerId);
+      const {posKey}=layerToCatItem(layerId);
+      const pos=getPos(posKey);
+      dragState={layerId,posKey,startX:e.clientX,startY:e.clientY,startOX:pos.offsetX,startOY:pos.offsetY};
+      stage.style.touchAction='none';
+      stage.setPointerCapture(e.pointerId);
+      stage.addEventListener('pointermove',onStageDragMove);
+      stage.addEventListener('pointerup',onStageDragEnd);
+      e.preventDefault();
+      return;
+    }
+    if(easyMode && !el){ deselectLayer(); return; }
+
     // 미리보기 모드: 탭하면 하이라이트 + 편집 버튼만 표시
     if(!el){ clearPreviewLayer(); return; }
     const layerId=el.id.replace('lyr-','');
@@ -1885,15 +2004,19 @@ function selectLayer(layerId) {
   const titleLabel = inst
     ? (assets[inst.catId]?.find(i=>i.id===inst.itemId)?.label || layerLabel(inst.catId))
     : layerLabel(layerId);
-  document.getElementById('lcTitle').textContent=titleLabel+' 조정';
+  document.getElementById('lcTitle').textContent=
+    easyMode ? '👆 '+titleLabel+' — 드래그로 이동' : titleLabel+' 조정';
   document.getElementById('layerControls').classList.add('show');
   syncLCSliders(getPos(posKey));
   updateTransformOverlay();
   // 레이어 순서·삭제 버튼
   const orderBtns=document.getElementById('layerControls').querySelector('.lc-order-btns');
   const delBtn=document.getElementById('lcBtnDelete');
-  orderBtns.style.display='flex';
+  orderBtns.style.display=easyMode?'none':'flex';
   if(delBtn) delBtn.style.display = (layerId==='bg_image') ? 'none' : 'inline-flex';
+  // Easy 모드: 완료 버튼 텍스트 변경
+  const doneBtn=document.getElementById('lcBtnDone');
+  if(doneBtn) doneBtn.textContent=easyMode?'👌 확인':'✓ 완료';
   updateOrderButtons();
   setMobileAiBarVisible(false);
   // 모바일: 하단 시트가 캔버스를 가리지 않도록 스테이지를 화면 상단으로 스크롤
@@ -1989,8 +2112,62 @@ function buildOpts(catId) {
   add.className='add-btn'; add.onclick=()=>openUpload(catId,null,true);
   add.innerHTML=`<div class="add-icon-wrap">＋</div><span class="add-label-txt">추가</span>`;
   cont.appendChild(add);
+  // Easy 모드: 현재 선택된 아이템 하이라이트
+  updateEasySelHighlight(catId);
 }
 function togglePanel(id){const p=document.getElementById('ppanel-'+id);p.classList.toggle('collapsed');p.querySelector('.panel-arrow').textContent=p.classList.contains('collapsed')?'▶':'▼';}
+
+/* ═══════════════════════════════════════
+   Easy 모드
+═══════════════════════════════════════ */
+function toggleEasyMode(){
+  easyMode=!easyMode;
+  document.body.classList.toggle('easy-mode',easyMode);
+  const btn=document.getElementById('easyToggleBtn');
+  if(btn) btn.classList.toggle('easy-active',easyMode);
+  if(easyMode){
+    // 카테고리당 하나만 남기기
+    ['character','effect','prop'].forEach(catId=>{
+      const insts=activeInstances.filter(i=>i.catId===catId);
+      if(insts.length>1){
+        insts.slice(1).forEach(inst=>{
+          const el=document.getElementById('lyr-'+inst.uid);
+          if(el) el.remove();
+          delete positions[inst.uid];
+          const oi=layerOrder.indexOf(inst.uid);
+          if(oi>=0) layerOrder.splice(oi,1);
+        });
+        activeInstances=activeInstances.filter(i=>i.catId!==catId||i.uid===insts[0].uid);
+      }
+    });
+    // 모바일: 스테이지가 잘 보이도록 상단으로 스크롤
+    if(isMobile()){
+      const stage=document.getElementById('stage');
+      if(stage) setTimeout(()=>{
+        stage.scrollIntoView({behavior:'smooth',block:'start'});
+      },100);
+    }
+  }
+  deselectLayer();
+  ['character','effect','prop'].forEach(c=>buildOpts(c));
+  applyAll();
+}
+function updateEasySelHighlight(catId){
+  if(!easyMode) return;
+  const cont=document.getElementById('opts-'+catId);
+  if(!cont) return;
+  cont.querySelectorAll('.opt-item').forEach(el=>el.classList.remove('easy-sel'));
+  const inst=activeInstances.find(i=>i.catId===catId);
+  if(inst){
+    const items=assets[catId]||[];
+    const idx=items.findIndex(i=>i.id===inst.itemId);
+    if(idx>=0){
+      const optItems=cont.querySelectorAll('.opt-item');
+      if(optItems[idx]) optItems[idx].classList.add('easy-sel');
+    }
+  }
+}
+
 function selectItem(catId,id,el){
   if(catId==='bg'){
     // 배경은 단일 교체
@@ -2000,7 +2177,38 @@ function selectItem(catId,id,el){
     applyAll();
     return;
   }
-  if(id==='none') return; // '없음' 항목은 무시
+  if(id==='none'){
+    // Easy 모드: '없음' 선택 시 해당 카테고리 인스턴스 제거
+    if(easyMode){
+      const existing=activeInstances.filter(i=>i.catId===catId);
+      existing.forEach(inst=>{
+        const el2=document.getElementById('lyr-'+inst.uid);
+        if(el2) el2.remove();
+        delete positions[inst.uid];
+        const oi=layerOrder.indexOf(inst.uid);
+        if(oi>=0) layerOrder.splice(oi,1);
+      });
+      activeInstances=activeInstances.filter(i=>i.catId!==catId);
+      deselectLayer();
+      buildOpts(catId);
+      applyAll();
+    }
+    return;
+  }
+
+  // Easy 모드: 카테고리당 1개만 허용 — 기존 인스턴스 교체
+  if(easyMode){
+    const existing=activeInstances.filter(i=>i.catId===catId);
+    existing.forEach(inst=>{
+      const el2=document.getElementById('lyr-'+inst.uid);
+      if(el2) el2.remove();
+      delete positions[inst.uid];
+      const oi=layerOrder.indexOf(inst.uid);
+      if(oi>=0) layerOrder.splice(oi,1);
+    });
+    activeInstances=activeInstances.filter(i=>i.catId!==catId);
+  }
+
   // 캐릭터·효과·소품: 새 인스턴스 추가
   const uid='inst_'+(++instanceCounter);
   const item=assets[catId]?.find(i=>i.id===id);
@@ -2021,7 +2229,13 @@ function selectItem(catId,id,el){
   applyAllZIndexes();
   applyLayer(uid,item?.src||'',catId,uid);
   buildOpts(catId);
-  setPreviewLayer(uid);
+  // Easy 모드: 선택 후 자동 편집 모드 진입
+  if(easyMode){
+    updateEasySelHighlight(catId);
+    selectLayer(uid);
+  } else {
+    setPreviewLayer(uid);
+  }
 }
 async function delItem(catId,itemId){
   if(!isAdmin) return;
