@@ -224,6 +224,16 @@ body.admin .add-btn{display:flex}
 .dl-act-btn:disabled{opacity:.3;cursor:not-allowed}
 .dl-act-btn.off{opacity:.45}
 
+/* 이미지 레이어 변환(크기/각도) 패널 */
+.dl-transform{padding:8px 10px;border:2px solid var(--c-yellow);background:#2d1500;margin-top:-3px;display:flex;flex-direction:column;gap:5px}
+.dl-tf-row{display:flex;align-items:center;gap:8px;font-family:var(--f-ui);font-size:11px;color:#ccc}
+.dl-tf-label{min-width:54px;font-weight:700;color:var(--c-yellow);text-transform:uppercase}
+.dl-tf-slider{flex:1;accent-color:var(--c-yellow);min-width:0}
+.dl-tf-val{min-width:42px;text-align:right;color:var(--c-yellow);font-weight:700}
+.dl-tf-btns{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+.dl-tf-btn{flex:1;min-width:52px;padding:5px 6px;border:1px solid #3a0028;background:#0d0008;color:#ccc;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;transition:.1s;text-transform:uppercase}
+.dl-tf-btn:hover{background:#1a0010;color:var(--c-yellow);border-color:var(--c-purple)}
+
 /* 템플릿 선택/관리 모달 */
 .dt-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .dt-breadcrumb{font-family:var(--f-ui);font-size:11px;color:#ccc;display:flex;align-items:center;gap:3px;flex-wrap:wrap;flex:1;min-width:0}
@@ -2743,7 +2753,13 @@ function _createDrawLayer({ kind = 'draw', name = '', src = '', imageEl = null, 
     opacity,
     visible: true,
     history: [],
-    redoStack: []
+    redoStack: [],
+    // 이미지 레이어 전용 변환
+    scale: 1,
+    rotate: 0,
+    offsetX: 0,
+    offsetY: 0,
+    _imageEl: null,
   };
   canvas.style.opacity = String(opacity);
   if (kind === 'image' && (imageEl || src)) {
@@ -2758,24 +2774,43 @@ function _paintImageToLayer(layer, imageEl, srcUrl) {
   const canvas = layer.canvas;
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
-  const render = (img) => {
-    ctx.clearRect(0, 0, w, h);
-    const iw = img.naturalWidth || img.width;
-    const ih = img.naturalHeight || img.height;
-    if (!iw || !ih) return;
-    const scale = Math.min(w / iw, h / ih);
-    const dw = iw * scale, dh = ih * scale;
-    const dx = (w - dw) / 2, dy = (h - dh) / 2;
-    ctx.drawImage(img, dx, dy, dw, dh);
+  const onReady = (img) => {
+    layer._imageEl = img;
+    _redrawImageLayer(layer);
     _renderDrawLayersList();
   };
-  if (imageEl && imageEl.complete && imageEl.naturalWidth) { render(imageEl); return; }
-  if (imageEl) { imageEl.onload = () => render(imageEl); return; }
+  if (imageEl && imageEl.complete && imageEl.naturalWidth) { onReady(imageEl); return; }
+  if (imageEl) { imageEl.onload = () => onReady(imageEl); return; }
   const img = new Image();
   img.crossOrigin = 'anonymous';
-  img.onload = () => render(img);
+  img.onload = () => onReady(img);
   img.onerror = () => { ctx.fillStyle = '#fdd'; ctx.fillRect(0, 0, w, h); _renderDrawLayersList(); };
   img.src = srcUrl;
+}
+
+// 이미지 레이어의 scale/rotate/offset 적용해서 다시 그림
+function _redrawImageLayer(layer) {
+  if (!layer || layer.kind !== 'image') return;
+  const canvas = layer.canvas;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const img = layer._imageEl;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, w, h);
+  if (img && img.naturalWidth) {
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const baseFit = Math.min(w / iw, h / ih); // contain 방식 기준 크기
+    const scale = baseFit * Math.max(0.05, layer.scale || 1);
+    const dw = iw * scale, dh = ih * scale;
+    const cx = w / 2 + (layer.offsetX || 0);
+    const cy = h / 2 + (layer.offsetY || 0);
+    ctx.translate(cx, cy);
+    ctx.rotate(((layer.rotate || 0) * Math.PI) / 180);
+    if (layer._flipH) ctx.scale(-1, 1);
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  }
+  ctx.restore();
 }
 
 function _resizeDrawLayer(layer, w, h) {
@@ -2794,7 +2829,8 @@ function _resizeDrawLayer(layer, w, h) {
     }
   } else {
     layer.canvas.width = w; layer.canvas.height = h;
-    _paintImageToLayer(layer, null, layer.src);
+    if (layer._imageEl) _redrawImageLayer(layer);
+    else _paintImageToLayer(layer, null, layer.src);
   }
 }
 
@@ -2883,12 +2919,97 @@ function _renderDrawLayersList() {
     row.appendChild(actions);
 
     list.appendChild(row);
+
+    // 활성 이미지 레이어: 크기/각도 조정 패널
+    if (layer.kind === 'image' && layer.id === activeDrawLayerId) {
+      const tf = document.createElement('div');
+      tf.className = 'dl-transform';
+      const scalePct = Math.round((layer.scale || 1) * 100);
+      const rotDeg = Math.round(layer.rotate || 0);
+      tf.innerHTML = `
+        <div class="dl-tf-row">
+          <span class="dl-tf-label">📏 크기</span>
+          <input type="range" class="dl-tf-slider" min="10" max="300" step="1" value="${scalePct}"
+                 oninput="event.stopPropagation();setImageLayerScale('${layer.id}', this.value/100)"
+                 onclick="event.stopPropagation()">
+          <span class="dl-tf-val" id="dl-sc-${layer.id}">${scalePct}%</span>
+        </div>
+        <div class="dl-tf-row">
+          <span class="dl-tf-label">🔄 각도</span>
+          <input type="range" class="dl-tf-slider" min="-180" max="180" step="1" value="${rotDeg}"
+                 oninput="event.stopPropagation();setImageLayerRotate('${layer.id}', this.value)"
+                 onclick="event.stopPropagation()">
+          <span class="dl-tf-val" id="dl-ro-${layer.id}">${rotDeg}°</span>
+        </div>
+        <div class="dl-tf-btns">
+          <button class="dl-tf-btn" onclick="event.stopPropagation();rotateImageLayerBy('${layer.id}',-90)" title="좌로 90°">⟲ 90°</button>
+          <button class="dl-tf-btn" onclick="event.stopPropagation();rotateImageLayerBy('${layer.id}',90)" title="우로 90°">⟳ 90°</button>
+          <button class="dl-tf-btn" onclick="event.stopPropagation();flipImageLayerH('${layer.id}')" title="좌우 반전">↔</button>
+          <button class="dl-tf-btn" onclick="event.stopPropagation();resetImageLayerTransform('${layer.id}')" title="기본값">↺ 초기화</button>
+        </div>
+      `;
+      list.appendChild(tf);
+    }
   }
 }
 
 function selectDrawLayer(id) {
   activeDrawLayerId = id;
   drawCtx = getActiveDrawCtx();
+  _renderDrawLayersList();
+}
+
+/* ── 이미지 레이어 변환 ── */
+function _getImageLayer(id) {
+  const l = drawLayers.find(x => x.id === id);
+  return l && l.kind === 'image' ? l : null;
+}
+
+function setImageLayerScale(id, scale) {
+  const layer = _getImageLayer(id);
+  if (!layer) return;
+  layer.scale = Math.max(0.1, Math.min(3, Number(scale) || 1));
+  _redrawImageLayer(layer);
+  const lbl = document.getElementById('dl-sc-' + id);
+  if (lbl) lbl.textContent = Math.round(layer.scale * 100) + '%';
+}
+
+function setImageLayerRotate(id, deg) {
+  const layer = _getImageLayer(id);
+  if (!layer) return;
+  let d = Number(deg) || 0;
+  // -180 ~ 180 범위로 정규화
+  while (d > 180) d -= 360;
+  while (d < -180) d += 360;
+  layer.rotate = d;
+  _redrawImageLayer(layer);
+  const lbl = document.getElementById('dl-ro-' + id);
+  if (lbl) lbl.textContent = Math.round(d) + '°';
+}
+
+function rotateImageLayerBy(id, delta) {
+  const layer = _getImageLayer(id);
+  if (!layer) return;
+  setImageLayerRotate(id, (layer.rotate || 0) + delta);
+  _renderDrawLayersList();
+}
+
+function flipImageLayerH(id) {
+  const layer = _getImageLayer(id);
+  if (!layer) return;
+  layer._flipH = !layer._flipH;
+  _redrawImageLayer(layer);
+}
+
+function resetImageLayerTransform(id) {
+  const layer = _getImageLayer(id);
+  if (!layer) return;
+  layer.scale = 1;
+  layer.rotate = 0;
+  layer.offsetX = 0;
+  layer.offsetY = 0;
+  layer._flipH = false;
+  _redrawImageLayer(layer);
   _renderDrawLayersList();
 }
 
