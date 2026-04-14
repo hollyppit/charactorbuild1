@@ -172,7 +172,7 @@ body.admin .add-btn{display:flex}
 .pal-dot.active{border-color:var(--c-yellow);box-shadow:3px 3px 0px var(--c-black);transform:translate(-1px,-1px)}
 
 /* 캔버스 */
-.draw-canvas-wrap{border:4px solid var(--c-yellow);box-shadow:var(--shadow-yellow);touch-action:none;position:relative;background:var(--c-white);max-width:660px;width:100%;aspect-ratio:4/3;cursor:crosshair;
+.draw-canvas-wrap{border:4px solid var(--c-yellow);box-shadow:var(--shadow-yellow);touch-action:none;position:relative;background:var(--c-white);max-width:520px;width:100%;aspect-ratio:210/297;cursor:crosshair;
   background-image:linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%);
   background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0px;background-color:#fff}
 .draw-canvas-stack{position:absolute;inset:0}
@@ -250,7 +250,8 @@ body.admin .dt-admin-section{display:block}
 .result-card{border:2px solid #3a0028;overflow:hidden}
 .result-card-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#999;padding:6px 10px 3px;text-transform:uppercase;letter-spacing:.05em}
 .result-placeholder{height:110px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;background:#1a0010;font-family:var(--f-ui);font-size:12px;font-weight:700;color:#999}
-.result-img{width:100%;aspect-ratio:29/44;object-fit:contain;background:#0d0008;display:block}
+.result-img{width:100%;aspect-ratio:210/297;object-fit:contain;background:#0d0008;display:block}
+.result-img.landscape{aspect-ratio:297/210}
 .res-modal-content{display:flex;flex-direction:column;gap:20px;padding:10px 0 30px}
 .res-item{background:var(--c-card);border:2px solid #3a0028;padding:15px}
 .res-item-label{font-family:var(--f-display-kr);font-size:14px;color:var(--c-yellow);margin-bottom:10px;display:flex;align-items:center;gap:6px}
@@ -326,10 +327,11 @@ body.admin .dt-admin-section{display:block}
    데스크탑 전용: 그리기 패드 확대 (≥860px)
 ══════════════════════════════ */
 @media(min-width:860px){
-  /* 직접 그리기: 캔버스 + 관련 요소 확대 */
-  .draw-canvas-wrap{max-width:900px}
+  /* 직접 그리기: 캔버스 + 관련 요소 확대 (A4 세로 비율 유지) */
+  .draw-canvas-wrap{max-width:560px}
   .draw-toolbar{max-width:900px;gap:8px;padding:11px 16px}
   .palette{max-width:900px}
+  .draw-layers-panel{max-width:900px}
   .ai-section{max-width:900px}
   .result-wrap{max-width:900px}
   .tool-btn{padding:8px 16px;font-size:13px}
@@ -666,7 +668,7 @@ body.easy-mode .t-save-btn{display:none}
 .sb-canvas-col{flex:1;min-width:260px;display:flex;flex-direction:column;gap:8px}
 .sb-controls-col{width:190px;display:flex;flex-direction:column;gap:12px}
 .sb-frame-label{font-family:var(--f-display-kr);font-size:13px;color:var(--c-yellow);text-align:center;background:#0d0008;padding:8px;border:2px solid var(--c-purple)}
-.sb-canvas-wrap{border:4px solid var(--c-yellow);overflow:hidden;background:var(--c-white);aspect-ratio:16/9;position:relative;touch-action:none;box-shadow:var(--shadow-yellow)}
+.sb-canvas-wrap{border:4px solid var(--c-yellow);overflow:hidden;background:var(--c-white);aspect-ratio:297/210;position:relative;touch-action:none;box-shadow:var(--shadow-yellow)}
 .sb-canvas-wrap canvas{display:block;width:100%;height:100%;touch-action:none}
 .sb-section-title{font-family:var(--f-ui);font-size:12px;font-weight:700;color:#aaa;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
 .sb-char-upload{border:2px dashed var(--c-purple);padding:12px 8px;text-align:center;cursor:pointer;transition:.15s;background:#0d0008;min-height:80px;display:flex;align-items:center;justify-content:center;color:#777}
@@ -2609,7 +2611,8 @@ function initDrawCanvas() {
   const wrap = document.getElementById('drawCanvasWrap');
   if (!wrap) return;
   const w = wrap.offsetWidth;
-  const h = Math.round(w * 0.75);
+  // A4 세로 비율 (210:297) — 인쇄 최적화
+  const h = Math.round(w * 297 / 210);
   drawCanvasBaseW = w;
   drawCanvasBaseH = h;
 
@@ -3493,7 +3496,8 @@ function initSBCanvas() {
   if (!canvas) return;
   const wrap = canvas.parentElement;
   const w = wrap.offsetWidth;
-  const h = Math.round(w * 9 / 16);
+  // A4 가로 비율 (297:210) — 인쇄 최적화
+  const h = Math.round(w * 210 / 297);
   // 기존 그림 보존
   let saved = null;
   if (sbCtx && canvas.width > 0) saved = canvas.toDataURL();
@@ -3731,12 +3735,12 @@ function showSBResult(imageUrl) {
   content.innerHTML = `
     <div class="res-item">
       <div class="res-item-label">✏️ 나의 스토리보드 스케치</div>
-      <img src="${sketchImg}" class="result-img" alt="스케치">
+      <img src="${sketchImg}" class="result-img landscape" alt="스케치">
     </div>
     <div style="text-align:center;font-size:24px">👇</div>
     <div class="res-item" style="border:2px solid var(--c-yellow);background:#1a0020">
       <div class="res-item-label">🎬 AI 영화 장면 (${genreLabels[sbGenre]||sbGenre})</div>
-      <img src="${imageUrl}" class="result-img" alt="영화장면" id="finalAiImage">
+      <img src="${imageUrl}" class="result-img landscape" alt="영화장면" id="finalAiImage">
     </div>`;
 
   const saveBtn = document.getElementById('aiResultSaveBtn');

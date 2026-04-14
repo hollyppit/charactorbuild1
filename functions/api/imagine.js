@@ -194,7 +194,7 @@ Required art style: Impressionist master painting. Bold visible brushstrokes lik
       finalPrompt = styleInstructions[style] || styleInstructions.cartoon;
       finalPrompt += userCustomization;
 
-      const safetyLine = "\n\nIMPORTANT: Output in vertical portrait orientation (9:16 aspect ratio, mobile phone optimized). Full body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
+      const safetyLine = "\n\nIMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized for A4 paper printing). Full body composition, safe for all ages, no violence, no sexual content, child-friendly illustration.";
       finalPrompt += safetyLine;
 
     } else {
@@ -265,7 +265,7 @@ STRICT RULES (VERY IMPORTANT):
 - ONLY upgrade: line quality, shading, lighting, texture, detail, and overall polish.
 - Think of this as "what the artist WOULD have drawn if they had professional skill" — same scene, same intent, just rendered beautifully.${userDescLine}
 
-IMPORTANT: Output in vertical portrait orientation (9:16 aspect ratio, mobile phone optimized). Safe for all ages, no violence, no sexual content, child-friendly illustration.`;
+IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized for A4 paper printing). Safe for all ages, no violence, no sexual content, child-friendly illustration.`;
     }
 
     const models = [
@@ -296,7 +296,7 @@ IMPORTANT: Output in vertical portrait orientation (9:16 aspect ratio, mobile ph
             contents: [{ parts }],
             generationConfig: {
               responseModalities: ['IMAGE'],
-              imageConfig: { aspectRatio: '9:16' },
+              imageConfig: { aspectRatio: '3:4' },
             },
           }),
         });
