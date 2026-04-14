@@ -154,6 +154,19 @@ body.admin .add-btn{display:flex}
 /* 툴바 */
 .draw-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;background:var(--c-card);border:2px solid var(--c-purple);box-shadow:var(--shadow-purple);padding:9px 12px;width:100%;max-width:660px}
 .tool-btn{padding:6px 12px;border:2px solid #3a0028;background:var(--c-card);font-family:var(--f-ui);font-size:12px;font-weight:700;cursor:pointer;color:#aaa;transition:.15s;text-transform:uppercase}
+/* 필압 토글 */
+.press-toggle{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:2px solid #3a0028;background:var(--c-card);color:#aaa;font-family:var(--f-ui);font-size:12px;font-weight:700;cursor:pointer;user-select:none;transition:.15s;text-transform:uppercase}
+.press-toggle:hover{background:#2d0020;color:var(--c-white);border-color:var(--c-purple)}
+.press-toggle.active{background:var(--c-yellow);color:var(--c-black);border-color:var(--c-black)}
+.press-toggle input{cursor:pointer;accent-color:var(--c-yellow);width:14px;height:14px;margin:0}
+/* 필압 설정 모달 */
+.ps-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ps-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#ccc;min-width:72px;text-transform:uppercase;letter-spacing:.03em}
+.ps-row input[type=range]{flex:1;accent-color:var(--c-yellow);min-width:0}
+.ps-val{font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-yellow);min-width:40px;text-align:right}
+.ps-preview-wrap{margin-top:10px}
+.ps-preview-wrap canvas{width:100%;display:block;border:2px solid #3a0028;background:#fff;touch-action:none}
+.ps-preview-label{font-family:var(--f-ui);font-size:10px;font-weight:700;color:#888;text-align:center;margin-top:3px;text-transform:uppercase;letter-spacing:.03em}
 .tool-btn.active{background:var(--c-yellow);color:var(--c-black);border-color:var(--c-black)}
 .tool-btn:hover:not(.active){background:#2d0020;color:var(--c-white);border-color:var(--c-purple)}
 .toolbar-sep{width:2px;height:26px;background:#3a0028;flex-shrink:0}
@@ -1142,6 +1155,12 @@ body.easy-mode .t-save-btn{display:none}
       <input type="color" id="colorPicker" value="#FF6B9D"
         style="width:32px;height:32px;border-radius:50%;border:2px solid var(--c-black);cursor:pointer;padding:2px">
       <div class="toolbar-sep"></div>
+      <label class="press-toggle" id="pressToggleLabel" title="필압 사용 (체크 해제 시 일정 굵기)">
+        <input type="checkbox" id="pressureToggle" onchange="togglePressure(this)">
+        <span>🖊️ 필압</span>
+      </label>
+      <button class="tool-btn" onclick="openPressureSettings()" title="필압 감도 설정" style="padding:6px 10px">⚙</button>
+      <div class="toolbar-sep"></div>
       <button class="tool-btn" onclick="undoDraw()">↩️ 되돌리기</button>
       <button class="tool-btn" onclick="clearDraw()">🗑️ 전체 지우기</button>
     </div>
@@ -1320,6 +1339,44 @@ body.easy-mode .t-save-btn{display:none}
   </div>
 </div>
 
+  </div>
+</div>
+
+<!-- ── 직접 그리기: 필압 감도 설정 모달 ── -->
+<div class="modal-overlay" id="pressureModal">
+  <div class="modal" style="max-width:460px">
+    <h2>🎚 필압 감도 설정</h2>
+    <div class="ps-row">
+      <span class="ps-label">최소 두께</span>
+      <input type="range" id="psMin" min="5" max="80" value="20" oninput="onPressureSlider()">
+      <span class="ps-val" id="psMinVal">20%</span>
+    </div>
+    <div class="ps-row">
+      <span class="ps-label">최대 두께</span>
+      <input type="range" id="psMax" min="100" max="300" value="150" oninput="onPressureSlider()">
+      <span class="ps-val" id="psMaxVal">150%</span>
+    </div>
+    <div class="ps-row">
+      <span class="ps-label">감도(곡선)</span>
+      <input type="range" id="psGamma" min="40" max="300" value="100" oninput="onPressureSlider()">
+      <span class="ps-val" id="psGammaVal">1.0</span>
+    </div>
+    <div style="font-family:var(--f-ui);font-size:10px;color:#888;line-height:1.5;padding:6px 2px 0">
+      · 1.0 = 선형 · &lt; 1.0: 약한 힘에도 굵어짐 · &gt; 1.0: 세게 눌러야 굵어짐
+    </div>
+    <div class="ps-preview-wrap">
+      <canvas id="pressureCurveCanvas" width="420" height="80"></canvas>
+      <div class="ps-preview-label">📏 두께 곡선 (가로: 필압 · 세로: 굵기)</div>
+    </div>
+    <div class="ps-preview-wrap">
+      <canvas id="pressurePreviewCanvas" width="420" height="110"></canvas>
+      <div class="ps-preview-label">✏️ 테스트 — 펜/손가락으로 그어보세요</div>
+    </div>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn btn-gray" onclick="resetPressureSettings()">기본값</button>
+      <button class="btn btn-blue" onclick="clearPressurePreview()">테스트 지우기</button>
+      <button class="btn btn-purple" onclick="closeModal('pressureModal')">닫기</button>
+    </div>
   </div>
 </div>
 
@@ -1611,6 +1668,9 @@ let selLayer = null, dragState = null, pinchState = null;
 // 그림판
 let drawTool = 'pen', brushSize = 8, painting = false, lastX=0, lastY=0;
 let drawHistory = [], drawRedo = [], MAX_HIST = 20;
+// 필압
+let pressureEnabled = false;
+let pressureSettings = { minRatio: 0.2, maxRatio: 1.5, gamma: 1.0 };
 
 /* ═══════════════════════════════════════
    localStorage
@@ -3289,6 +3349,17 @@ async function deleteDrawTemplate(id) {
   }
 }
 
+/* ── 필압 계산 ── */
+function _currentBrushWidth(pressure) {
+  if (!pressureEnabled) return brushSize;
+  // 필압 0 (마우스/미지원)은 기본값 0.5로
+  const p = (typeof pressure === 'number' && pressure > 0) ? Math.min(1, pressure) : 0.5;
+  const g = Math.max(0.1, pressureSettings.gamma);
+  const mapped = Math.pow(p, 1 / g);
+  const ratio = pressureSettings.minRatio + (pressureSettings.maxRatio - pressureSettings.minRatio) * mapped;
+  return Math.max(0.5, brushSize * ratio);
+}
+
 /* ── 포인터 이벤트 (활성 레이어로 라우팅) ── */
 function _drawLayerPointerDown(e) {
   const layer = getActiveDrawLayer();
@@ -3311,8 +3382,9 @@ function _drawLayerPointerDown(e) {
   lastX = pos.x; lastY = pos.y;
   if (drawTool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
   else ctx.globalCompositeOperation = 'source-over';
+  const w = _currentBrushWidth(e.pressure);
   ctx.beginPath();
-  ctx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
+  ctx.arc(pos.x, pos.y, w / 2, 0, Math.PI * 2);
   ctx.fillStyle = document.getElementById('colorPicker').value;
   ctx.fill();
 }
@@ -3324,11 +3396,12 @@ function _drawLayerPointerMove(e) {
   e.preventDefault();
   const ctx = layer.canvas.getContext('2d');
   const pos = _getDrawLayerPos(layer.canvas, e);
+  const w = _currentBrushWidth(e.pressure);
   ctx.beginPath();
   ctx.moveTo(lastX, lastY);
   ctx.lineTo(pos.x, pos.y);
   ctx.strokeStyle = document.getElementById('colorPicker').value;
-  ctx.lineWidth = brushSize;
+  ctx.lineWidth = w;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.stroke();
   lastX = pos.x; lastY = pos.y;
@@ -3353,6 +3426,178 @@ function _getDrawLayerPos(canvas, e) {
 function getCanvasPos(canvas, e) {
   return _getDrawLayerPos(canvas, e);
 }
+
+/* ═══════════════════════════════════════
+   필압 UI / 설정
+═══════════════════════════════════════ */
+function togglePressure(checkbox) {
+  pressureEnabled = !!checkbox.checked;
+  const label = document.getElementById('pressToggleLabel');
+  if (label) label.classList.toggle('active', pressureEnabled);
+  save('pressure_enabled', pressureEnabled);
+}
+
+function openPressureSettings() {
+  // 슬라이더 현재 상태로 동기화
+  document.getElementById('psMin').value = Math.round(pressureSettings.minRatio * 100);
+  document.getElementById('psMax').value = Math.round(pressureSettings.maxRatio * 100);
+  document.getElementById('psGamma').value = Math.round(pressureSettings.gamma * 100);
+  _updatePressureValueLabels();
+  _drawPressureCurve();
+  _setupPressurePreview();
+  clearPressurePreview();
+  openModal('pressureModal');
+}
+
+function onPressureSlider() {
+  pressureSettings.minRatio = Number(document.getElementById('psMin').value) / 100;
+  pressureSettings.maxRatio = Number(document.getElementById('psMax').value) / 100;
+  pressureSettings.gamma = Number(document.getElementById('psGamma').value) / 100;
+  // 최소가 최대보다 크지 않도록 보정
+  if (pressureSettings.minRatio > pressureSettings.maxRatio) {
+    pressureSettings.minRatio = pressureSettings.maxRatio;
+    document.getElementById('psMin').value = Math.round(pressureSettings.minRatio * 100);
+  }
+  _updatePressureValueLabels();
+  _drawPressureCurve();
+  save('pressure_settings', pressureSettings);
+}
+
+function _updatePressureValueLabels() {
+  document.getElementById('psMinVal').textContent = Math.round(pressureSettings.minRatio * 100) + '%';
+  document.getElementById('psMaxVal').textContent = Math.round(pressureSettings.maxRatio * 100) + '%';
+  document.getElementById('psGammaVal').textContent = pressureSettings.gamma.toFixed(1);
+}
+
+function resetPressureSettings() {
+  pressureSettings = { minRatio: 0.2, maxRatio: 1.5, gamma: 1.0 };
+  document.getElementById('psMin').value = 20;
+  document.getElementById('psMax').value = 150;
+  document.getElementById('psGamma').value = 100;
+  _updatePressureValueLabels();
+  _drawPressureCurve();
+  save('pressure_settings', pressureSettings);
+}
+
+function _drawPressureCurve() {
+  const c = document.getElementById('pressureCurveCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  // 배경
+  ctx.fillStyle = '#0d0008';
+  ctx.fillRect(0, 0, w, h);
+  // 격자
+  ctx.strokeStyle = '#2a0020';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo(0, h * i / 4); ctx.lineTo(w, h * i / 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w * i / 4, 0); ctx.lineTo(w * i / 4, h); ctx.stroke();
+  }
+  // 곡선
+  const MAX_Y = 3.0; // 그래프 세로 최대값 (비율)
+  ctx.strokeStyle = '#FFD700';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const g = Math.max(0.1, pressureSettings.gamma);
+  for (let x = 0; x <= w; x++) {
+    const p = x / w;
+    const mapped = Math.pow(p, 1 / g);
+    const ratio = pressureSettings.minRatio + (pressureSettings.maxRatio - pressureSettings.minRatio) * mapped;
+    const y = h - Math.min(h, (ratio / MAX_Y) * h);
+    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  // 기준선 (1.0 배율)
+  const yRef = h - (1.0 / MAX_Y) * h;
+  ctx.strokeStyle = '#555';
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath(); ctx.moveTo(0, yRef); ctx.lineTo(w, yRef); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+/* ── 테스트 캔버스 ── */
+let _psPreviewLast = null, _psPreviewPainting = false, _psPreviewInited = false;
+
+function _setupPressurePreview() {
+  const c = document.getElementById('pressurePreviewCanvas');
+  if (!c || _psPreviewInited) return;
+  _psPreviewInited = true;
+  const ctx = c.getContext('2d');
+  c.onpointerdown = (e) => {
+    e.preventDefault();
+    _psPreviewPainting = true;
+    const pos = _psPreviewPos(c, e);
+    _psPreviewLast = pos;
+    const w = _previewWidth(e.pressure);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, w / 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#1A1A2E';
+    ctx.fill();
+  };
+  c.onpointermove = (e) => {
+    if (!_psPreviewPainting) return;
+    e.preventDefault();
+    const pos = _psPreviewPos(c, e);
+    const w = _previewWidth(e.pressure);
+    ctx.beginPath();
+    ctx.moveTo(_psPreviewLast.x, _psPreviewLast.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = '#1A1A2E';
+    ctx.lineWidth = w;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.stroke();
+    _psPreviewLast = pos;
+  };
+  c.onpointerup = () => { _psPreviewPainting = false; };
+  c.onpointerleave = () => { _psPreviewPainting = false; };
+}
+
+function _psPreviewPos(c, e) {
+  const r = c.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * (c.width / r.width),
+    y: (e.clientY - r.top) * (c.height / r.height),
+  };
+}
+
+// 테스트용: 전역 pressureEnabled와 무관하게 항상 현재 감도 설정 적용
+function _previewWidth(pressure) {
+  const p = (typeof pressure === 'number' && pressure > 0) ? Math.min(1, pressure) : 0.5;
+  const g = Math.max(0.1, pressureSettings.gamma);
+  const mapped = Math.pow(p, 1 / g);
+  const ratio = pressureSettings.minRatio + (pressureSettings.maxRatio - pressureSettings.minRatio) * mapped;
+  return Math.max(0.5, brushSize * ratio);
+}
+
+function clearPressurePreview() {
+  const c = document.getElementById('pressurePreviewCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+}
+
+/* ── 저장된 설정 로드 ── */
+(function _initPressureFromStorage() {
+  try {
+    const savedSettings = load('pressure_settings');
+    if (savedSettings && typeof savedSettings === 'object') {
+      pressureSettings = { ...pressureSettings, ...savedSettings };
+    }
+    const savedEnabled = load('pressure_enabled');
+    if (typeof savedEnabled === 'boolean') pressureEnabled = savedEnabled;
+    // DOM이 준비된 뒤 체크박스/라벨 상태 반영
+    document.addEventListener('DOMContentLoaded', () => {
+      const cb = document.getElementById('pressureToggle');
+      const label = document.getElementById('pressToggleLabel');
+      if (cb) cb.checked = pressureEnabled;
+      if (label) label.classList.toggle('active', pressureEnabled);
+    });
+  } catch (e) { /* noop */ }
+})();
 
 function setDrawTool(t,btn){
   drawTool=t;
