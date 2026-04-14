@@ -212,15 +212,37 @@ body.admin .add-btn{display:flex}
 .dl-act-btn.off{opacity:.45}
 
 /* 템플릿 선택/관리 모달 */
-.dt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 12px;max-height:320px;overflow-y:auto}
-.dt-card{border:2px solid #3a0028;background:#0d0008;padding:5px;cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:.1s;position:relative}
+.dt-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.dt-breadcrumb{font-family:var(--f-ui);font-size:11px;color:#ccc;display:flex;align-items:center;gap:3px;flex-wrap:wrap;flex:1;min-width:0}
+.dt-crumb{padding:4px 8px;background:#0d0008;border:1px solid #3a0028;font-weight:700}
+.dt-crumb.clickable{cursor:pointer;color:var(--c-yellow);border-color:var(--c-purple)}
+.dt-crumb.clickable:hover{background:#2d1500}
+.dt-crumb.current{background:#2d1500;color:var(--c-yellow);border-color:var(--c-yellow)}
+.dt-crumb-sep{color:#666;padding:0 1px;font-weight:700}
+.dt-admin-actions{display:none;gap:4px}
+body.admin .dt-admin-actions{display:flex}
+.dt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 12px;max-height:340px;overflow-y:auto;min-height:120px;padding:4px;border:2px dashed transparent;transition:.1s}
+.dt-grid.drop-active{border-color:var(--c-purple);background:rgba(161,28,238,.08)}
+.dt-empty{grid-column:1/-1;padding:28px;text-align:center;color:#666;font-family:var(--f-ui);font-size:12px;border:2px dashed #3a0028}
+.dt-card{border:2px solid #3a0028;background:#0d0008;padding:5px;cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:.1s;position:relative;user-select:none}
 .dt-card:hover{border-color:var(--c-yellow);background:#2d1500}
 .dt-card-thumb{width:100%;height:90px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .dt-card-thumb img{width:100%;height:100%;object-fit:contain}
 .dt-card-thumb .emoji{font-size:40px}
+.dt-card.dt-folder .dt-card-thumb{background:linear-gradient(135deg,#3a2a00,#2d1500);color:var(--c-yellow)}
+.dt-card.dt-folder .dt-card-thumb .emoji{font-size:52px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.dt-card.dt-folder{border-color:var(--c-yellow)}
 .dt-card-name{font-family:var(--f-ui);font-size:11px;color:#ccc;text-align:center;word-break:break-word}
+.dt-card.dt-folder .dt-card-name{font-weight:700;color:var(--c-yellow)}
 .dt-card-del{position:absolute;top:2px;right:2px;width:22px;height:22px;background:#E63946;color:#fff;border:none;font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2}
 body.admin .dt-card-del{display:flex}
+body.admin .dt-card[draggable=true]{cursor:grab}
+body.admin .dt-card[draggable=true]:active{cursor:grabbing}
+.dt-card.dragging{opacity:.35}
+.dt-card.drop-into{outline:3px solid #6BDB8A;outline-offset:-3px;background:#1a3010;border-color:#6BDB8A}
+.dt-card.drop-into .dt-card-name::after{content:" ⬇";color:#6BDB8A}
+.dt-card.drop-before{box-shadow:-4px 0 0 var(--c-yellow)}
+.dt-card.drop-after{box-shadow:4px 0 0 var(--c-yellow)}
 .dt-admin-section{display:none;border-top:2px solid #3a0028;padding-top:10px;margin-top:6px}
 body.admin .dt-admin-section{display:block}
 .dt-admin-section h3{font-family:var(--f-ui);font-size:12px;color:var(--c-yellow);margin:0 0 8px;text-transform:uppercase;letter-spacing:.05em}
@@ -1304,12 +1326,19 @@ body.easy-mode .t-save-btn{display:none}
 <!-- ── 비밀번호 모달 ── -->
 <!-- ── 직접 그리기: 템플릿 선택/관리 모달 ── -->
 <div class="modal-overlay" id="drawTemplateModal">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:600px">
     <h2 id="drawTemplateModalTitle">🖼️ 템플릿 선택</h2>
-    <div style="font-family:var(--f-ui);font-size:11px;color:#999;margin-bottom:6px">카드를 클릭하면 새 레이어로 추가됩니다</div>
+    <div style="font-family:var(--f-ui);font-size:11px;color:#999;margin-bottom:6px" id="drawTemplateHint">폴더를 클릭해 들어가고, 이미지를 클릭하면 새 레이어로 추가됩니다</div>
+    <div class="dt-toolbar">
+      <div class="dt-breadcrumb" id="drawTemplateBreadcrumb"></div>
+      <div class="dt-admin-actions">
+        <button class="dl-add-btn" onclick="createTemplateFolder()">📁 새 폴더</button>
+      </div>
+    </div>
     <div class="dt-grid" id="drawTemplateGrid"></div>
     <div class="dt-admin-section">
       <h3>📤 새 템플릿 업로드 (관리자)</h3>
+      <div style="font-family:var(--f-ui);font-size:10px;color:#888;margin-bottom:6px">현재 폴더에 업로드됩니다</div>
       <div class="dt-upload-row">
         <input class="field-input" id="dtNewName" placeholder="템플릿 이름 (예: 나무 실루엣)">
         <input type="file" id="dtNewFile" accept="image/*">
@@ -2873,7 +2902,14 @@ function _onDrawLayerFilePicked(e) {
   reader.readAsDataURL(file);
 }
 
-/* ── 템플릿 로드/선택/관리 (DB) ── */
+/* ── 템플릿 로드/선택/관리 (DB) ──
+   폴더/계층 구현:
+   - bg_emoji='folder' → 폴더, 그 외 → 이미지
+   - src_back → parent_id (빈 값이면 루트)
+   - sort_order → 같은 부모 안 순서                                 */
+let currentTemplateFolder = null;
+let _templateDrag = null;
+
 async function loadDrawTemplatesFromDB() {
   try {
     const res = await fetch('/api/items');
@@ -2881,15 +2917,51 @@ async function loadDrawTemplatesFromDB() {
     if (!Array.isArray(rows)) return [];
     return rows
       .filter(r => r.category === DRAW_TEMPLATE_CATEGORY)
-      .map(r => ({ id: r.id, label: r.label || '템플릿', src: r.src || '', emoji: r.emoji || '🖼️' }));
+      .map(r => ({
+        id: r.id,
+        label: r.label || '템플릿',
+        src: r.src || '',
+        emoji: r.emoji || '🖼️',
+        kind: r.bg_emoji === 'folder' ? 'folder' : 'image',
+        parent_id: r.src_back || null,
+        sort_order: typeof r.sort_order === 'number' ? r.sort_order : 0,
+      }));
   } catch (e) {
     console.error('loadDrawTemplatesFromDB:', e);
     return [];
   }
 }
 
+async function saveDrawTemplateRow(row) {
+  await fetch('/api/items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: row.id,
+      category: DRAW_TEMPLATE_CATEGORY,
+      label: row.label,
+      emoji: row.emoji || (row.kind === 'folder' ? '📁' : '🖼️'),
+      src: row.src || '',
+      src_back: row.parent_id || '',
+      bg_emoji: row.kind === 'folder' ? 'folder' : '',
+      sort_order: typeof row.sort_order === 'number' ? row.sort_order : 0,
+    })
+  });
+}
+
+async function updateDrawTemplateRow(id, partial) {
+  await fetch('/api/items', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ...partial })
+  });
+}
+
 async function openDrawTemplatePicker() {
   document.getElementById('drawTemplateModalTitle').textContent = '🖼️ 템플릿 선택';
+  const hint = document.getElementById('drawTemplateHint');
+  if (hint) hint.textContent = '폴더를 클릭해 들어가고, 이미지를 클릭하면 새 레이어로 추가됩니다';
+  currentTemplateFolder = null;
   await refreshDrawTemplates();
   openModal('drawTemplateModal');
 }
@@ -2897,33 +2969,264 @@ async function openDrawTemplatePicker() {
 async function openDrawTemplateManager() {
   if (!isAdmin) { alert('관리자 모드에서만 사용할 수 있어요.'); return; }
   document.getElementById('drawTemplateModalTitle').textContent = '⚙ 템플릿 관리 (관리자)';
+  const hint = document.getElementById('drawTemplateHint');
+  if (hint) hint.textContent = '드래그로 순서 변경, 폴더에 올려놓으면 이동, 이미지/폴더 사이에 놓으면 순서 변경됩니다';
+  currentTemplateFolder = null;
   await refreshDrawTemplates();
   openModal('drawTemplateModal');
 }
 
 async function refreshDrawTemplates() {
   drawTemplatesCache = await loadDrawTemplatesFromDB();
-  const grid = document.getElementById('drawTemplateGrid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  if (drawTemplatesCache.length === 0) {
-    grid.innerHTML = `<div style="grid-column:1/-1;padding:24px;text-align:center;color:#777;font-family:var(--f-ui);font-size:12px">등록된 템플릿이 없어요.<br>${isAdmin ? '아래에서 새 템플릿을 업로드하세요.' : '관리자에게 문의하세요.'}</div>`;
-    return;
+  _renderDrawTemplateGrid();
+}
+
+function _tplById(id){ return drawTemplatesCache.find(t => t.id === id); }
+
+function _isDescendantOf(itemId, ancestorId) {
+  if (!itemId || !ancestorId) return false;
+  if (itemId === ancestorId) return true;
+  let cur = _tplById(itemId);
+  const seen = new Set();
+  while (cur && cur.parent_id && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    if (cur.parent_id === ancestorId) return true;
+    cur = _tplById(cur.parent_id);
   }
-  drawTemplatesCache.forEach(t => {
+  return false;
+}
+
+function _getNextSortOrder(parentId) {
+  const siblings = drawTemplatesCache.filter(t => (t.parent_id || null) === (parentId || null));
+  return siblings.length ? Math.max(...siblings.map(s => s.sort_order || 0)) + 1 : 0;
+}
+
+function _renderDrawTemplateGrid() {
+  const grid = document.getElementById('drawTemplateGrid');
+  const breadcrumb = document.getElementById('drawTemplateBreadcrumb');
+  if (!grid) return;
+
+  // ── 브레드크럼
+  if (breadcrumb) {
+    const path = [];
+    let f = currentTemplateFolder ? _tplById(currentTemplateFolder) : null;
+    const seen = new Set();
+    while (f && !seen.has(f.id)) { seen.add(f.id); path.unshift(f); f = f.parent_id ? _tplById(f.parent_id) : null; }
+    const crumbs = [{ id: null, name: '🏠 루트' }].concat(path.map(p => ({ id: p.id, name: '📁 ' + p.label })));
+    breadcrumb.innerHTML = crumbs.map((c, i) => {
+      const last = i === crumbs.length - 1;
+      const cls = last ? 'dt-crumb current' : 'dt-crumb clickable';
+      const onclick = last ? '' : `onclick="enterTemplateFolder(${c.id === null ? 'null' : `'${_escHtml(c.id)}'`})"`;
+      const sep = last ? '' : '<span class="dt-crumb-sep">›</span>';
+      return `<span class="${cls}" ${onclick}>${_escHtml(c.name)}</span>${sep}`;
+    }).join('');
+  }
+
+  // ── 현재 폴더 항목
+  const items = drawTemplatesCache
+    .filter(t => (t.parent_id || null) === (currentTemplateFolder || null))
+    .sort((a, b) => {
+      // 폴더 먼저, 그 다음 sort_order 순
+      if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
+      return (a.sort_order || 0) - (b.sort_order || 0) || a.label.localeCompare(b.label);
+    });
+
+  grid.innerHTML = '';
+
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'dt-empty';
+    empty.textContent = currentTemplateFolder
+      ? '이 폴더는 비어 있어요.'
+      : (isAdmin ? '등록된 템플릿이 없어요. 아래에서 업로드하거나 "📁 새 폴더"를 만드세요.' : '등록된 템플릿이 없어요. 관리자에게 문의하세요.');
+    grid.appendChild(empty);
+  }
+
+  items.forEach(t => {
     const card = document.createElement('div');
-    card.className = 'dt-card';
-    card.onclick = () => pickDrawTemplate(t);
-    const thumbHtml = t.src
-      ? `<div class="dt-card-thumb"><img src="${_escHtml(t.src)}" alt=""></div>`
-      : `<div class="dt-card-thumb"><span class="emoji">${_escHtml(t.emoji)}</span></div>`;
+    card.className = 'dt-card ' + (t.kind === 'folder' ? 'dt-folder' : 'dt-image');
+    card.dataset.id = t.id;
+    card.dataset.kind = t.kind;
+    if (isAdmin) card.draggable = true;
+
+    let thumbHtml;
+    if (t.kind === 'folder') {
+      thumbHtml = `<div class="dt-card-thumb"><span class="emoji">📁</span></div>`;
+    } else if (t.src) {
+      thumbHtml = `<div class="dt-card-thumb"><img src="${_escHtml(t.src)}" alt=""></div>`;
+    } else {
+      thumbHtml = `<div class="dt-card-thumb"><span class="emoji">${_escHtml(t.emoji)}</span></div>`;
+    }
     card.innerHTML = `
       ${thumbHtml}
       <div class="dt-card-name">${_escHtml(t.label)}</div>
       <button class="dt-card-del" title="삭제" onclick="event.stopPropagation();deleteDrawTemplate('${_escHtml(t.id)}')">✕</button>
     `;
+
+    card.onclick = () => {
+      if (t.kind === 'folder') enterTemplateFolder(t.id);
+      else pickDrawTemplate(t);
+    };
+
+    if (isAdmin) {
+      card.addEventListener('dragstart', (e) => _onTplDragStart(e, t));
+      card.addEventListener('dragover', (e) => _onTplDragOver(e, t));
+      card.addEventListener('dragleave', _onTplDragLeave);
+      card.addEventListener('drop', (e) => _onTplDrop(e, t));
+      card.addEventListener('dragend', _onTplDragEnd);
+    }
+
     grid.appendChild(card);
   });
+
+  // 그리드 빈 공간에 드롭 = 현재 폴더 끝으로 이동
+  if (isAdmin) {
+    grid.ondragover = (e) => {
+      if (!_templateDrag) return;
+      // 카드 위가 아닐 때만
+      if (e.target.closest('.dt-card')) return;
+      e.preventDefault();
+      grid.classList.add('drop-active');
+    };
+    grid.ondragleave = (e) => {
+      if (e.target === grid) grid.classList.remove('drop-active');
+    };
+    grid.ondrop = (e) => {
+      grid.classList.remove('drop-active');
+      if (e.target.closest('.dt-card')) return;
+      _onTplDropOnEmpty(e);
+    };
+  } else {
+    grid.ondragover = null;
+    grid.ondragleave = null;
+    grid.ondrop = null;
+  }
+}
+
+function enterTemplateFolder(folderId) {
+  currentTemplateFolder = folderId;
+  _renderDrawTemplateGrid();
+}
+
+async function createTemplateFolder() {
+  if (!isAdmin) return;
+  const name = prompt('새 폴더 이름:');
+  if (!name || !name.trim()) return;
+  try {
+    await saveDrawTemplateRow({
+      id: 'dtfolder_' + Date.now(),
+      label: name.trim(),
+      emoji: '📁',
+      src: '',
+      kind: 'folder',
+      parent_id: currentTemplateFolder,
+      sort_order: _getNextSortOrder(currentTemplateFolder),
+    });
+    await refreshDrawTemplates();
+  } catch (e) {
+    alert('폴더 생성 오류: ' + e.message);
+  }
+}
+
+/* ── 드래그 앤 드롭 핸들러 ── */
+function _onTplDragStart(e, item) {
+  _templateDrag = item;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', item.id); } catch(_) {}
+  const card = e.currentTarget;
+  setTimeout(() => card.classList.add('dragging'), 0);
+}
+
+function _onTplDragOver(e, target) {
+  if (!_templateDrag) return;
+  if (_templateDrag.id === target.id) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const card = e.currentTarget;
+  card.classList.remove('drop-into', 'drop-before', 'drop-after');
+  const rect = card.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const pct = x / rect.width;
+  const canDropInto = target.kind === 'folder' && !_isDescendantOf(target.id, _templateDrag.id);
+  if (canDropInto && pct > 0.2 && pct < 0.8) {
+    card.classList.add('drop-into');
+  } else if (pct < 0.5) {
+    card.classList.add('drop-before');
+  } else {
+    card.classList.add('drop-after');
+  }
+}
+
+function _onTplDragLeave(e) {
+  const card = e.currentTarget;
+  card.classList.remove('drop-into', 'drop-before', 'drop-after');
+}
+
+async function _onTplDrop(e, target) {
+  if (!_templateDrag) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const card = e.currentTarget;
+  const drag = _templateDrag;
+  const isInto = card.classList.contains('drop-into');
+  const isBefore = card.classList.contains('drop-before');
+  card.classList.remove('drop-into', 'drop-before', 'drop-after');
+  if (drag.id === target.id) return;
+  // 자기 자신이나 자손에게 드롭 금지 (폴더 드래그 시)
+  if (drag.kind === 'folder' && _isDescendantOf(target.parent_id || target.id, drag.id)) return;
+
+  try {
+    if (isInto && target.kind === 'folder' && !_isDescendantOf(target.id, drag.id)) {
+      // 폴더 안으로 이동
+      await updateDrawTemplateRow(drag.id, {
+        src_back: target.id,
+        sort_order: _getNextSortOrder(target.id),
+      });
+    } else {
+      // target과 같은 부모로 이동 + 재정렬
+      const newParent = target.parent_id || null;
+      // 폴더를 자기 자손의 부모 아래로 이동하려 하면 중단
+      if (drag.kind === 'folder' && newParent && _isDescendantOf(newParent, drag.id)) return;
+      const siblings = drawTemplatesCache
+        .filter(t => (t.parent_id || null) === newParent && t.id !== drag.id)
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      const targetIdx = siblings.findIndex(s => s.id === target.id);
+      const insertIdx = isBefore ? targetIdx : targetIdx + 1;
+      siblings.splice(insertIdx, 0, drag);
+      // 순서 재할당 (같은 부모 내 모두 업데이트)
+      await Promise.all(siblings.map((s, i) =>
+        updateDrawTemplateRow(s.id, { sort_order: i, src_back: newParent || '' })
+      ));
+    }
+    await refreshDrawTemplates();
+  } catch (err) {
+    alert('이동 오류: ' + err.message);
+  }
+}
+
+function _onTplDragEnd() {
+  _templateDrag = null;
+  document.querySelectorAll('.dt-card').forEach(c => c.classList.remove('dragging', 'drop-into', 'drop-before', 'drop-after'));
+  const grid = document.getElementById('drawTemplateGrid');
+  if (grid) grid.classList.remove('drop-active');
+}
+
+async function _onTplDropOnEmpty(e) {
+  if (!_templateDrag) return;
+  e.preventDefault();
+  const drag = _templateDrag;
+  const parent = currentTemplateFolder || null;
+  if ((drag.parent_id || null) === parent) return; // 이미 이 폴더
+  if (drag.kind === 'folder' && parent && _isDescendantOf(parent, drag.id)) return;
+  try {
+    await updateDrawTemplateRow(drag.id, {
+      src_back: parent || '',
+      sort_order: _getNextSortOrder(parent),
+    });
+    await refreshDrawTemplates();
+  } catch (err) {
+    alert('이동 오류: ' + err.message);
+  }
 }
 
 function pickDrawTemplate(t) {
@@ -2946,12 +3249,15 @@ async function uploadDrawTemplate() {
       const ext = (file.name.split('.').pop() || 'png').toLowerCase();
       const fileName = `draw_template_${Date.now()}.${ext}`;
       const url = await uploadToStorage(ev.target.result, fileName);
-      await saveItemToDB({
+      await saveDrawTemplateRow({
         id: 'dtpl_' + Date.now(),
         label: name,
         emoji: '🖼️',
         src: url,
-      }, DRAW_TEMPLATE_CATEGORY);
+        kind: 'image',
+        parent_id: currentTemplateFolder,
+        sort_order: _getNextSortOrder(currentTemplateFolder),
+      });
       nameEl.value = ''; fileEl.value = '';
       await refreshDrawTemplates();
       alert('업로드 완료!');
@@ -2964,8 +3270,18 @@ async function uploadDrawTemplate() {
 
 async function deleteDrawTemplate(id) {
   if (!isAdmin) return;
-  if (!confirm('이 템플릿을 삭제할까요?')) return;
+  const item = _tplById(id);
+  if (!item) return;
+  // 자손 포함 삭제 대상 집계
+  const descendants = drawTemplatesCache.filter(t => t.id !== id && _isDescendantOf(t.id, id));
+  const msg = item.kind === 'folder'
+    ? (descendants.length
+        ? `"${item.label}" 폴더와 그 안의 항목 ${descendants.length}개를 모두 삭제할까요?`
+        : `"${item.label}" 폴더를 삭제할까요?`)
+    : `"${item.label}" 템플릿을 삭제할까요?`;
+  if (!confirm(msg)) return;
   try {
+    for (const d of descendants) { await deleteItemFromDB(d.id); }
     await deleteItemFromDB(id);
     await refreshDrawTemplates();
   } catch (e) {
