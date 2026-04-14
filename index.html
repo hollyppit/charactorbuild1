@@ -4004,6 +4004,8 @@ function _currentBrushWidth(pressure) {
 
 /* ── 포인터 이벤트 (활성 레이어로 라우팅) ── */
 function _drawLayerPointerDown(e) {
+  // 선택 액션 바(버튼/슬라이더)에서 시작된 이벤트는 캔버스로 전달하지 않는다
+  if (e.target && e.target.closest && e.target.closest('#selectionBar')) return;
   // 플로팅 선택: 드래그 시작
   if (selection?.mode === 'floating') {
     _floatingDragStart(e);
@@ -4052,6 +4054,7 @@ function _drawLayerPointerDown(e) {
 }
 
 function _drawLayerPointerMove(e) {
+  if (e.target && e.target.closest && e.target.closest('#selectionBar')) return;
   // 올가미 진행
   if (selection?.mode === 'lassoing') {
     _lassoMove(e);
