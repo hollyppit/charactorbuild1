@@ -2996,7 +2996,10 @@ function initDrawCanvas() {
     const endPinch = e => {
       if(drawPinchState && e.touches.length < 2){
         const shortTap = Date.now() - drawPinchState.startTime < 300;
-        if(!drawPinchState.moved && shortTap && !drawPinchState.hadStroke){
+        // 짧게 탭 + 움직임 거의 없음 → 되돌리기 실행
+        // (hadStroke 일 때는 touchstart에서 진행 중 점을 이미 롤백했고,
+        //  여기서 실제 "이전 스트로크 되돌리기"를 추가로 실행)
+        if(!drawPinchState.moved && shortTap){
           undoDraw();
         }
         drawPinchState = null;
