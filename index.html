@@ -4897,6 +4897,7 @@ document.addEventListener('keydown', e=>{
   if(e.ctrlKey||e.metaKey||e.altKey) return;
 
   if(e.key==='Tab'){ e.preventDefault(); undoDraw(); return; }
+  if(e.key==='Delete'){ e.preventDefault(); clearDraw(); return; }
   if(e.key==='p'||e.key==='P'){
     const btn=document.getElementById('tool-pen');
     if(btn){ e.preventDefault(); setDrawTool('pen',btn); }
