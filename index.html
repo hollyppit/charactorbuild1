@@ -260,12 +260,15 @@ body.admin .add-btn{display:flex}
 .pal-dot.active{border-color:var(--c-yellow);box-shadow:3px 3px 0px var(--c-black);transform:translate(-1px,-1px)}
 
 /* 캔버스 */
-.draw-canvas-wrap{border:4px solid var(--c-yellow);box-shadow:var(--shadow-yellow);touch-action:none;position:relative;background:var(--c-white);max-width:520px;width:100%;aspect-ratio:210/297;cursor:crosshair;overflow:hidden;
-  background-image:linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%);
-  background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0px;background-color:#fff}
+/* wrap: 뷰포트 (바깥은 어둡게 → 그릴 수 없는 영역 표시) */
+.draw-canvas-wrap{border:4px solid var(--c-yellow);box-shadow:var(--shadow-yellow);touch-action:none;position:relative;background:#0a0006;max-width:520px;width:100%;aspect-ratio:210/297;cursor:crosshair;overflow:hidden}
 .draw-canvas-wrap.pan-ready{cursor:grab}
 .draw-canvas-wrap.pan-active{cursor:grabbing}
-.draw-canvas-stack{position:absolute;inset:0;transform-origin:0 0;will-change:transform;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* stack: 실제 캔버스 영역 (체크무늬 + 밝은 외곽선으로 경계 명확화) */
+.draw-canvas-stack{position:absolute;inset:0;transform-origin:0 0;will-change:transform;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  background-image:linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%);
+  background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0px;background-color:#fff;
+  outline:2px solid rgba(255,255,255,.35);outline-offset:-1px;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .draw-canvas-stack canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
 #selectionOverlay{transform-origin:0 0;will-change:transform;-webkit-touch-callout:none}
 /* 줌 초기화 버튼 (확대/팬 상태일 때만 표시) */
