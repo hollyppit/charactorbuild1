@@ -3273,6 +3273,9 @@ function _renderDrawLayersList() {
           <button class="dl-tf-btn" onclick="event.stopPropagation();flipImageLayerH('${layer.id}')" title="좌우 반전">↔</button>
           <button class="dl-tf-btn" onclick="event.stopPropagation();resetImageLayerTransform('${layer.id}')" title="기본값">↺ 초기화</button>
         </div>
+        <div class="dl-tf-btns" style="margin-top:6px">
+          <button class="dl-tf-btn" style="flex:1;background:#ffd700;color:#000;font-weight:700" onclick="event.stopPropagation();enableImageLayerEdit('${layer.id}')" title="이 레이어에 직접 그리거나 지울 수 있도록 전환합니다. 전환 후에는 크기·각도 조정을 할 수 없어요.">✏️ 편집하기</button>
+        </div>
       `;
       list.appendChild(tf);
     }
@@ -3337,6 +3340,24 @@ function resetImageLayerTransform(id) {
   layer.offsetY = 0;
   layer._flipH = false;
   _redrawImageLayer(layer);
+  _renderDrawLayersList();
+}
+
+// 이미지 레이어를 그리기 가능한 레이어로 전환
+function enableImageLayerEdit(id) {
+  const layer = _getImageLayer(id);
+  if (!layer) return;
+  const ok = confirm('이 템플릿 레이어를 편집 모드로 전환할까요?\n전환 후에는 이 레이어에 직접 그리거나 지울 수 있지만, 크기·각도 조정은 더 이상 할 수 없어요.');
+  if (!ok) return;
+  // 현재 변환이 적용된 상태를 캔버스에 확정
+  _redrawImageLayer(layer);
+  // 그리기 레이어로 전환 (캔버스 픽셀은 그대로 유지됨)
+  layer.kind = 'draw';
+  layer.history = [];
+  layer.redoStack = [];
+  layer._imageEl = null;
+  activeDrawLayerId = layer.id;
+  drawCtx = getActiveDrawCtx();
   _renderDrawLayersList();
 }
 
