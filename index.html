@@ -1311,6 +1311,7 @@ body.easy-mode .t-save-btn{display:none}
         <div class="dl-add-btns">
           <button class="dl-add-btn" onclick="addBlankDrawLayer()">➕ 빈 레이어</button>
           <button class="dl-add-btn" onclick="triggerDrawLayerUpload()">📷 이미지 업로드</button>
+          <button class="dl-add-btn" onclick="pasteImageFromClipboard('draw')">📋 붙여넣기</button>
           <button class="dl-add-btn" onclick="openDrawTemplatePicker()">🖼️ 템플릿</button>
           <button class="dl-add-btn lc-admin-only" onclick="openDrawTemplateManager()">⚙ 관리</button>
         </div>
@@ -1320,7 +1321,7 @@ body.easy-mode .t-save-btn{display:none}
     </div>
 
     <!-- 캔버스 (레이어 스택) -->
-    <div class="draw-canvas-wrap" id="drawCanvasWrap">
+    <div class="draw-canvas-wrap" id="drawCanvasWrap" oncontextmenu="return false">
       <div class="draw-canvas-stack" id="drawCanvasStack"></div>
       <canvas class="selection-overlay" id="selectionOverlay"></canvas>
       <div class="selection-bar" id="selectionBar" style="display:none"></div>
@@ -1391,6 +1392,7 @@ body.easy-mode .t-save-btn{display:none}
           style="width:32px;height:32px;border-radius:50%;border:2px solid var(--c-black);cursor:pointer;padding:2px"
           oninput="sbColor=this.value">
         <div class="toolbar-sep"></div>
+        <button class="tool-btn" onclick="pasteImageFromClipboard('storyboard')">📋 붙여넣기</button>
         <button class="tool-btn" onclick="undoSB()">↩️ 되돌리기</button>
         <button class="tool-btn" onclick="clearSB()">🗑️ 전체 지우기</button>
       </div>
@@ -1410,7 +1412,7 @@ body.easy-mode .t-save-btn{display:none}
       </div>
 
       <!-- 16:9 캔버스 -->
-      <div class="sb-canvas-wrap">
+      <div class="sb-canvas-wrap" oncontextmenu="return false">
         <canvas id="sbCanvas"></canvas>
       </div>
 
@@ -4964,6 +4966,100 @@ document.addEventListener('keyup', e=>{
     // 팬 진행 중이면 pointerup까지 유지
     if(wrap && !isPanning) wrap.classList.remove('pan-ready');
   }
+});
+
+// 클립보드 이미지를 캔버스에 적용 (직접 그리기 = 새 레이어 / 스토리보드 = 캔버스에 그리기)
+function _applyPastedImageDataUrl(dataUrl, mode){
+  if(mode==='draw'){
+    addImageDrawLayer(dataUrl, '붙여넣은 이미지');
+  } else if(mode==='storyboard'){
+    const canvas=document.getElementById('sbCanvas');
+    if(!canvas || !sbCtx) return;
+    const img=new Image();
+    img.onload=()=>{
+      sbHistory.push(canvas.toDataURL());
+      if(sbHistory.length>30) sbHistory.shift();
+      sbRedo=[];
+      const cw=canvas.width, ch=canvas.height;
+      const ratio=Math.min(cw/img.width, ch/img.height)*0.9;
+      const dw=img.width*ratio, dh=img.height*ratio;
+      const dx=(cw-dw)/2, dy=(ch-dh)/2;
+      sbCtx.drawImage(img, dx, dy, dw, dh);
+    };
+    img.src=dataUrl;
+  }
+}
+
+function _readBlobAsDataURL(blob){
+  return new Promise((resolve, reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=()=>reject(r.error||new Error('read failed'));
+    r.readAsDataURL(blob);
+  });
+}
+
+// 터치 환경용 — 버튼 클릭 시 Clipboard API로 이미지 읽기
+async function pasteImageFromClipboard(mode){
+  // mode 미지정 시 현재 활성 패널로부터 추론
+  if(!mode){
+    const active=document.querySelector('.mode-panel.active');
+    if(!active) return;
+    if(active.id==='panel-draw') mode='draw';
+    else if(active.id==='panel-storyboard') mode='storyboard';
+    else return;
+  }
+  try{
+    if(!navigator.clipboard || !navigator.clipboard.read){
+      alert('이 브라우저는 클립보드 읽기를 지원하지 않습니다.\n이미지를 길게 눌러 복사한 뒤 다시 시도하거나,\n📷 이미지 업로드 버튼을 사용해 주세요.');
+      return;
+    }
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){
+      const type=item.types.find(t=>t.startsWith('image/'));
+      if(type){ blob=await item.getType(type); break; }
+    }
+    if(!blob){
+      alert('클립보드에 이미지가 없습니다.\n이미지를 먼저 복사한 뒤 다시 시도해 주세요.');
+      return;
+    }
+    const dataUrl=await _readBlobAsDataURL(blob);
+    _applyPastedImageDataUrl(dataUrl, mode);
+  }catch(err){
+    console.error('pasteImageFromClipboard:', err);
+    if(err && (err.name==='NotAllowedError' || err.name==='SecurityError')){
+      alert('클립보드 읽기 권한이 거부되었습니다.\n주소창의 권한 아이콘에서 클립보드 접근을 허용해 주세요.');
+    } else {
+      alert('이미지를 붙여넣을 수 없습니다: '+(err && err.message || err));
+    }
+  }
+}
+
+// Ctrl+V — 클립보드 이미지 붙여넣기 (직접 그리기/스토리보드)
+document.addEventListener('paste', e=>{
+  const active=document.querySelector('.mode-panel.active');
+  if(!active) return;
+  let mode=null;
+  if(active.id==='panel-draw') mode='draw';
+  else if(active.id==='panel-storyboard') mode='storyboard';
+  else return;
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||e.target.isContentEditable) return;
+
+  const items=(e.clipboardData||window.clipboardData||{}).items;
+  if(!items) return;
+  let imageItem=null;
+  for(const it of items){
+    if(it && it.type && it.type.indexOf('image/')===0){ imageItem=it; break; }
+  }
+  if(!imageItem) return;
+  e.preventDefault();
+
+  const file=imageItem.getAsFile();
+  if(!file) return;
+  _readBlobAsDataURL(file).then(dataUrl=>_applyPastedImageDataUrl(dataUrl, mode))
+    .catch(()=>alert('이미지를 붙여넣을 수 없습니다.'));
 });
 
 function saveDrawHistory(){
