@@ -188,9 +188,8 @@ CRITICAL: Do NOT include any text, words, letters, subtitles, watermarks, captio
 
     // ── Step 4: Gemini로 이미지 생성 ──
     const models = [
+      'gemini-3.1-flash-image-preview',
       'gemini-2.5-flash-image',
-      'gemini-2.0-flash-preview-image-generation',
-      'gemini-2.0-flash-exp-image-generation',
     ];
 
     let lastError = '';
