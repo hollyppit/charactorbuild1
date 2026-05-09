@@ -270,54 +270,50 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
     }
 
     const models = [
-      'gemini-3.1-flash-image-preview',
-      'gemini-2.5-flash-image',
+      'gemini-2.0-flash-preview-image-generation',
+      'gemini-2.5-flash-preview-05-20',
     ];
+
+    const parts = useImageInput
+      ? [
+          { inlineData: { mimeType: 'image/png', data: base64 } },
+          { text: finalPrompt }
+        ]
+      : [
+          { text: finalPrompt }
+        ];
+
+    const tryGemini = async (model) => {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            responseModalities: ['IMAGE'],
+            imageConfig: { aspectRatio: '3:4' },
+          },
+        }),
+      });
+      if (!res.ok) {
+        const errTxt = await res.text().catch(() => '');
+        throw new Error(`[${model}] ${res.status}: ${errTxt}`);
+      }
+      const data = await res.json();
+      const parts2 = data.candidates?.[0]?.content?.parts || [];
+      const imagePart = parts2.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+      if (!imagePart) throw new Error(`[${model}] 이미지 데이터 없음`);
+      return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+    };
 
     let lastError = '';
 
-    for (const model of models) {
-      try {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
-
-        const parts = useImageInput
-          ? [
-              { inlineData: { mimeType: 'image/png', data: base64 } },
-              { text: finalPrompt }
-            ]
-          : [
-              { text: finalPrompt }
-            ];
-
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts }],
-            generationConfig: {
-              responseModalities: ['IMAGE'],
-              imageConfig: { aspectRatio: '3:4' },
-            },
-          }),
-        });
-
-        if (!res.ok) {
-          const errTxt = await res.text().catch(() => '');
-          throw new Error(`[${model}] ${res.status}: ${errTxt}`);
-        }
-
-        const data = await res.json();
-        const parts2 = data.candidates?.[0]?.content?.parts || [];
-        const imagePart = parts2.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-
-        if (!imagePart) throw new Error(`[${model}] 이미지 데이터 없음`);
-
-        const imageDataUrl = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-        return new Response(JSON.stringify({ image: imageDataUrl }), { headers: corsHeaders });
-
-      } catch (e) {
-        lastError += e.message + ' | ';
-      }
+    try {
+      const imageDataUrl = await Promise.any(models.map(m => tryGemini(m)));
+      return new Response(JSON.stringify({ image: imageDataUrl }), { headers: corsHeaders });
+    } catch (aggErr) {
+      lastError = aggErr.errors?.map(e => e.message).join(' | ') ?? String(aggErr);
     }
 
     // OpenAI 폴백
