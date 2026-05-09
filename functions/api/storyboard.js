@@ -232,6 +232,31 @@ CRITICAL: Do NOT include any text, words, letters, subtitles, watermarks, captio
       }
     }
 
+    // OpenAI 폴백
+    try {
+      const binaryStr = atob(sketchBase64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('image', blob, 'image.png');
+      formData.append('prompt', finalPrompt.slice(0, 32000));
+      formData.append('model', 'gpt-image-1');
+      formData.append('size', '1536x1024');
+      formData.append('n', '1');
+      const oaiRes = await fetch('https://api.openai.com/v1/images/edits', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
+        body: formData,
+      });
+      if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`edits ${oaiRes.status}: ${t}`); }
+      const imageB64 = (await oaiRes.json()).data?.[0]?.b64_json;
+      if (!imageB64) throw new Error('이미지 데이터 없음');
+      return new Response(JSON.stringify({ image: `data:image/png;base64,${imageB64}` }), { headers: corsHeaders });
+    } catch (oaiErr) {
+      lastError += `[OpenAI] ${oaiErr.message}`;
+    }
+
     throw new Error(`모든 모델 실패: ${lastError}`);
 
   } catch (err) {

@@ -11,6 +11,7 @@ export async function onRequest(context) {
     const { image, style, mode, userPrompt: rawPrompt, regen } = await context.request.json();
     const GEMINI_KEY = context.env.GEMINI_KEY;
     const ANTHROPIC_KEY = context.env.ANTHROPIC_API_KEY;
+    const OPENAI_KEY = context.env.OPENAI_API_KEY;
     const base64 = image.includes(',') ? image.split(',')[1] : image;
 
     // 서버 측 안전 순화 (클라이언트 우회 방어)
@@ -317,6 +318,45 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
       } catch (e) {
         lastError += e.message + ' | ';
       }
+    }
+
+    // OpenAI 폴백
+    try {
+      const oaiPrompt = finalPrompt.slice(0, 32000);
+      let imageB64;
+
+      if (useImageInput) {
+        const binaryStr = atob(base64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'image/png' });
+        const formData = new FormData();
+        formData.append('image', blob, 'image.png');
+        formData.append('prompt', oaiPrompt);
+        formData.append('model', 'gpt-image-1');
+        formData.append('size', '1024x1536');
+        formData.append('n', '1');
+        const oaiRes = await fetch('https://api.openai.com/v1/images/edits', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
+          body: formData,
+        });
+        if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`edits ${oaiRes.status}: ${t}`); }
+        imageB64 = (await oaiRes.json()).data?.[0]?.b64_json;
+      } else {
+        const oaiRes = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
+          body: JSON.stringify({ model: 'gpt-image-1', prompt: oaiPrompt, size: '1024x1536', n: 1 }),
+        });
+        if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`generations ${oaiRes.status}: ${t}`); }
+        imageB64 = (await oaiRes.json()).data?.[0]?.b64_json;
+      }
+
+      if (!imageB64) throw new Error('이미지 데이터 없음');
+      return new Response(JSON.stringify({ image: `data:image/png;base64,${imageB64}` }), { headers: corsHeaders });
+    } catch (oaiErr) {
+      lastError += `[OpenAI] ${oaiErr.message}`;
     }
 
     throw new Error(`모든 모델 실패: ${lastError}`);
