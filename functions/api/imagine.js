@@ -270,8 +270,8 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
     }
 
     const models = [
-      'gemini-2.0-flash-preview-image-generation',
-      'gemini-2.5-flash-preview-05-20',
+      'gemini-3.1-flash-image-preview',
+      'gemini-2.5-flash-image',
     ];
 
     const parts = useImageInput
