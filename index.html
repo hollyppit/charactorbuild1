@@ -334,6 +334,10 @@ body.admin .add-btn{display:flex}
 .dl-item{display:flex;align-items:center;gap:8px;padding:5px;border:2px solid #3a0028;background:#0d0008;cursor:pointer;transition:.1s}
 .dl-item:hover{background:#1a0010;border-color:var(--c-purple)}
 .dl-item.active{border-color:var(--c-yellow);background:#2d1500}
+/* 잠금 레이어: 클릭 불가, 회색 처리 */
+.dl-item.dl-locked{cursor:default;border-color:#2a2a2a;background:#080808;opacity:.75}
+.dl-item.dl-locked:hover{background:#080808;border-color:#2a2a2a}
+.dl-locked-badge{font-size:9px;color:#666;font-family:var(--f-ui);font-weight:700;letter-spacing:.03em;display:block;margin-top:2px}
 .dl-thumb{width:44px;height:32px;border:1px solid #444;flex-shrink:0;overflow:hidden;position:relative;
   background-image:linear-gradient(45deg,#333 25%,transparent 25%),linear-gradient(-45deg,#333 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#333 75%),linear-gradient(-45deg,transparent 75%,#333 75%);
   background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0px;background-color:#555}
@@ -1295,12 +1299,6 @@ body.easy-mode .t-save-btn{display:none}
         <span class="sz-value" id="brushSizeValue">8px</span>
       </div>
       <div class="toolbar-sep"></div>
-      <div class="color-picker-wrap">
-        <input type="color" id="colorPicker" value="#FF6B9D"
-          style="width:32px;height:32px;border-radius:50%;border:2px solid var(--c-black);cursor:pointer;padding:2px">
-        <span class="color-picker-label">색상 직접 선택</span>
-      </div>
-      <div class="toolbar-sep"></div>
       <label class="press-toggle" id="pressToggleLabel" title="필압 사용 (체크 해제 시 일정 굵기)">
         <input type="checkbox" id="pressureToggle" onchange="togglePressure(this)">
         <span>🖊️ 필압</span>
@@ -1327,6 +1325,12 @@ body.easy-mode .t-save-btn{display:none}
       <div class="pal-dot" style="background:#888888" onclick="setPalColor('#888888',this)"></div>
       <div class="pal-dot" style="background:#FFFFFF;border:1px solid #ccc" onclick="setPalColor('#FFFFFF',this)"></div>
       <div class="pal-dot" style="background:#1A1A2E" onclick="setPalColor('#1A1A2E',this)"></div>
+      <!-- 색상 직접 선택: 팔레트에 없는 색을 고를 때 클릭 -->
+      <div class="color-picker-wrap" style="margin-left:6px;border-left:2px solid #3a0028;padding-left:8px">
+        <input type="color" id="colorPicker" value="#FF6B9D"
+          style="width:30px;height:30px;border-radius:50%;border:2px solid var(--c-black);cursor:pointer;padding:2px">
+        <span class="color-picker-label">색상 직접 선택</span>
+      </div>
     </div>
 
     <!-- 레이어 패널 -->
@@ -2939,7 +2943,15 @@ let drawCtx = null;
 function _newDrawLayerId() { return 'dl_' + (++drawLayerCounter); }
 
 function getActiveDrawLayer() {
-  return drawLayers.find(l => l.id === activeDrawLayerId) || null;
+  const layer = drawLayers.find(l => l.id === activeDrawLayerId);
+  if (layer && !layer.locked) return layer;
+  // 잠금 레이어가 활성화된 경우 → 최상위 비잠금 레이어로 자동 전환
+  const nonLocked = drawLayers.filter(l => !l.locked);
+  if (nonLocked.length > 0) {
+    activeDrawLayerId = nonLocked[nonLocked.length - 1].id;
+    return nonLocked[nonLocked.length - 1];
+  }
+  return null;
 }
 
 function getActiveDrawCtx() {
@@ -2959,9 +2971,10 @@ function initDrawCanvas() {
   drawCanvasBaseW = w;
   drawCanvasBaseH = h;
 
-  // 기본 레이어 없으면 1개 생성 (흰 배경)
+  // 첫 진입 시: 잠금된 흰 배경 + 실제 그리기 레이어 생성
   if (drawLayers.length === 0) {
-    _createDrawLayer({ kind: 'draw', name: '기본 레이어', _fillWhite: true });
+    _createDrawLayer({ kind: 'draw', name: '흰 배경', _fillWhite: true, locked: true });
+    _createDrawLayer({ kind: 'draw', name: '레이어 1' });
   }
 
   // 모든 레이어 크기 맞추기
@@ -3040,7 +3053,7 @@ function showGestureHintOnce(){
   }catch(_){ /* localStorage 차단된 경우 무시 */ }
 }
 
-function _createDrawLayer({ kind = 'draw', name = '', src = '', imageEl = null, opacity = 1, _fillWhite = false }) {
+function _createDrawLayer({ kind = 'draw', name = '', src = '', imageEl = null, opacity = 1, _fillWhite = false, locked = false }) {
   const id = _newDrawLayerId();
   const canvas = document.createElement('canvas');
   const w = drawCanvasBaseW || 600;
@@ -3056,9 +3069,9 @@ function _createDrawLayer({ kind = 'draw', name = '', src = '', imageEl = null, 
     canvas,
     opacity,
     visible: true,
+    locked,
     history: [],
     redoStack: [],
-    // 이미지 레이어 전용 변환
     scale: 1,
     rotate: 0,
     offsetX: 0,
@@ -3070,7 +3083,7 @@ function _createDrawLayer({ kind = 'draw', name = '', src = '', imageEl = null, 
     _paintImageToLayer(layer, imageEl, src);
   }
   drawLayers.push(layer);
-  activeDrawLayerId = id;
+  if (!locked) activeDrawLayerId = id; // 잠금 레이어는 활성 레이어로 설정하지 않음
   return layer;
 }
 
@@ -3163,8 +3176,27 @@ function _renderDrawLayersList() {
     const isTop = i === drawLayers.length - 1;
     const isBottom = i === 0;
     const row = document.createElement('div');
-    row.className = 'dl-item' + (layer.id === activeDrawLayerId ? ' active' : '');
     row.dataset.id = layer.id;
+
+    // 잠금 레이어: 선택/편집 불가, 단순 표시만
+    if (layer.locked) {
+      row.className = 'dl-item dl-locked';
+      const thumb = document.createElement('div');
+      thumb.className = 'dl-thumb';
+      const tc = document.createElement('canvas');
+      tc.width = 64; tc.height = 48;
+      try { tc.getContext('2d').drawImage(layer.canvas, 0, 0, 64, 48); } catch(e) {}
+      thumb.appendChild(tc);
+      row.appendChild(thumb);
+      const info = document.createElement('div');
+      info.className = 'dl-info';
+      info.innerHTML = `<div class="dl-name-row"><span class="dl-name-text">🔒 ${_escHtml(layer.name)}</span></div><span class="dl-locked-badge">고정 배경 · 편집 불가</span>`;
+      row.appendChild(info);
+      list.appendChild(row);
+      continue;
+    }
+
+    row.className = 'dl-item' + (layer.id === activeDrawLayerId ? ' active' : '');
     row.onclick = (e) => {
       if (e.target.closest('.dl-actions') || e.target.tagName === 'INPUT') return;
       selectDrawLayer(layer.id);
@@ -3261,6 +3293,8 @@ function _renderDrawLayersList() {
 }
 
 function selectDrawLayer(id) {
+  const layer = drawLayers.find(l => l.id === id);
+  if (!layer || layer.locked) return; // 잠금 레이어 선택 불가 (무시)
   if (selection && selection.layerId !== id) cancelSelection();
   activeDrawLayerId = id;
   drawCtx = getActiveDrawCtx();
@@ -3355,7 +3389,9 @@ function addImageDrawLayer(src, name) {
 function moveDrawLayer(id, dir) {
   const i = drawLayers.findIndex(l => l.id === id);
   if (i < 0) return;
+  if (drawLayers[i].locked) return; // 잠금 레이어 이동 불가
   const j = i + dir;
+  if (j >= 0 && drawLayers[j] && drawLayers[j].locked) return; // 잠금 레이어 아래로 이동 불가
   if (j < 0 || j >= drawLayers.length) return;
   [drawLayers[i], drawLayers[j]] = [drawLayers[j], drawLayers[i]];
   _rebuildDrawLayerStackDOM();
@@ -3364,7 +3400,7 @@ function moveDrawLayer(id, dir) {
 
 function toggleDrawLayerVisible(id) {
   const layer = drawLayers.find(l => l.id === id);
-  if (!layer) return;
+  if (!layer || layer.locked) return;
   layer.visible = !layer.visible;
   layer.canvas.style.opacity = layer.visible ? String(layer.opacity) : '0';
   _renderDrawLayersList();
@@ -3372,21 +3408,24 @@ function toggleDrawLayerVisible(id) {
 
 function setDrawLayerOpacity(id, opacity) {
   const layer = drawLayers.find(l => l.id === id);
-  if (!layer) return;
+  if (!layer || layer.locked) return;
   layer.opacity = Math.max(0, Math.min(1, opacity));
   if (layer.visible) layer.canvas.style.opacity = String(layer.opacity);
 }
 
 function removeDrawLayer(id) {
-  if (drawLayers.length <= 1) { alert('레이어는 최소 1개 이상이어야 해요.'); return; }
+  const layer = drawLayers.find(l => l.id === id);
+  if (layer && layer.locked) return; // 잠금 레이어 삭제 불가 (무시)
+  const nonLocked = drawLayers.filter(l => !l.locked);
+  if (nonLocked.length <= 1) { alert('레이어는 최소 1개 이상이어야 해요.'); return; }
   const i = drawLayers.findIndex(l => l.id === id);
   if (i < 0) return;
   if (!confirm('이 레이어를 삭제할까요?')) return;
   if (selection && selection.layerId === id) cancelSelection();
   drawLayers.splice(i, 1);
   if (activeDrawLayerId === id) {
-    const newIdx = Math.max(0, i - 1);
-    activeDrawLayerId = drawLayers[newIdx].id;
+    const remaining = drawLayers.filter(l => !l.locked);
+    activeDrawLayerId = remaining.length > 0 ? remaining[remaining.length - 1].id : drawLayers[drawLayers.length - 1].id;
   }
   _rebuildDrawLayerStackDOM();
   _renderDrawLayersList();
