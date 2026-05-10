@@ -1388,7 +1388,8 @@ body.easy-mode .t-save-btn{display:none}
     <div class="btn-row">
       <button class="btn btn-gray"   onclick="clearDraw()">🗑️ 초기화</button>
       <button class="btn btn-blue"   onclick="saveDrawing()">💾 PNG 저장</button>
-      <button class="btn btn-green"  onclick="openDrawSaveModal()">☁️ 저장</button>
+      <button class="btn btn-green"  id="btnDrawNewSave"   onclick="openNewDrawSave()">☁️ 새 저장</button>
+      <button class="btn btn-green"  id="btnDrawQuickSave" onclick="openQuickSave()">🔄 중간 저장</button>
       <button class="btn btn-green"  onclick="openDrawSavesList()">📂 불러오기</button>
     </div>
 
@@ -5656,52 +5657,71 @@ function _makeDrawThumbnail() {
   return tmp.toDataURL('image/jpeg', 0.7);
 }
 
-// 저장 모달 열기 — 세션이 있으면 바로 업데이트, 없으면 모달
-function openDrawSaveModal() {
-  if (_drawSaveSession) {
-    // 이미 저장한 적 있음 → 바로 덮어쓰기
-    _execDrawSave();
-    return;
-  }
+// ── 새 저장: 항상 모달 → 새 레코드 생성 ──────────────────
+function openNewDrawSave() {
   document.getElementById('dsSaveName').value = '';
   document.getElementById('dsSavePw').value = '';
   document.getElementById('dsSaveErr').textContent = '';
   document.getElementById('dsSaveProgress').style.display = 'none';
+  // 모달 제목 업데이트
+  document.querySelector('#drawSaveModal h2').textContent = '☁️ 새 파일로 저장';
   openModal('drawSaveModal');
   setTimeout(() => document.getElementById('dsSaveName').focus(), 100);
 }
 
-// 모달에서 "저장하기" 클릭 (최초 1회)
+// ── 중간 저장: 세션 있으면 바로 PUT, 없으면 모달로 세션 생성 ──
+function openQuickSave() {
+  if (_drawSaveSession?.id) {
+    // 세션 있음 → 바로 덮어쓰기
+    _execDrawSave(false);
+  } else {
+    // 세션 없음 → 모달로 이름+비밀번호 받은 뒤 첫 저장
+    document.getElementById('dsSaveName').value = _drawSaveSession?.name || '';
+    document.getElementById('dsSavePw').value = '';
+    document.getElementById('dsSaveErr').textContent = '';
+    document.getElementById('dsSaveProgress').style.display = 'none';
+    document.querySelector('#drawSaveModal h2').textContent = '🔄 중간 저장 설정';
+    openModal('drawSaveModal');
+    setTimeout(() => document.getElementById('dsSaveName').focus(), 100);
+  }
+}
+
+// 모달 "저장하기" 버튼 — 제목에 따라 신규/중간 저장 분기
 async function doDrawSave() {
-  const name = document.getElementById('dsSaveName').value.trim();
-  const pw   = document.getElementById('dsSavePw').value;
+  const name  = document.getElementById('dsSaveName').value.trim();
+  const pw    = document.getElementById('dsSavePw').value;
   const errEl = document.getElementById('dsSaveErr');
-  const progEl = document.getElementById('dsSaveProgress');
 
   errEl.textContent = '';
   if (!name) { errEl.textContent = '이름을 입력해 주세요.'; return; }
   if (!pw)   { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
   if (drawLayers.length === 0) { errEl.textContent = '저장할 레이어가 없습니다.'; return; }
 
-  progEl.style.display = 'block';
-  progEl.textContent = '⏳ 저장 준비 중...';
-
+  const isNew = document.querySelector('#drawSaveModal h2').textContent.includes('새 파일');
   const password_hash = await sha256hex(pw);
-  // 세션에 저장해두고 실행
-  _drawSaveSession = { id: null, name, pw, password_hash };
+
+  if (isNew) {
+    // 새 파일 저장: 세션을 새로 생성
+    _drawSaveSession = { id: null, name, pw, password_hash };
+  } else {
+    // 중간 저장 최초 설정: 세션 생성 (id는 저장 후 채워짐)
+    _drawSaveSession = { id: null, name, pw, password_hash };
+  }
+
   closeModal('drawSaveModal');
-  await _execDrawSave();
+  await _execDrawSave(isNew);
 }
 
-// 실제 저장/업데이트 실행 (신규 또는 덮어쓰기 공통)
-async function _execDrawSave() {
+// 실제 저장/업데이트 실행
+// isNew=true → 항상 POST(새 레코드) / isNew=false → id 있으면 PUT, 없으면 POST
+async function _execDrawSave(isNew) {
   const session = _drawSaveSession;
   if (!session) return;
 
-  // 저장 버튼 상태 표시
-  const btn = document.querySelector('.btn-row .btn-green');
-  const origText = btn ? btn.textContent : '';
-  if (btn) { btn.textContent = '⏳ 저장 중...'; btn.disabled = true; }
+  const btnNew   = document.getElementById('btnDrawNewSave');
+  const btnQuick = document.getElementById('btnDrawQuickSave');
+  if (btnNew)   { btnNew.disabled = true; }
+  if (btnQuick) { btnQuick.textContent = '⏳ 저장 중...'; btnQuick.disabled = true; }
 
   try {
     const thumbnail = _makeDrawThumbnail();
@@ -5715,9 +5735,9 @@ async function _execDrawSave() {
         : layer.canvas.toDataURL('image/jpeg', 0.85),
     }));
 
-    const isUpdate = !!session.id;
+    const useUpdate = !isNew && !!session.id;
     const res = await fetch(DRAWS_API, {
-      method: isUpdate ? 'PUT' : 'POST',
+      method: useUpdate ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: session.id,
@@ -5733,19 +5753,21 @@ async function _execDrawSave() {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || '저장 실패');
 
-    // 최초 저장이면 id 기록
-    if (!isUpdate && data.id) _drawSaveSession.id = data.id;
+    // 신규 저장이면 id 기록 (이후 중간 저장에서 사용)
+    if (!useUpdate && data.id) _drawSaveSession.id = data.id;
 
-    if (btn) {
-      btn.textContent = '✅ 저장됨';
+    if (btnQuick) {
+      btnQuick.textContent = '✅ 저장됨';
       setTimeout(() => {
-        btn.textContent = `☁️ ${session.name}`;
-        btn.disabled = false;
+        btnQuick.textContent = `🔄 ${session.name}`;
+        btnQuick.disabled = false;
       }, 1500);
     }
+    if (btnNew) btnNew.disabled = false;
   } catch (e) {
     alert(`저장 실패: ${e.message}`);
-    if (btn) { btn.textContent = origText; btn.disabled = false; }
+    if (btnNew)   { btnNew.disabled = false; }
+    if (btnQuick) { btnQuick.textContent = '🔄 중간 저장'; btnQuick.disabled = false; }
   }
 }
 
