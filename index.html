@@ -5839,42 +5839,58 @@ async function loadDrawSave(saveId) {
     const save = await res.json();
     if (save.error) throw new Error(save.error);
 
-    // 캔버스 초기화
+    // 캔버스 초기화 (drawCanvasBaseW/H 세팅 목적으로만 호출)
     drawLayers = [];
     drawLayerCounter = 0;
     activeDrawLayerId = null;
     initDrawCanvas();
 
-    // 기존 레이어 제거 후 재구성
+    // initDrawCanvas가 만든 기본 레이어 제거 후 재구성
     drawLayers = [];
     document.getElementById('drawCanvasStack').innerHTML = '';
 
     for (const meta of save.layers_meta) {
       if (!meta.url) continue;
+
+      // fetch → Blob URL 방식: crossOrigin/캐시 문제 없이 canvas에 그릴 수 있음
+      let blobUrl = null;
+      try {
+        const blob = await fetch(meta.url).then(r => r.blob());
+        blobUrl = URL.createObjectURL(blob);
+      } catch(fetchErr) {
+        console.warn('레이어 이미지 로드 실패:', meta.url, fetchErr);
+        continue;
+      }
+
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       await new Promise(resolve => {
         img.onload = resolve;
         img.onerror = resolve;
-        img.src = meta.url;
+        img.src = blobUrl;
       });
+
       _createDrawLayer({
         kind: meta.kind,
         name: meta.name,
-        imageEl: meta.kind === 'image' ? img : null,
         opacity: meta.opacity,
         locked: meta.locked,
       });
       const layer = drawLayers[drawLayers.length - 1];
       layer.visible = meta.visible;
-      layer.scale   = meta.scale;
-      layer.rotate  = meta.rotate;
-      layer.offsetX = meta.offsetX;
-      layer.offsetY = meta.offsetY;
-      if (meta.kind === 'draw') {
-        const ctx = layer.canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, layer.canvas.width, layer.canvas.height);
-      }
+      layer.scale   = meta.scale ?? 1;
+      layer.rotate  = meta.rotate ?? 0;
+      layer.offsetX = meta.offsetX ?? 0;
+      layer.offsetY = meta.offsetY ?? 0;
+
+      // 픽셀 데이터를 canvas에 직접 그리기 (draw/image 모두 동일)
+      const ctx = layer.canvas.getContext('2d');
+      ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+      ctx.drawImage(img, 0, 0, layer.canvas.width, layer.canvas.height);
+
+      // image 레이어는 _imageEl도 설정해야 리사이즈 시 재렌더링됨
+      if (meta.kind === 'image') layer._imageEl = img;
+
+      URL.revokeObjectURL(blobUrl);
     }
 
     _rebuildDrawLayerStackDOM();
