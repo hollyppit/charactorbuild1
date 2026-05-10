@@ -5853,47 +5853,42 @@ async function loadDrawSave(saveId) {
     document.getElementById('drawCanvasStack').innerHTML = '';
 
     for (const meta of save.layers_meta) {
-      if (!meta.url) continue;
-
-      // fetch → Blob URL 방식: crossOrigin/캐시 문제 없이 canvas에 그릴 수 있음
-      let blobUrl = null;
-      try {
-        const blob = await fetch(meta.url).then(r => r.blob());
-        blobUrl = URL.createObjectURL(blob);
-      } catch(fetchErr) {
-        console.warn('레이어 이미지 로드 실패:', meta.url, fetchErr);
-        continue;
-      }
-
-      const img = new Image();
-      await new Promise(resolve => {
-        img.onload = resolve;
-        img.onerror = resolve;
-        img.src = blobUrl;
-      });
-
       _createDrawLayer({
         kind: meta.kind,
         name: meta.name,
-        opacity: meta.opacity,
-        locked: meta.locked,
+        opacity: meta.opacity ?? 1,
+        locked: meta.locked ?? false,
       });
       const layer = drawLayers[drawLayers.length - 1];
-      layer.visible = meta.visible;
+      layer.visible = meta.visible ?? true;
       layer.scale   = meta.scale ?? 1;
       layer.rotate  = meta.rotate ?? 0;
       layer.offsetX = meta.offsetX ?? 0;
       layer.offsetY = meta.offsetY ?? 0;
 
-      // 픽셀 데이터를 canvas에 직접 그리기 (draw/image 모두 동일)
-      const ctx = layer.canvas.getContext('2d');
-      ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
-      ctx.drawImage(img, 0, 0, layer.canvas.width, layer.canvas.height);
+      if (!meta.url) continue; // URL 없으면 빈 레이어로 유지
 
-      // image 레이어는 _imageEl도 설정해야 리사이즈 시 재렌더링됨
-      if (meta.kind === 'image') layer._imageEl = img;
-
-      URL.revokeObjectURL(blobUrl);
+      // fetch → Blob URL: CORS/캐시 문제 없이 canvas에 그릴 수 있음
+      try {
+        const blob = await fetch(meta.url).then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.blob();
+        });
+        const blobUrl = URL.createObjectURL(blob);
+        const img = new Image();
+        await new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+          img.src = blobUrl;
+        });
+        const ctx = layer.canvas.getContext('2d');
+        ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+        ctx.drawImage(img, 0, 0, layer.canvas.width, layer.canvas.height);
+        if (meta.kind === 'image') layer._imageEl = img;
+        URL.revokeObjectURL(blobUrl);
+      } catch(fetchErr) {
+        console.warn('레이어 로드 실패 (빈 레이어로 유지):', meta.url, fetchErr);
+      }
     }
 
     _rebuildDrawLayerStackDOM();
