@@ -840,6 +840,32 @@ body.easy-mode .t-save-btn{display:none}
   letter-spacing: .05em;
 }
 
+/* ── 직접그리기 클라우드 저장 ── */
+.ds-modal-body{display:flex;flex-direction:column;gap:10px}
+.ds-field-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-yellow);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.ds-input{width:100%;padding:9px 12px;border:2px solid #3a0028;background:#0d0008;color:var(--c-white);font-family:var(--f-ui);font-size:15px;outline:none;transition:.15s;-webkit-appearance:none;border-radius:0}
+.ds-input:focus{border-color:var(--c-yellow)}
+.ds-input::placeholder{color:#555}
+.ds-hint{font-family:var(--f-ui);font-size:10px;color:#666;margin-top:2px}
+.ds-err{font-family:var(--f-ui);font-size:11px;color:#E63946;font-weight:700;min-height:16px}
+.ds-progress{font-family:var(--f-ui);font-size:11px;color:var(--c-yellow);text-align:center;padding:6px 0}
+/* 저장 목록 */
+.ds-list{display:flex;flex-direction:column;gap:8px;max-height:480px;overflow-y:auto;padding-right:2px}
+.ds-card{display:flex;gap:10px;align-items:center;background:#0d0008;border:2px solid #3a0028;padding:8px;transition:.15s}
+.ds-card:hover{border-color:#5a0040}
+.ds-thumb{width:56px;height:80px;flex-shrink:0;background:#1a0010;border:1px solid #3a0028;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.ds-thumb img{width:100%;height:100%;object-fit:cover}
+.ds-thumb-empty{font-size:22px;opacity:.4}
+.ds-info{flex:1;min-width:0}
+.ds-name{font-family:var(--f-display-kr);font-size:14px;color:var(--c-white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.ds-meta{font-family:var(--f-ui);font-size:10px;color:#666}
+.ds-card-btns{display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+.ds-btn{padding:5px 10px;border:var(--border-thin);font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;box-shadow:var(--shadow-solid-sm);transition:all .1s}
+.ds-btn:hover{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--c-black)}
+.ds-btn-load{background:var(--c-yellow);color:var(--c-black)}
+.ds-btn-del{background:#E63946;color:#fff}
+.ds-empty{text-align:center;padding:32px 0;font-family:var(--f-ui);font-size:13px;color:#555}
+
 /* ── 스토리보드 ── */
 .sb-layout{display:flex;gap:12px;padding:12px;flex-wrap:wrap;align-items:flex-start}
 .sb-canvas-col{flex:1;min-width:260px;display:flex;flex-direction:column;gap:8px}
@@ -1362,6 +1388,8 @@ body.easy-mode .t-save-btn{display:none}
     <div class="btn-row">
       <button class="btn btn-gray"   onclick="clearDraw()">🗑️ 초기화</button>
       <button class="btn btn-blue"   onclick="saveDrawing()">💾 PNG 저장</button>
+      <button class="btn btn-green"  onclick="openDrawSaveModal()">☁️ 저장</button>
+      <button class="btn btn-green"  onclick="openDrawSavesList()">📂 불러오기</button>
     </div>
 
     <!-- AI 섹션 (그리기) -->
@@ -1652,6 +1680,64 @@ body.easy-mode .t-save-btn{display:none}
     <div class="modal-btns">
       <button class="btn btn-gray" onclick="closeModal('pwModal')">취소</button>
       <button class="btn btn-purple" onclick="checkPw()">로그인</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 직접그리기: 클라우드 저장 모달 ── -->
+<div class="modal-overlay" id="drawSaveModal">
+  <div class="modal">
+    <h2>☁️ 내 그림 저장</h2>
+    <div class="ds-modal-body">
+      <div>
+        <div class="ds-field-label">이름 (닉네임)</div>
+        <input class="ds-input" type="text" id="dsSaveName" placeholder="예: 김민준" maxlength="20"
+          onkeydown="if(event.key==='Enter')document.getElementById('dsSavePw').focus()">
+      </div>
+      <div>
+        <div class="ds-field-label">비밀번호 (숫자 4자리 권장)</div>
+        <input class="ds-input" type="password" id="dsSavePw" placeholder="예: 1234" maxlength="20"
+          onkeydown="if(event.key==='Enter')doDrawSave()">
+        <div class="ds-hint">⚠️ 비밀번호를 잊으면 복구할 수 없어요. 꼭 기억해 두세요!</div>
+      </div>
+      <div class="ds-err" id="dsSaveErr"></div>
+      <div class="ds-progress" id="dsSaveProgress" style="display:none">⏳ 저장 중...</div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeModal('drawSaveModal')">취소</button>
+      <button class="btn btn-purple" onclick="doDrawSave()">저장하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 직접그리기: 저장 목록 모달 ── -->
+<div class="modal-overlay" id="drawSavesListModal">
+  <div class="modal" style="max-width:520px">
+    <h2>📂 저장된 그림 목록</h2>
+    <div class="ds-list" id="dsSavesList">
+      <div class="ds-empty">불러오는 중...</div>
+    </div>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn btn-gray" onclick="closeModal('drawSavesListModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 직접그리기: 비밀번호 확인 모달 (삭제/편집용) ── -->
+<div class="modal-overlay" id="drawSaveAuthModal">
+  <div class="modal">
+    <h2 id="dsAuthTitle">🔑 비밀번호 확인</h2>
+    <div class="ds-modal-body">
+      <div>
+        <div class="ds-field-label">저장할 때 설정한 비밀번호</div>
+        <input class="ds-input" type="password" id="dsAuthPw" placeholder="비밀번호 입력" maxlength="20"
+          onkeydown="if(event.key==='Enter')doDrawSaveAuth()">
+      </div>
+      <div class="ds-err" id="dsAuthErr"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeModal('drawSaveAuthModal')">취소</button>
+      <button class="btn btn-purple" onclick="doDrawSaveAuth()">확인</button>
     </div>
   </div>
 </div>
@@ -5535,6 +5621,273 @@ function resetAll(){
   document.getElementById('result-dressup').classList.remove('show');
   CATEGORIES.forEach(c=>buildOpts(c.id));
   applyAll(); deselectLayer();
+}
+
+/* ═══════════════════════════════════════
+   직접그리기 클라우드 저장
+═══════════════════════════════════════ */
+
+const DRAWS_API = '/api/saves';
+
+// SHA-256 해시 (hex 문자열 반환)
+async function sha256hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 현재 그리기 레이어 전체를 합성한 JPEG 썸네일 생성
+function _makeDrawThumbnail() {
+  const w = drawCanvasBaseW || 520;
+  const h = drawCanvasBaseH || 735;
+  const tmp = document.createElement('canvas');
+  tmp.width = Math.round(w * 0.3);
+  tmp.height = Math.round(h * 0.3);
+  const ctx = tmp.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, tmp.width, tmp.height);
+  for (const layer of drawLayers) {
+    if (!layer.visible) continue;
+    ctx.globalAlpha = layer.opacity ?? 1;
+    ctx.drawImage(layer.canvas, 0, 0, tmp.width, tmp.height);
+  }
+  ctx.globalAlpha = 1;
+  return tmp.toDataURL('image/jpeg', 0.7);
+}
+
+// 저장 모달 열기
+function openDrawSaveModal() {
+  document.getElementById('dsSaveName').value = '';
+  document.getElementById('dsSavePw').value = '';
+  document.getElementById('dsSaveErr').textContent = '';
+  document.getElementById('dsSaveProgress').style.display = 'none';
+  openModal('drawSaveModal');
+  setTimeout(() => document.getElementById('dsSaveName').focus(), 100);
+}
+
+// 실제 저장 실행
+async function doDrawSave() {
+  const name = document.getElementById('dsSaveName').value.trim();
+  const pw   = document.getElementById('dsSavePw').value;
+  const errEl = document.getElementById('dsSaveErr');
+  const progEl = document.getElementById('dsSaveProgress');
+
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = '이름을 입력해 주세요.'; return; }
+  if (!pw)   { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
+  if (drawLayers.length === 0) { errEl.textContent = '저장할 레이어가 없습니다.'; return; }
+
+  progEl.style.display = 'block';
+  progEl.textContent = '⏳ 저장 준비 중...';
+
+  try {
+    const password_hash = await sha256hex(pw);
+    const thumbnail = _makeDrawThumbnail();
+
+    // 레이어 데이터 직렬화
+    const layers = drawLayers.map((layer, i) => {
+      progEl.textContent = `⏳ 레이어 ${i + 1}/${drawLayers.length} 변환 중...`;
+      const isPng = layer.kind === 'draw';
+      const data = isPng
+        ? layer.canvas.toDataURL('image/png')
+        : layer.canvas.toDataURL('image/jpeg', 0.85);
+      return {
+        name: layer.name,
+        kind: layer.kind,
+        opacity: layer.opacity,
+        visible: layer.visible,
+        locked: layer.locked,
+        scale: layer.scale,
+        rotate: layer.rotate,
+        offsetX: layer.offsetX,
+        offsetY: layer.offsetY,
+        data,
+      };
+    });
+
+    progEl.textContent = '⏳ 서버에 업로드 중... (잠시 기다려 주세요)';
+
+    const res = await fetch(DRAWS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_name: name,
+        password_hash,
+        thumbnail,
+        layers,
+        canvas_w: drawCanvasBaseW,
+        canvas_h: drawCanvasBaseH,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || '저장 실패');
+
+    closeModal('drawSaveModal');
+    alert(`✅ "${name}"님의 그림이 저장되었습니다!`);
+  } catch (e) {
+    progEl.style.display = 'none';
+    errEl.textContent = `저장 실패: ${e.message}`;
+  }
+}
+
+// 저장 목록 열기
+async function openDrawSavesList() {
+  const listEl = document.getElementById('dsSavesList');
+  listEl.innerHTML = '<div class="ds-empty">불러오는 중...</div>';
+  openModal('drawSavesListModal');
+
+  try {
+    const res = await fetch(DRAWS_API);
+    const saves = await res.json();
+
+    if (!saves.length) {
+      listEl.innerHTML = '<div class="ds-empty">저장된 그림이 없어요.</div>';
+      return;
+    }
+
+    listEl.innerHTML = saves.map(s => {
+      const date = new Date(s.created_at).toLocaleDateString('ko-KR', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+      const thumb = s.thumbnail_url
+        ? `<img src="${s.thumbnail_url}" alt="">`
+        : `<span class="ds-thumb-empty">🖼️</span>`;
+      const adminDel = isAdmin
+        ? `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',true)">🗑 삭제</button>`
+        : `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',false)">🗑 삭제</button>`;
+      return `<div class="ds-card">
+        <div class="ds-thumb">${thumb}</div>
+        <div class="ds-info">
+          <div class="ds-name">${_escHtml(s.user_name)}</div>
+          <div class="ds-meta">${s.layer_count}개 레이어 · ${date}</div>
+        </div>
+        <div class="ds-card-btns">
+          <button class="ds-btn ds-btn-load" onclick="loadDrawSave('${s.id}')">📂 불러오기</button>
+          ${adminDel}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = `<div class="ds-empty">오류: ${e.message}</div>`;
+  }
+}
+
+// 저장 불러오기
+async function loadDrawSave(saveId) {
+  if (!confirm('현재 작업 중인 내용이 모두 지워집니다. 불러올까요?')) return;
+
+  const listEl = document.getElementById('dsSavesList');
+  listEl.innerHTML = '<div class="ds-empty">불러오는 중...</div>';
+
+  try {
+    const res = await fetch(`${DRAWS_API}?id=${saveId}`);
+    const save = await res.json();
+    if (save.error) throw new Error(save.error);
+
+    // 캔버스 초기화
+    drawLayers = [];
+    drawLayerCounter = 0;
+    activeDrawLayerId = null;
+    initDrawCanvas();
+
+    // 기존 레이어 제거 후 재구성
+    drawLayers = [];
+    document.getElementById('drawCanvasStack').innerHTML = '';
+
+    for (const meta of save.layers_meta) {
+      if (!meta.url) continue;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = meta.url;
+      });
+      _createDrawLayer({
+        kind: meta.kind,
+        name: meta.name,
+        imageEl: meta.kind === 'image' ? img : null,
+        opacity: meta.opacity,
+        locked: meta.locked,
+      });
+      const layer = drawLayers[drawLayers.length - 1];
+      layer.visible = meta.visible;
+      layer.scale   = meta.scale;
+      layer.rotate  = meta.rotate;
+      layer.offsetX = meta.offsetX;
+      layer.offsetY = meta.offsetY;
+      if (meta.kind === 'draw') {
+        const ctx = layer.canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, layer.canvas.width, layer.canvas.height);
+      }
+    }
+
+    _rebuildDrawLayerStackDOM();
+    _renderDrawLayersList();
+    closeModal('drawSavesListModal');
+    alert(`✅ "${save.user_name}"님의 그림을 불러왔습니다!`);
+  } catch (e) {
+    listEl.innerHTML = `<div class="ds-empty">불러오기 실패: ${e.message}</div>`;
+  }
+}
+
+// 삭제 확인 (관리자면 바로 / 일반이면 비밀번호 요청)
+let _dsDeleteTarget = null;
+
+function confirmDeleteDrawSave(saveId, userName, byAdmin) {
+  _dsDeleteTarget = { saveId, userName, byAdmin };
+  if (byAdmin) {
+    if (!confirm(`"${userName}"님의 그림을 삭제할까요? (관리자 권한)`)) return;
+    _execDeleteDrawSave(saveId, null, true);
+  } else {
+    document.getElementById('dsAuthPw').value = '';
+    document.getElementById('dsAuthErr').textContent = '';
+    document.getElementById('dsAuthTitle').textContent = `🔑 "${userName}" 삭제 — 비밀번호 확인`;
+    openModal('drawSaveAuthModal');
+    setTimeout(() => document.getElementById('dsAuthPw').focus(), 100);
+  }
+}
+
+async function doDrawSaveAuth() {
+  if (!_dsDeleteTarget) return;
+  const pw = document.getElementById('dsAuthPw').value;
+  const errEl = document.getElementById('dsAuthErr');
+  if (!pw) { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
+  errEl.textContent = '확인 중...';
+  const { saveId, byAdmin } = _dsDeleteTarget;
+  const ok = await _execDeleteDrawSave(saveId, pw, byAdmin);
+  if (!ok) {
+    errEl.textContent = '비밀번호가 맞지 않습니다.';
+  }
+}
+
+async function _execDeleteDrawSave(saveId, pw, byAdmin) {
+  try {
+    const body = { id: saveId };
+    if (byAdmin) {
+      body.admin_pw_hash = await sha256hex(ADMIN_PW);
+    } else {
+      body.password_hash = await sha256hex(pw);
+    }
+
+    const res = await fetch(DRAWS_API, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.error === 'wrong_password') return false;
+    if (!res.ok) throw new Error(data.error || '삭제 실패');
+
+    closeModal('drawSaveAuthModal');
+    _dsDeleteTarget = null;
+    alert('삭제되었습니다.');
+    openDrawSavesList();
+    return true;
+  } catch (e) {
+    alert(`삭제 오류: ${e.message}`);
+    return false;
+  }
 }
 
 /* ═══════════════════════════════════════
