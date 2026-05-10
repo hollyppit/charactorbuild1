@@ -44,7 +44,7 @@ export async function onRequest(context) {
     }
 
     const res = await sb(
-      '/rest/v1/draw_saves?select=id,user_name,password_plain,thumbnail_url,layer_count,canvas_w,canvas_h,created_at&order=created_at.desc'
+      '/rest/v1/draw_saves?select=id,user_name,password_hash,password_plain,thumbnail_url,layer_count,canvas_w,canvas_h,created_at&order=created_at.desc'
     );
     return json(await res.json());
   }

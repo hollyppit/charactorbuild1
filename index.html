@@ -5806,6 +5806,9 @@ async function openDrawSavesList() {
       const pwBadge = isAdmin && s.password_plain
         ? `<span style="font-family:var(--f-ui);font-size:11px;color:#aaa">🔑 <b style="color:var(--c-yellow)">${_escHtml(s.password_plain)}</b></span>`
         : '';
+      const loadBtn = isAdmin
+        ? `<button class="ds-btn ds-btn-load" onclick="loadDrawSave('${s.id}')">📂 불러오기</button>`
+        : `<button class="ds-btn ds-btn-load" onclick="confirmLoadDrawSave('${s.id}','${_escHtml(s.user_name)}','${s.password_hash}')">📂 불러오기</button>`;
       const delBtn = isAdmin
         ? `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',true)">🗑 삭제</button>`
         : `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',false)">🗑 삭제</button>`;
@@ -5817,7 +5820,7 @@ async function openDrawSavesList() {
           ${pwBadge}
         </div>
         <div class="ds-card-btns">
-          <button class="ds-btn ds-btn-load" onclick="loadDrawSave('${s.id}')">📂 불러오기</button>
+          ${loadBtn}
           ${delBtn}
         </div>
       </div>`;
@@ -5903,32 +5906,55 @@ async function loadDrawSave(saveId) {
 }
 
 // 삭제 확인 (관리자면 바로 / 일반이면 비밀번호 요청)
-let _dsDeleteTarget = null;
+// action: 'delete' | 'load', storedHash: DB의 password_hash (load 검증용)
+let _dsAuthTarget = null;
+
+function confirmLoadDrawSave(saveId, userName, storedHash) {
+  _dsAuthTarget = { action: 'load', saveId, userName, storedHash };
+  document.getElementById('dsAuthPw').value = '';
+  document.getElementById('dsAuthErr').textContent = '';
+  document.getElementById('dsAuthTitle').textContent = `🔑 "${userName}" 불러오기 — 비밀번호 확인`;
+  openModal('drawSaveAuthModal');
+  setTimeout(() => document.getElementById('dsAuthPw').focus(), 100);
+}
 
 function confirmDeleteDrawSave(saveId, userName, byAdmin) {
-  _dsDeleteTarget = { saveId, userName, byAdmin };
+  _dsAuthTarget = { action: 'delete', saveId, userName, byAdmin };
   if (byAdmin) {
     if (!confirm(`"${userName}"님의 그림을 삭제할까요? (관리자 권한)`)) return;
     _execDeleteDrawSave(saveId, null, true);
-  } else {
-    document.getElementById('dsAuthPw').value = '';
-    document.getElementById('dsAuthErr').textContent = '';
-    document.getElementById('dsAuthTitle').textContent = `🔑 "${userName}" 삭제 — 비밀번호 확인`;
-    openModal('drawSaveAuthModal');
-    setTimeout(() => document.getElementById('dsAuthPw').focus(), 100);
+    return;
   }
+  document.getElementById('dsAuthPw').value = '';
+  document.getElementById('dsAuthErr').textContent = '';
+  document.getElementById('dsAuthTitle').textContent = `🔑 "${userName}" 삭제 — 비밀번호 확인`;
+  openModal('drawSaveAuthModal');
+  setTimeout(() => document.getElementById('dsAuthPw').focus(), 100);
 }
 
 async function doDrawSaveAuth() {
-  if (!_dsDeleteTarget) return;
+  if (!_dsAuthTarget) return;
   const pw = document.getElementById('dsAuthPw').value;
   const errEl = document.getElementById('dsAuthErr');
   if (!pw) { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
-  errEl.textContent = '확인 중...';
-  const { saveId, byAdmin } = _dsDeleteTarget;
-  const ok = await _execDeleteDrawSave(saveId, pw, byAdmin);
-  if (!ok) {
-    errEl.textContent = '비밀번호가 맞지 않습니다.';
+
+  const { action, saveId, byAdmin, storedHash } = _dsAuthTarget;
+
+  if (action === 'load') {
+    errEl.textContent = '확인 중...';
+    const inputHash = await sha256hex(pw);
+    if (inputHash !== storedHash) {
+      errEl.textContent = '비밀번호가 맞지 않습니다.';
+      return;
+    }
+    closeModal('drawSaveAuthModal');
+    closeModal('drawSavesListModal');
+    _dsAuthTarget = null;
+    loadDrawSave(saveId);
+  } else {
+    errEl.textContent = '확인 중...';
+    const ok = await _execDeleteDrawSave(saveId, pw, false);
+    if (!ok) errEl.textContent = '비밀번호가 맞지 않습니다.';
   }
 }
 
@@ -5951,7 +5977,7 @@ async function _execDeleteDrawSave(saveId, pw, byAdmin) {
     if (!res.ok) throw new Error(data.error || '삭제 실패');
 
     closeModal('drawSaveAuthModal');
-    _dsDeleteTarget = null;
+    _dsAuthTarget = null;
     alert('삭제되었습니다.');
     openDrawSavesList();
     return true;
