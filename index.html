@@ -5102,13 +5102,14 @@ document.addEventListener('keydown', e=>{
   else if(active.id==='panel-storyboard'){ e.preventDefault(); isRedo ? redoSB() : undoSB(); }
 });
 
-// Ctrl+S — 직접 그리기 중간 저장
+// Ctrl+S — 중간 저장 / Ctrl+Shift+S — 새 저장
 document.addEventListener('keydown', e=>{
   if(!(e.ctrlKey||e.metaKey) || (e.key!=='s' && e.key!=='S')) return;
   const active=document.querySelector('.mode-panel.active');
   if(!active || active.id!=='panel-draw') return;
   e.preventDefault();
-  openQuickSave();
+  if(e.shiftKey) openNewDrawSave();
+  else openQuickSave();
 });
 
 // 직접 그리기 단축키: Tab=되돌리기, P=펜, E=지우개, +/-=확대/축소, Space+드래그=패닝
