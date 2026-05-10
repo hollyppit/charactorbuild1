@@ -95,6 +95,17 @@ body.admin .admin-bar{display:block}
 .z-bg_image{z-index:1}.z-character{z-index:10}.z-effect{z-index:30}.z-prop{z-index:20}
 .name-tag{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:var(--c-black);color:var(--c-yellow);font-family:var(--f-ui);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:3px 10px;white-space:nowrap;z-index:100;pointer-events:none}
 
+/* 스테이지 드래그/핀치 조작 중 — 스테이지 외 전체 UI 터치 차단 */
+body.stage-interacting .mode-tabs,
+body.stage-interacting .mode-marquee,
+body.stage-interacting .header,
+body.stage-interacting .admin-bar,
+body.stage-interacting .options-col,
+body.stage-interacting .layer-controls,
+body.stage-interacting .canvas-col .btn-row {
+  pointer-events: none;
+}
+
 /* 레이어 컨트롤 */
 .layer-controls{display:none;background:var(--c-card);border:2px solid var(--c-purple);box-shadow:var(--shadow-purple);padding:10px;z-index:200;margin-top:8px;width:290px}
 .layer-controls.show{display:block}
@@ -2137,6 +2148,7 @@ function initStageDrag() {
       stage.setPointerCapture(e.pointerId);
       stage.addEventListener('pointermove',onStageDragMove);
       stage.addEventListener('pointerup',onStageDragEnd);
+      document.body.classList.add('stage-interacting'); // 조작 중 외부 터치 차단
       e.preventDefault();
       return;
     }
@@ -2152,6 +2164,7 @@ function initStageDrag() {
       stage.setPointerCapture(e.pointerId);
       stage.addEventListener('pointermove',onStageDragMove);
       stage.addEventListener('pointerup',onStageDragEnd);
+      document.body.classList.add('stage-interacting'); // 조작 중 외부 터치 차단
       e.preventDefault();
       return;
     }
@@ -2246,7 +2259,8 @@ function onStageDragMove(e) {
 }
 function onStageDragEnd(e) {
   if(!dragState) return;
-  document.getElementById('stage').style.touchAction=''; // 드래그 종료 후 스크롤 복원
+  document.body.classList.remove('stage-interacting'); // 외부 터치 차단 해제
+  document.getElementById('stage').style.touchAction='';
   document.getElementById('stage').removeEventListener('pointermove',onStageDragMove);
   document.getElementById('stage').removeEventListener('pointerup',onStageDragEnd);
   dragState=null;
@@ -2284,6 +2298,7 @@ function initStagePinch() {
       startRotate: pos.rotate || 0
     };
     stage.style.touchAction = 'none';
+    document.body.classList.add('stage-interacting'); // 핀치 중 외부 터치 차단
   }, { passive: false });
 
   stage.addEventListener('touchmove', e => {
@@ -2319,12 +2334,19 @@ function initStagePinch() {
   const endPinch = e => {
     if (!pinchState) return;
     if (e.touches.length < 2) {
+      document.body.classList.remove('stage-interacting'); // 핀치 종료 후 외부 터치 차단 해제
       document.getElementById('stage').style.touchAction = '';
       pinchState = null;
     }
   };
   stage.addEventListener('touchend', endPinch);
   stage.addEventListener('touchcancel', endPinch);
+
+  // 포인터 강제 취소 시 잠금 해제 (전화 수신 등 OS 개입 상황)
+  stage.addEventListener('pointercancel', () => {
+    document.body.classList.remove('stage-interacting');
+    dragState = null;
+  });
 }
 function applyLayerLive(layerId, pos) {
   const el=document.getElementById('lyr-'+layerId); if(!el||el.style.display==='none') return;
