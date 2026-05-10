@@ -5831,7 +5831,7 @@ async function openDrawSavesList() {
 }
 
 // 저장 불러오기
-async function loadDrawSave(saveId) {
+async function loadDrawSave(saveId, session = null) {
   if (!confirm('현재 작업 중인 내용이 모두 지워집니다. 불러올까요?')) return;
 
   const listEl = document.getElementById('dsSavesList');
@@ -5893,6 +5893,14 @@ async function loadDrawSave(saveId) {
 
     _rebuildDrawLayerStackDOM();
     _renderDrawLayersList();
+
+    // 불러온 파일을 중간 저장 세션으로 설정
+    if (session) {
+      _drawSaveSession = { id: saveId, name: session.name, pw: session.pw, password_hash: session.password_hash };
+      const btnQuick = document.getElementById('btnDrawQuickSave');
+      if (btnQuick) btnQuick.textContent = `🔄 ${session.name}`;
+    }
+
     closeModal('drawSavesListModal');
     alert(`✅ "${save.user_name}"님의 그림을 불러왔습니다!`);
   } catch (e) {
@@ -5944,8 +5952,9 @@ async function doDrawSaveAuth() {
     }
     closeModal('drawSaveAuthModal');
     closeModal('drawSavesListModal');
+    const { userName } = _dsAuthTarget;
     _dsAuthTarget = null;
-    loadDrawSave(saveId);
+    loadDrawSave(saveId, { name: userName, pw, password_hash: inputHash });
   } else {
     errEl.textContent = '확인 중...';
     const ok = await _execDeleteDrawSave(saveId, pw, false);
