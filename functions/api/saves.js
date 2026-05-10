@@ -44,7 +44,7 @@ export async function onRequest(context) {
     }
 
     const res = await sb(
-      '/rest/v1/draw_saves?select=id,user_name,thumbnail_url,layer_count,canvas_w,canvas_h,created_at&order=created_at.desc'
+      '/rest/v1/draw_saves?select=id,user_name,password_plain,thumbnail_url,layer_count,canvas_w,canvas_h,created_at&order=created_at.desc'
     );
     return json(await res.json());
   }
@@ -54,7 +54,7 @@ export async function onRequest(context) {
     let body;
     try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
 
-    const { user_name, password_hash, thumbnail, layers, canvas_w, canvas_h } = body;
+    const { user_name, password_hash, password_plain, thumbnail, layers, canvas_w, canvas_h } = body;
     if (!user_name || !password_hash || !Array.isArray(layers) || !layers.length)
       return json({ error: 'missing_fields' }, 400);
 
@@ -132,6 +132,7 @@ export async function onRequest(context) {
         id: saveId,
         user_name,
         password_hash,
+        password_plain: password_plain || '',
         thumbnail_url,
         layer_count: layers.length,
         layers_meta,

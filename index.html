@@ -5712,6 +5712,7 @@ async function doDrawSave() {
       body: JSON.stringify({
         user_name: name,
         password_hash,
+        password_plain: pw,
         thumbnail,
         layers,
         canvas_w: drawCanvasBaseW,
@@ -5752,7 +5753,10 @@ async function openDrawSavesList() {
       const thumb = s.thumbnail_url
         ? `<img src="${s.thumbnail_url}" alt="">`
         : `<span class="ds-thumb-empty">🖼️</span>`;
-      const adminDel = isAdmin
+      const pwBadge = isAdmin && s.password_plain
+        ? `<span style="font-family:var(--f-ui);font-size:11px;color:#aaa">🔑 <b style="color:var(--c-yellow)">${_escHtml(s.password_plain)}</b></span>`
+        : '';
+      const delBtn = isAdmin
         ? `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',true)">🗑 삭제</button>`
         : `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',false)">🗑 삭제</button>`;
       return `<div class="ds-card">
@@ -5760,10 +5764,11 @@ async function openDrawSavesList() {
         <div class="ds-info">
           <div class="ds-name">${_escHtml(s.user_name)}</div>
           <div class="ds-meta">${s.layer_count}개 레이어 · ${date}</div>
+          ${pwBadge}
         </div>
         <div class="ds-card-btns">
           <button class="ds-btn ds-btn-load" onclick="loadDrawSave('${s.id}')">📂 불러오기</button>
-          ${adminDel}
+          ${delBtn}
         </div>
       </div>`;
     }).join('');
