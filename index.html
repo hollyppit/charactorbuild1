@@ -87,6 +87,8 @@ body.admin .admin-bar{display:block}
 .canvas-col{display:flex;flex-direction:column;align-items:center;gap:10px;position:sticky;top:10px}
 .stage-wrap{position:relative}
 .stage{width:290px;height:440px;border:4px solid var(--c-yellow);box-shadow:var(--shadow-yellow);background:var(--c-white);overflow:hidden;position:relative;touch-action:pan-y}
+/* Easy 모드: 모든 화면 크기(태블릿 포함)에서 스테이지 스크롤 차단 — 드래그 우선 */
+body.easy-mode .stage{touch-action:none}
 .stage-bg-emoji{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:100px;opacity:.07;pointer-events:none;z-index:0}
 .char-layer{position:absolute;transform-origin:center bottom;pointer-events:none;user-select:none;image-rendering:-webkit-optimize-contrast;display:none}
 .char-layer.visible{pointer-events:auto;cursor:grab}
@@ -812,8 +814,7 @@ body.easy-mode .t-save-btn{display:none}
   body.easy-mode .stage{border-color:var(--c-yellow);border-width:5px}
   /* 카테고리 탭 확대 */
   body.easy-mode .mct-btn{padding:14px 22px;min-height:52px;font-size:15px;border-width:3px}
-  /* Easy 모드: 스테이지 터치 시 페이지 스크롤 방지 → 드래그 우선 */
-  body.easy-mode .stage{touch-action:none}
+  /* Easy 모드: 모바일 스테이지 테두리 강조 (touch-action은 전역 규칙으로 이동) */
 }
 
 .t-save-btn {
@@ -2155,17 +2156,19 @@ function initStageDrag() {
 
     // Easy 모드: 탭 즉시 편집 모드 진입 + 드래그 시작
     if(easyMode && el){
+      e.preventDefault(); // 브라우저 스크롤/줌 먼저 차단 (태블릿 포함)
       const layerId=el.id.replace('lyr-','');
-      if(selLayer!==layerId) selectLayer(layerId);
       const {posKey}=layerToCatItem(layerId);
       const pos=getPos(posKey);
+      // dragState를 selectLayer() 이전에 설정 — 레이아웃 변경이 기준점에 영향 못 주도록
       dragState={layerId,posKey,startX:e.clientX,startY:e.clientY,startOX:pos.offsetX,startOY:pos.offsetY};
       stage.style.touchAction='none';
       stage.setPointerCapture(e.pointerId);
       stage.addEventListener('pointermove',onStageDragMove);
       stage.addEventListener('pointerup',onStageDragEnd);
-      document.body.classList.add('stage-interacting'); // 조작 중 외부 터치 차단
-      e.preventDefault();
+      document.body.classList.add('stage-interacting');
+      // selectLayer는 제스처 설정 완료 후 실행 — 레이어 컨트롤 열림이 드래그를 방해하지 않도록
+      if(selLayer!==layerId) requestAnimationFrame(()=>selectLayer(layerId));
       return;
     }
     if(easyMode && !el){ deselectLayer(); return; }
@@ -2581,6 +2584,9 @@ function toggleEasyMode(){
   deselectLayer();
   ['character','effect','prop'].forEach(c=>buildOpts(c));
   applyAll();
+  // CSS 적용 전 공백 없이 touch-action 즉각 반영 (태블릿/모바일 모두)
+  const stageEl=document.getElementById('stage');
+  if(stageEl) stageEl.style.touchAction=easyMode?'none':'';
 }
 function updateEasySelHighlight(catId){
   if(!easyMode) return;
