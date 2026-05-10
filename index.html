@@ -246,12 +246,19 @@ body.admin .add-btn{display:flex}
 .tool-btn:hover:not(.active){background:#2d0020;color:var(--c-white);border-color:var(--c-purple)}
 .toolbar-sep{width:2px;height:26px;background:#3a0028;flex-shrink:0}
 
-/* 브러시 크기 */
-.brush-sizes{display:flex;gap:5px;align-items:center}
-.sz-btn{width:28px;height:28px;border:2px solid #3a0028;background:var(--c-card);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
-.sz-btn.active{border-color:var(--c-yellow);background:#2d1500}
-.sz-dot{background:var(--c-white);border-radius:50%;pointer-events:none}
-.sz-btn.active .sz-dot{background:var(--c-yellow)}
+/* 브러시 크기 - 슬라이더 + 위아래 버튼 */
+.brush-sizes{display:flex;gap:4px;align-items:center}
+.sz-label{font-family:var(--f-ui);font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;flex-shrink:0}
+.sz-step-btn{width:22px;height:28px;border:2px solid #3a0028;background:var(--c-card);color:#aaa;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:.15s;flex-shrink:0;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.sz-step-btn:hover{border-color:var(--c-yellow);color:var(--c-yellow)}
+.sz-step-btn:active{background:#2d1500}
+.sz-slider{width:90px;height:4px;-webkit-appearance:none;appearance:none;background:#3a0028;cursor:pointer;flex-shrink:0;border:none;padding:0;outline:none}
+.sz-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--c-yellow);border:2px solid var(--c-black);cursor:pointer;border-radius:0}
+.sz-slider::-moz-range-thumb{width:14px;height:14px;background:var(--c-yellow);border:2px solid var(--c-black);cursor:pointer;border-radius:0}
+.sz-value{font-family:var(--f-ui);font-size:11px;font-weight:700;color:var(--c-yellow);min-width:32px;text-align:left;flex-shrink:0}
+/* 색상 직접 선택 래퍼 */
+.color-picker-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0}
+.color-picker-label{font-family:var(--f-ui);font-size:8px;font-weight:700;color:#888;white-space:nowrap;pointer-events:none}
 
 /* 팔레트 */
 .palette{display:flex;flex-wrap:wrap;gap:5px;align-items:center;justify-content:center;background:var(--c-card);border:2px solid var(--c-purple);box-shadow:var(--shadow-purple);padding:8px 12px;max-width:660px;width:100%}
@@ -1266,15 +1273,21 @@ body.easy-mode .t-save-btn{display:none}
       <button class="tool-btn"        id="tool-fill"   onclick="setDrawTool('fill',this)">🪣 채우기</button>
       <button class="tool-btn"        id="tool-select" onclick="setDrawTool('select',this)" title="올가미로 영역 선택">🔲 선택</button>
       <div class="toolbar-sep"></div>
+      <!-- 펜 굵기: ▼/▲ 버튼으로 1px씩, 바를 드래그해서 세세하게 조절 (1~100px) -->
       <div class="brush-sizes">
-        <div class="sz-btn active" onclick="setBrushSize(3,this)"><div class="sz-dot" style="width:4px;height:4px"></div></div>
-        <div class="sz-btn" onclick="setBrushSize(8,this)"><div class="sz-dot" style="width:8px;height:8px"></div></div>
-        <div class="sz-btn" onclick="setBrushSize(16,this)"><div class="sz-dot" style="width:13px;height:13px"></div></div>
-        <div class="sz-btn" onclick="setBrushSize(28,this)"><div class="sz-dot" style="width:20px;height:20px"></div></div>
+        <span class="sz-label">굵기</span>
+        <button class="sz-step-btn" onclick="stepBrushSize(-1)" title="굵기 1px 줄이기">▼</button>
+        <input class="sz-slider" type="range" id="brushSizeSlider" min="1" max="100" value="8"
+          oninput="onBrushSlider(this.value)" title="드래그하여 굵기 조절">
+        <button class="sz-step-btn" onclick="stepBrushSize(1)" title="굵기 1px 늘리기">▲</button>
+        <span class="sz-value" id="brushSizeValue">8px</span>
       </div>
       <div class="toolbar-sep"></div>
-      <input type="color" id="colorPicker" value="#FF6B9D"
-        style="width:32px;height:32px;border-radius:50%;border:2px solid var(--c-black);cursor:pointer;padding:2px">
+      <div class="color-picker-wrap">
+        <input type="color" id="colorPicker" value="#FF6B9D"
+          style="width:32px;height:32px;border-radius:50%;border:2px solid var(--c-black);cursor:pointer;padding:2px">
+        <span class="color-picker-label">색상 직접 선택</span>
+      </div>
       <div class="toolbar-sep"></div>
       <label class="press-toggle" id="pressToggleLabel" title="필압 사용 (체크 해제 시 일정 굵기)">
         <input type="checkbox" id="pressureToggle" onchange="togglePressure(this)">
@@ -4905,10 +4918,18 @@ function setDrawTool(t,btn){
   document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
-function setBrushSize(s,btn){
+function setBrushSize(s){
   brushSize=s;
-  document.querySelectorAll('#panel-draw .sz-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  const slider=document.getElementById('brushSizeSlider');
+  const label=document.getElementById('brushSizeValue');
+  if(slider) slider.value=s;
+  if(label) label.textContent=s+'px';
+}
+function onBrushSlider(val){
+  setBrushSize(parseInt(val));
+}
+function stepBrushSize(delta){
+  setBrushSize(Math.max(1,Math.min(100,brushSize+delta)));
 }
 function setPalColor(c,el){
   document.getElementById('colorPicker').value=c;
