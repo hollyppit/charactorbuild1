@@ -150,6 +150,72 @@ export async function onRequest(context) {
     return json(saved[0] || { id: saveId });
   }
 
+  // ── PUT: 기존 저장 덮어쓰기 ─────────────────────────────
+  if (request.method === 'PUT') {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+
+    const { id, password_hash, thumbnail, layers, canvas_w, canvas_h } = body;
+    if (!id || !password_hash || !Array.isArray(layers) || !layers.length)
+      return json({ error: 'missing_fields' }, 400);
+
+    // 비밀번호 검증
+    const getRes = await sb(`/rest/v1/draw_saves?id=eq.${encodeURIComponent(id)}&select=id,password_hash,layers_meta`);
+    const rows = await getRes.json();
+    if (!rows.length) return json({ error: 'not_found' }, 404);
+    if (rows[0].password_hash !== password_hash) return json({ error: 'wrong_password' }, 403);
+
+    // 썸네일 덮어쓰기
+    let thumbnail_url = null;
+    if (thumbnail) {
+      const binary = _b64ToBinary(thumbnail.split(',')[1]);
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/draw-saves/${id}/thumb.jpg`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+        body: binary,
+      });
+      if (r.ok) thumbnail_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/thumb.jpg`;
+    }
+
+    // 레이어 덮어쓰기
+    const layers_meta = [];
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i];
+      let layer_url = null;
+      if (layer.data) {
+        const isPng = layer.kind === 'draw';
+        const ext = isPng ? 'png' : 'jpg';
+        const binary = _b64ToBinary(layer.data.split(',')[1]);
+        const r = await fetch(`${SUPABASE_URL}/storage/v1/object/draw-saves/${id}/layer_${i}.${ext}`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': isPng ? 'image/png' : 'image/jpeg', 'x-upsert': 'true' },
+          body: binary,
+        });
+        if (r.ok) layer_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/layer_${i}.${ext}`;
+      }
+      layers_meta.push({
+        name: layer.name, kind: layer.kind, opacity: layer.opacity ?? 1,
+        visible: layer.visible ?? true, locked: layer.locked ?? false,
+        scale: layer.scale ?? 1, rotate: layer.rotate ?? 0,
+        offsetX: layer.offsetX ?? 0, offsetY: layer.offsetY ?? 0, url: layer_url,
+      });
+    }
+
+    // DB 업데이트
+    const dbRes = await sb(`/rest/v1/draw_saves?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        thumbnail_url, layer_count: layers.length, layers_meta,
+        canvas_w: canvas_w || 0, canvas_h: canvas_h || 0,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+
+    if (!dbRes.ok) return json({ error: await dbRes.text() }, 500);
+    return json({ success: true, id });
+  }
+
   // ── DELETE: 저장 삭제 ────────────────────────────────────
   if (request.method === 'DELETE') {
     let body;

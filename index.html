@@ -5628,6 +5628,8 @@ function resetAll(){
 ═══════════════════════════════════════ */
 
 const DRAWS_API = '/api/saves';
+// 현재 세션의 저장 정보 (페이지 새로고침 시 초기화)
+let _drawSaveSession = null; // { id, name, pw, password_hash }
 
 // SHA-256 해시 (hex 문자열 반환)
 async function sha256hex(text) {
@@ -5654,8 +5656,13 @@ function _makeDrawThumbnail() {
   return tmp.toDataURL('image/jpeg', 0.7);
 }
 
-// 저장 모달 열기
+// 저장 모달 열기 — 세션이 있으면 바로 업데이트, 없으면 모달
 function openDrawSaveModal() {
+  if (_drawSaveSession) {
+    // 이미 저장한 적 있음 → 바로 덮어쓰기
+    _execDrawSave();
+    return;
+  }
   document.getElementById('dsSaveName').value = '';
   document.getElementById('dsSavePw').value = '';
   document.getElementById('dsSaveErr').textContent = '';
@@ -5664,7 +5671,7 @@ function openDrawSaveModal() {
   setTimeout(() => document.getElementById('dsSaveName').focus(), 100);
 }
 
-// 실제 저장 실행
+// 모달에서 "저장하기" 클릭 (최초 1회)
 async function doDrawSave() {
   const name = document.getElementById('dsSaveName').value.trim();
   const pw   = document.getElementById('dsSavePw').value;
@@ -5679,42 +5686,45 @@ async function doDrawSave() {
   progEl.style.display = 'block';
   progEl.textContent = '⏳ 저장 준비 중...';
 
+  const password_hash = await sha256hex(pw);
+  // 세션에 저장해두고 실행
+  _drawSaveSession = { id: null, name, pw, password_hash };
+  closeModal('drawSaveModal');
+  await _execDrawSave();
+}
+
+// 실제 저장/업데이트 실행 (신규 또는 덮어쓰기 공통)
+async function _execDrawSave() {
+  const session = _drawSaveSession;
+  if (!session) return;
+
+  // 저장 버튼 상태 표시
+  const btn = document.querySelector('.btn-row .btn-green');
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳ 저장 중...'; btn.disabled = true; }
+
   try {
-    const password_hash = await sha256hex(pw);
     const thumbnail = _makeDrawThumbnail();
-
-    // 레이어 데이터 직렬화
-    const layers = drawLayers.map((layer, i) => {
-      progEl.textContent = `⏳ 레이어 ${i + 1}/${drawLayers.length} 변환 중...`;
-      const isPng = layer.kind === 'draw';
-      const data = isPng
+    const layers = drawLayers.map(layer => ({
+      name: layer.name, kind: layer.kind,
+      opacity: layer.opacity, visible: layer.visible, locked: layer.locked,
+      scale: layer.scale, rotate: layer.rotate,
+      offsetX: layer.offsetX, offsetY: layer.offsetY,
+      data: layer.kind === 'draw'
         ? layer.canvas.toDataURL('image/png')
-        : layer.canvas.toDataURL('image/jpeg', 0.85);
-      return {
-        name: layer.name,
-        kind: layer.kind,
-        opacity: layer.opacity,
-        visible: layer.visible,
-        locked: layer.locked,
-        scale: layer.scale,
-        rotate: layer.rotate,
-        offsetX: layer.offsetX,
-        offsetY: layer.offsetY,
-        data,
-      };
-    });
+        : layer.canvas.toDataURL('image/jpeg', 0.85),
+    }));
 
-    progEl.textContent = '⏳ 서버에 업로드 중... (잠시 기다려 주세요)';
-
+    const isUpdate = !!session.id;
     const res = await fetch(DRAWS_API, {
-      method: 'POST',
+      method: isUpdate ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_name: name,
-        password_hash,
-        password_plain: pw,
-        thumbnail,
-        layers,
+        id: session.id,
+        user_name: session.name,
+        password_hash: session.password_hash,
+        password_plain: session.pw,
+        thumbnail, layers,
         canvas_w: drawCanvasBaseW,
         canvas_h: drawCanvasBaseH,
       }),
@@ -5723,11 +5733,19 @@ async function doDrawSave() {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || '저장 실패');
 
-    closeModal('drawSaveModal');
-    alert(`✅ "${name}"님의 그림이 저장되었습니다!`);
+    // 최초 저장이면 id 기록
+    if (!isUpdate && data.id) _drawSaveSession.id = data.id;
+
+    if (btn) {
+      btn.textContent = '✅ 저장됨';
+      setTimeout(() => {
+        btn.textContent = `☁️ ${session.name}`;
+        btn.disabled = false;
+      }, 1500);
+    }
   } catch (e) {
-    progEl.style.display = 'none';
-    errEl.textContent = `저장 실패: ${e.message}`;
+    alert(`저장 실패: ${e.message}`);
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
   }
 }
 
