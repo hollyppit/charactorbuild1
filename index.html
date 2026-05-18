@@ -389,11 +389,27 @@ body.admin .add-btn{display:flex}
 .dub-script-box.show{display:block}
 .dub-script-label{font-family:var(--f-ui);font-size:10px;font-weight:700;color:var(--c-purple);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
 .dub-script-text{font-family:var(--f-ui);font-size:14px;line-height:1.7;color:var(--c-white);white-space:pre-wrap;word-break:keep-all}
+/* 사용자 장면 미리보기 카드 */
+.dub-scene-preview-card{display:flex;align-items:flex-start;gap:12px;background:var(--c-card);border:2px solid #3a0028;padding:12px}
+.dub-scene-preview-card.has-audio{border-left:4px solid #6BDB8A}
+.dub-scene-preview-thumb{width:80px;height:60px;flex-shrink:0;background:#0d0008;border:2px solid #2a002a;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.dub-scene-preview-thumb img,.dub-scene-preview-thumb video{width:100%;height:100%;object-fit:cover}
+.dub-scene-preview-info{flex:1;min-width:0}
+.dub-scene-preview-num{font-family:var(--f-display-en);font-size:11px;font-weight:700;color:#888;margin-bottom:3px}
+.dub-scene-preview-name{font-family:var(--f-display-kr);font-size:15px;color:var(--c-white);margin-bottom:5px}
+.dub-scene-preview-text{font-family:var(--f-ui);font-size:12px;color:#aaa;line-height:1.6;white-space:pre-wrap;word-break:keep-all}
+.dub-scene-preview-status{font-family:var(--f-ui);font-size:11px;font-weight:700;margin-top:6px}
+.dub-scene-preview-status.done{color:#6BDB8A}
+.dub-scene-preview-status.pending{color:#888}
+/* DB 저장 상태 알림 */
+.dub-db-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--c-black);border:2px solid var(--c-yellow);color:var(--c-yellow);font-family:var(--f-ui);font-size:13px;font-weight:700;padding:10px 20px;z-index:9998;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap}
+.dub-db-toast.show{opacity:1}
 @media(max-width:620px){
   .dub-proj-title-input{font-size:14px;padding:7px 10px}
   .dub-scene-edit-thumb{width:64px;height:50px}
   .dub-scene-text-input{font-size:12px;min-height:56px}
   .dub-script-text{font-size:13px}
+  .dub-scene-preview-thumb{width:64px;height:50px}
 }
 .tool-btn.active{background:var(--c-yellow);color:var(--c-black);border-color:var(--c-black)}
 .tool-btn:hover:not(.active){background:#2d0020;color:var(--c-white);border-color:var(--c-purple)}
@@ -1752,18 +1768,29 @@ body.easy-mode .t-save-btn{display:none}
       </button>
     </div>
 
-    <!-- B: 장면 편집기 (작품 선택 시 표시) -->
+    <!-- B: 장면 편집기 (관리자 전용) -->
     <div id="dubSceneEditorWrap" style="display:none;flex-direction:column;gap:14px;width:100%">
       <div class="dub-editor-header">
         <button class="dub-editor-back" onclick="dubBackToProjects()">← 작품 목록</button>
         <input class="dub-proj-title-input" id="dubProjTitleInput" placeholder="작품 제목을 입력하세요" maxlength="40" oninput="dubSaveProjTitle()">
+        <button class="dub-scene-btn" id="dubSaveToDB" onclick="dubSaveProjectToDB()" style="background:var(--c-yellow);color:var(--c-black);border-color:var(--c-black);font-size:12px;padding:8px 14px;white-space:nowrap">💾 DB 저장</button>
       </div>
       <div class="dub-scene-list" id="dubSceneEditList"></div>
       <button class="dub-add-scene-btn" onclick="dubAddScene()">
         <span style="font-size:22px">➕</span> 장면 추가
       </button>
+    </div>
+
+    <!-- C: 장면 미리보기 (일반 사용자 — 작품 선택 후) -->
+    <div id="dubScenePreviewWrap" style="display:none;flex-direction:column;gap:14px;width:100%">
+      <div class="dub-editor-header">
+        <button class="dub-editor-back" onclick="dubBackToProjects()">← 작품 목록</button>
+        <div class="dub-proj-title-input" id="dubProjPreviewTitle" style="cursor:default;color:var(--c-yellow)"></div>
+      </div>
+      <div style="font-family:var(--f-ui);font-size:12px;color:#888;text-align:center">장면 목록을 확인하고 더빙을 시작하세요</div>
+      <div class="dub-scene-list" id="dubScenePreviewList"></div>
       <div class="btn-row" style="margin-top:4px">
-        <button class="btn btn-purple" onclick="switchDubStep(1)" id="dubGoRecordBtn" disabled>🎤 더빙하러 가기</button>
+        <button class="btn btn-purple" onclick="switchDubStep(1)" id="dubGoRecordBtn" disabled>🎤 더빙 시작!</button>
       </div>
     </div>
 
@@ -1828,6 +1855,8 @@ body.easy-mode .t-save-btn{display:none}
 
 </div>
 </div>
+
+<div class="dub-db-toast" id="dubDbToast"></div>
 
 <!-- 더빙 전체재생 모달 -->
 <div class="dub-player-modal" id="dubPlayerModal">
@@ -6787,10 +6816,109 @@ function _dubScenes() {
   return p ? p.scenes : [];
 }
 
-function initDubPanel() {
-  dubRenderProjList();
+async function initDubPanel() {
   dubDrawFlatWaveform();
+  // DB에서 작품 불러오기 (처음 1회만)
+  if (dubProjects.length === 0) await dubLoadFromDB();
+  dubRenderProjList();
   dubUpdateStepBadges();
+}
+
+/* ── DB 헬퍼 ── */
+async function dubLoadFromDB() {
+  try {
+    const res = await fetch('/api/dub-projects');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!Array.isArray(data)) return;
+    // 로컬에 없는 작품만 추가 (이미 더빙 중인 세션 유지)
+    for (const proj of data) {
+      const existing = dubProjects.find(p => p.id === proj.id);
+      if (!existing) {
+        dubProjects.push({
+          id: proj.id,
+          title: proj.title,
+          scenes: (proj.scenes || []).map(s => ({
+            id: s.id,
+            name: s.name || '',
+            text: s.scene_text || '',
+            mediaType: s.media_type || null,
+            mediaData: s.media_data || null,
+            mediaObjectURL: s.media_data ? _dubB64ToURL(s.media_data, s.media_type) : null,
+            mediaBlob: null,
+            audioBlob: null,
+            audioObjectURL: null,
+          })),
+        });
+      }
+    }
+  } catch(e) { console.warn('dubLoadFromDB:', e); }
+}
+
+async function dubSaveProjectToDB() {
+  const proj = dubProjects.find(p => p.id === dubCurrentProjectId);
+  if (!proj) return;
+  const btn = document.getElementById('dubSaveToDB');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+  try {
+    const scenes = await Promise.all(proj.scenes.map(async (s, i) => {
+      let mediaData = s.mediaData || null;
+      if (s.mediaBlob && !mediaData) mediaData = await _dubFileToB64(s.mediaBlob);
+      return {
+        id: String(s.id),
+        scene_text: s.text || '',
+        name: s.name || '',
+        media_type: s.mediaType || null,
+        media_data: mediaData,
+        order_num: i,
+      };
+    }));
+    const res = await fetch('/api/dub-projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: { id: proj.id, title: proj.title, order_num: 0 },
+        scenes,
+      }),
+    });
+    if (!res.ok) throw new Error('서버 오류 ' + res.status);
+    // 저장 성공 시 mediaData 캐시 갱신
+    for (let i = 0; i < proj.scenes.length; i++) {
+      if (proj.scenes[i].mediaBlob && !proj.scenes[i].mediaData) {
+        proj.scenes[i].mediaData = scenes[i].media_data;
+      }
+    }
+    _dubShowToast('✅ DB에 저장됐어요!');
+  } catch(e) {
+    _dubShowToast('❌ 저장 실패: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 DB 저장'; }
+  }
+}
+
+function _dubFileToB64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function _dubB64ToURL(b64, mediaType) {
+  try {
+    const mime = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    return URL.createObjectURL(new Blob([bytes], { type: mime }));
+  } catch { return null; }
+}
+
+function _dubShowToast(msg) {
+  const el = document.getElementById('dubDbToast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
 }
 
 /* ── 단계 전환 ── */
@@ -6800,6 +6928,10 @@ function switchDubStep(idx) {
   if (idx === 2 && scenes.length === 0) { alert('먼저 장면을 추가해주세요!'); return; }
   document.querySelectorAll('.dub-step-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
   document.querySelectorAll('.dub-view').forEach((v, i) => v.classList.toggle('active', i === idx));
+  if (idx === 0 && dubCurrentProjectId) {
+    // 프로젝트 선택 상태로 복귀 — 미리보기/편집기 새로고침
+    if (isAdmin) dubRenderSceneEditList(); else dubRenderScenePreview();
+  }
   if (idx === 1) {
     const sc = _dubScenes();
     dubGotoScene(dubCurrentIdx < sc.length ? dubCurrentIdx : 0);
@@ -6813,23 +6945,30 @@ function dubRenderProjList() {
   const list = document.getElementById('dubProjList');
   if (!list) return;
   list.innerHTML = '';
+  if (dubProjects.length === 0) {
+    list.innerHTML = `<div style="font-family:var(--f-ui);font-size:13px;color:#555;text-align:center;padding:20px 0">${isAdmin ? '아직 작품이 없어요. 새 작품을 만들어보세요.' : '등록된 작품이 없어요. 관리자에게 문의하세요.'}</div>`;
+  }
   dubProjects.forEach(proj => {
     const done = proj.scenes.filter(s => s.audioBlob).length;
     const card = document.createElement('div');
     card.className = 'dub-proj-card';
+    const adminBtns = isAdmin
+      ? `<button class="dub-scene-btn" onclick="dubOpenProject('${proj.id}');event.stopPropagation()">✏️ 편집</button>
+         <button class="dub-scene-btn danger" onclick="dubDeleteProject('${proj.id}');event.stopPropagation()">🗑</button>`
+      : `<button class="dub-scene-btn" style="background:var(--c-purple);color:#fff;border-color:var(--c-purple)" onclick="dubSelectProject('${proj.id}');event.stopPropagation()">선택 →</button>`;
     card.innerHTML = `
       <div class="dub-proj-icon">📖</div>
       <div class="dub-proj-info">
         <div class="dub-proj-title-text">${proj.title || '(제목 없음)'}</div>
-        <div class="dub-proj-meta">장면 ${proj.scenes.length}개 &nbsp;·&nbsp; 더빙 ${done}/${proj.scenes.length} 완료</div>
+        <div class="dub-proj-meta">장면 ${proj.scenes.length}개${done > 0 ? ` &nbsp;·&nbsp; 더빙 ${done}/${proj.scenes.length}` : ''}</div>
       </div>
-      <div class="dub-proj-btns">
-        <button class="dub-scene-btn" onclick="dubOpenProject('${proj.id}');event.stopPropagation()">✏️ 편집</button>
-        <button class="dub-scene-btn danger" onclick="dubDeleteProject('${proj.id}');event.stopPropagation()">🗑</button>
-      </div>`;
-    card.addEventListener('click', () => dubOpenProject(proj.id));
+      <div class="dub-proj-btns">${adminBtns}</div>`;
+    card.addEventListener('click', () => isAdmin ? dubOpenProject(proj.id) : dubSelectProject(proj.id));
     list.appendChild(card);
   });
+  // 관리자만 새 작품 버튼 표시
+  const newBtn = document.querySelector('.dub-new-proj-btn');
+  if (newBtn) newBtn.style.display = isAdmin ? '' : 'none';
 }
 
 function dubAddProject() {
@@ -6861,10 +7000,12 @@ function dubDeleteProject(id) {
 }
 
 function dubOpenProject(id) {
+  // 관리자 전용: 장면 편집기 열기
   dubCurrentProjectId = id;
   const proj = dubProjects.find(p => p.id === id);
   if (!proj) return;
   document.getElementById('dubProjListWrap').style.display = 'none';
+  document.getElementById('dubScenePreviewWrap').style.display = 'none';
   const wrap = document.getElementById('dubSceneEditorWrap');
   wrap.style.display = 'flex';
   document.getElementById('dubProjTitleInput').value = proj.title;
@@ -6872,10 +7013,53 @@ function dubOpenProject(id) {
   dubUpdateStepBadges();
 }
 
+function dubSelectProject(id) {
+  // 일반 사용자: 장면 미리보기 후 더빙
+  dubCurrentProjectId = id;
+  const proj = dubProjects.find(p => p.id === id);
+  if (!proj) return;
+  document.getElementById('dubProjListWrap').style.display = 'none';
+  document.getElementById('dubSceneEditorWrap').style.display = 'none';
+  const wrap = document.getElementById('dubScenePreviewWrap');
+  wrap.style.display = 'flex';
+  document.getElementById('dubProjPreviewTitle').textContent = proj.title || '(제목 없음)';
+  dubCurrentIdx = 0;
+  dubRenderScenePreview();
+  dubUpdateStepBadges();
+}
+
+function dubRenderScenePreview() {
+  const list = document.getElementById('dubScenePreviewList');
+  if (!list) return;
+  const scenes = _dubScenes();
+  list.innerHTML = '';
+  scenes.forEach((sc, i) => {
+    const card = document.createElement('div');
+    card.className = 'dub-scene-preview-card' + (sc.audioBlob ? ' has-audio' : '');
+    const thumbHtml = sc.mediaObjectURL
+      ? (sc.mediaType === 'video'
+          ? `<video src="${sc.mediaObjectURL}" muted></video>`
+          : `<img src="${sc.mediaObjectURL}" alt="">`)
+      : '<div style="font-size:22px;color:#555">🖼️</div>';
+    card.innerHTML = `
+      <div class="dub-scene-preview-thumb">${thumbHtml}</div>
+      <div class="dub-scene-preview-info">
+        <div class="dub-scene-preview-num">장면 ${i + 1}</div>
+        <div class="dub-scene-preview-name">${sc.name}</div>
+        ${sc.text ? `<div class="dub-scene-preview-text">${sc.text}</div>` : ''}
+        <div class="dub-scene-preview-status ${sc.audioBlob ? 'done' : 'pending'}">${sc.audioBlob ? '✅ 더빙 완료' : '⏳ 더빙 대기'}</div>
+      </div>`;
+    list.appendChild(card);
+  });
+  const btn = document.getElementById('dubGoRecordBtn');
+  if (btn) btn.disabled = scenes.length === 0;
+}
+
 function dubBackToProjects() {
   dubCurrentProjectId = null;
   document.getElementById('dubProjListWrap').style.display = 'flex';
   document.getElementById('dubSceneEditorWrap').style.display = 'none';
+  document.getElementById('dubScenePreviewWrap').style.display = 'none';
   dubRenderProjList();
   dubUpdateStepBadges();
 }
@@ -7154,7 +7338,7 @@ async function dubStartRecord() {
     dubRecording = false;
     _dubUpdateRecBtn();
     dubRenderDots();
-    dubRenderSceneEditList();
+    if (isAdmin) dubRenderSceneEditList(); else dubRenderScenePreview();
     dubUpdateStepBadges();
     cancelAnimationFrame(dubWaveAnimId);
     dubDrawFlatWaveform();
@@ -7250,7 +7434,7 @@ function dubDeleteRecording() {
   sc.audioObjectURL = null;
   _dubUpdateRecBtn();
   dubRenderDots();
-  dubRenderSceneEditList();
+  if (isAdmin) dubRenderSceneEditList(); else dubRenderScenePreview();
   dubUpdateStepBadges();
 }
 
