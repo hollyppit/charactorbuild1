@@ -29,7 +29,7 @@ export async function onRequest(context) {
   if (request.method === 'GET') {
     const [projRes, sceneRes] = await Promise.all([
       sb('/rest/v1/dub_projects?select=id,title,order_num,created_at&order=order_num.asc,created_at.asc'),
-      sb('/rest/v1/dub_scenes?select=id,project_id,name,scene_text,media_type,media_data,order_num&order=order_num.asc'),
+      sb('/rest/v1/dub_scenes?select=id,project_id,name,scene_text,media_type,media_data,text_style,order_num&order=order_num.asc'),
     ]);
     const projects = await projRes.json();
     const scenes = await sceneRes.json();
@@ -65,6 +65,7 @@ export async function onRequest(context) {
         scene_text: s.scene_text || '',
         media_type: s.media_type || null,
         media_data: s.media_data || null,
+        text_style: s.text_style ? JSON.stringify(s.text_style) : null,
         order_num: i,
       }));
       const sRes = await sb('/rest/v1/dub_scenes', {

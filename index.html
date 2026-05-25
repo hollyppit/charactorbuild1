@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>볼드하다 — AI 매직 드로잉</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Black+Han+Sans&family=Permanent+Marker&family=Space+Grotesk:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Black+Han+Sans&family=Gowun+Dodum&family=Nanum+Gothic:wght@400;700&family=Nanum+Pen+Script&family=Permanent+Marker&family=Space+Grotesk:wght@400;600;700&display=swap');
 :root{
   --c-yellow:#fbea1a;
   --c-purple:#a11cee;
@@ -357,6 +357,29 @@ body.admin .add-btn{display:flex}
 .dub-proj-btns{display:flex;gap:5px;flex-shrink:0}
 .dub-new-proj-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:18px;border:3px dashed #3a0028;background:transparent;color:#666;font-family:var(--f-display-kr);font-size:16px;cursor:pointer;width:100%;transition:.15s;touch-action:manipulation}
 .dub-new-proj-btn:hover{border-color:var(--c-purple);color:var(--c-white);background:#0d0008}
+/* 대본 스타일 편집 모달 미리보기 */
+.dub-sp-wrap{position:relative;width:100%;aspect-ratio:4/3;background:#111;overflow:hidden;cursor:default;border:2px solid #3a0028;margin-bottom:4px}
+.dub-sp-wrap img,.dub-sp-wrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.dub-sp-text{position:absolute;transform:translate(-50%,-50%);cursor:grab;user-select:none;touch-action:none;max-width:90%;padding:6px 14px;line-height:1.5;white-space:pre-wrap;word-break:break-word;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.dub-sp-text:active{cursor:grabbing}
+.dub-sp-hint{font-family:var(--f-ui);font-size:10px;color:#666;text-align:center;margin:3px 0 10px}
+.dub-sp-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;font-family:var(--f-ui)}
+/* 스타일 편집 컨트롤 */
+.dub-style-row{display:flex;align-items:center;gap:8px;width:100%;flex-wrap:wrap;margin:5px 0}
+.dub-style-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#888;min-width:46px;text-transform:uppercase;flex-shrink:0}
+.dub-align-btns,.dub-pos-btns{display:flex;gap:3px}
+.dub-align-btn,.dub-pos-btn{padding:5px 10px;border:2px solid #3a0028;background:var(--c-card);color:#888;font-size:12px;cursor:pointer;transition:.15s;font-family:var(--f-ui);font-weight:700;white-space:nowrap}
+.dub-align-btn.active{border-color:var(--c-yellow);color:var(--c-yellow);background:#1a0010}
+.dub-pos-btn:hover,.dub-align-btn:hover:not(.active){border-color:#5a0040;color:#ccc}
+.dub-toggle-btn{padding:5px 11px;border:2px solid #3a0028;background:var(--c-card);color:#888;font-size:13px;cursor:pointer;transition:.15s;font-family:var(--f-ui);font-weight:900}
+.dub-toggle-btn.active{border-color:var(--c-purple);color:#fff;background:var(--c-purple)}
+.dub-color-swatch{width:36px;height:30px;cursor:pointer;border:2px solid #3a0028;background:none;padding:0;border-radius:2px}
+/* 더빙 스튜디오 + 미리보기 텍스트 오버레이 */
+.dub-text-overlay{position:absolute;transform:translate(-50%,-50%);pointer-events:none;max-width:90%;padding:6px 14px;line-height:1.5;white-space:pre-wrap;word-break:break-word;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.5);z-index:10;display:none}
+/* 장면 카드 스타일 버튼 */
+.dub-style-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:2px solid #3a0028;background:var(--c-card);color:#888;font-family:var(--f-ui);font-size:10px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
+.dub-style-chip:hover{border-color:var(--c-yellow);color:var(--c-yellow)}
+.dub-style-chip.has-style{border-color:#3a2800;color:#bba000;background:#1a1000}
 /* 작품 탭 */
 .dub-proj-tab-nav{display:flex;border-bottom:2px solid #3a0028;gap:0;width:100%}
 .dub-proj-tab{flex:1;padding:10px 6px;font-family:var(--f-display-kr);font-size:13px;text-align:center;cursor:pointer;color:#555;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;touch-action:manipulation}
@@ -1830,6 +1853,7 @@ body.easy-mode .t-save-btn{display:none}
           <span>🖼️</span><span>장면을 선택하세요</span>
         </div>
         <div class="dub-scene-label" id="dubDisplayLabel" style="display:none"></div>
+        <div class="dub-text-overlay" id="dubTextOverlay"></div>
       </div>
       <div class="dub-script-box" id="dubScriptBox">
         <div class="dub-script-label">📝 이 장면의 대사 / 내용</div>
@@ -1943,6 +1967,86 @@ body.easy-mode .t-save-btn{display:none}
     <div class="modal-btns">
       <button class="btn btn-gray" onclick="closeModal('dubChangeMediaModal')">취소</button>
       <button class="btn btn-purple" id="dubChangeMediaConfirmBtn" onclick="dubConfirmChangeMedia()" disabled>변경하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 더빙: 대본 스타일 편집 모달 -->
+<div class="modal-overlay" id="dubTextStyleModal">
+  <div class="modal" style="max-width:580px;max-height:92vh;overflow-y:auto">
+    <h2>🎨 대본 스타일 편집</h2>
+
+    <!-- 미리보기 -->
+    <div class="dub-sp-wrap" id="dubSpWrap">
+      <div class="dub-sp-empty" id="dubSpEmpty">🖼️ 이미지를 먼저 등록하면 미리보기가 나와요</div>
+      <div class="dub-sp-text" id="dubSpText"></div>
+    </div>
+    <div class="dub-sp-hint">💡 텍스트를 드래그해서 위치를 바꿀 수 있어요</div>
+
+    <!-- 빠른 위치 -->
+    <div class="dub-style-row">
+      <span class="dub-style-label">위치</span>
+      <div class="dub-pos-btns">
+        <button class="dub-pos-btn" onclick="dubSetTextPos(50,10)">▲ 상단</button>
+        <button class="dub-pos-btn" onclick="dubSetTextPos(50,50)">■ 중간</button>
+        <button class="dub-pos-btn" onclick="dubSetTextPos(50,84)">▼ 하단</button>
+      </div>
+    </div>
+
+    <!-- 글씨체 -->
+    <div class="dub-style-row">
+      <span class="dub-style-label">글씨체</span>
+      <select class="field-input" id="dubSpFontFamily" style="flex:1;min-width:160px" onchange="dubUpdateStylePreview()">
+        <option value="Black Han Sans">블랙한산스 (기본 굵은체)</option>
+        <option value="Nanum Gothic">나눔고딕 (깔끔)</option>
+        <option value="Gowun Dodum">고운도담 (동글동글)</option>
+        <option value="Nanum Pen Script">나눔펜스크립트 (손글씨)</option>
+        <option value="Permanent Marker">Permanent Marker (영문손글씨)</option>
+        <option value="Space Grotesk">Space Grotesk (영문깔끔)</option>
+      </select>
+    </div>
+
+    <!-- 크기 -->
+    <div class="dub-style-row">
+      <span class="dub-style-label">크기</span>
+      <input type="range" id="dubSpFontSize" min="12" max="64" value="22" oninput="dubUpdateStylePreview()" style="flex:1">
+      <span style="font-family:var(--f-ui);font-size:13px;color:var(--c-yellow);min-width:34px;text-align:right" id="dubSpFontSizeVal">22px</span>
+    </div>
+
+    <!-- 글자색 / 스타일 -->
+    <div class="dub-style-row">
+      <span class="dub-style-label">글자색</span>
+      <input type="color" class="dub-color-swatch" id="dubSpColor" value="#ffffff" oninput="dubUpdateStylePreview()">
+      <span class="dub-style-label" style="margin-left:10px">스타일</span>
+      <button class="dub-toggle-btn" id="dubSpBold" onclick="dubToggleStyleProp('bold')"><b>B</b></button>
+      <button class="dub-toggle-btn" id="dubSpItalic" onclick="dubToggleStyleProp('italic')"><i>I</i></button>
+      <span class="dub-style-label" style="margin-left:10px">외곽선</span>
+      <input type="checkbox" id="dubSpStrokeEnabled" onchange="dubUpdateStylePreview()" style="width:16px;height:16px;cursor:pointer">
+      <input type="color" class="dub-color-swatch" id="dubSpStrokeColor" value="#000000" oninput="dubUpdateStylePreview()">
+    </div>
+
+    <!-- 배경 -->
+    <div class="dub-style-row">
+      <span class="dub-style-label">배경</span>
+      <input type="checkbox" id="dubSpBgEnabled" onchange="dubUpdateStylePreview()" checked style="width:16px;height:16px;cursor:pointer">
+      <input type="color" class="dub-color-swatch" id="dubSpBgColor" value="#000000" oninput="dubUpdateStylePreview()">
+      <input type="range" id="dubSpBgOpacity" min="0" max="100" value="65" oninput="dubUpdateStylePreview()" style="flex:1">
+      <span style="font-family:var(--f-ui);font-size:11px;color:#888;min-width:32px;text-align:right" id="dubSpBgOpacityVal">65%</span>
+    </div>
+
+    <!-- 정렬 -->
+    <div class="dub-style-row">
+      <span class="dub-style-label">정렬</span>
+      <div class="dub-align-btns">
+        <button class="dub-align-btn" id="dubSpAlignLeft" onclick="dubSetAlign('left')">◀ 왼쪽</button>
+        <button class="dub-align-btn active" id="dubSpAlignCenter" onclick="dubSetAlign('center')">가운데</button>
+        <button class="dub-align-btn" id="dubSpAlignRight" onclick="dubSetAlign('right')">오른쪽 ▶</button>
+      </div>
+    </div>
+
+    <div class="modal-btns" style="margin-top:14px">
+      <button class="btn btn-gray" onclick="closeModal('dubTextStyleModal')">취소</button>
+      <button class="btn btn-purple" onclick="dubSaveTextStyleFromModal()">💾 스타일 저장</button>
     </div>
   </div>
 </div>
@@ -6846,9 +6950,27 @@ let dubRecTimerInterval = null;
 let dubRecSeconds = 0;
 let dubAnalyser = null;
 let dubWaveAnimId = null;
-let dubPendingMedia = null;     // 장면추가/미디어변경 모달용
-let dubChangingSceneId = null;  // 미디어 변경 대상 장면 id
+let dubPendingMedia = null;          // 장면추가/미디어변경 모달용
+let dubChangingSceneId = null;       // 미디어 변경 대상 장면 id
+let dubStyleEditingSceneId = null;   // 스타일 편집 대상 장면 id
+let _dubSpWorkingStyle = null;       // 스타일 편집 중 임시 객체
 let dubExporting = false;
+
+const DUB_DEFAULT_STYLE = {
+  fontFamily: 'Black Han Sans',
+  fontSize: 22,
+  color: '#ffffff',
+  bold: false,
+  italic: false,
+  strokeEnabled: false,
+  strokeColor: '#000000',
+  bgEnabled: true,
+  bgColor: '#000000',
+  bgOpacity: 65,
+  posX: 50,
+  posY: 84,
+  align: 'center',
+};
 let _dubPlayAudio = null;
 
 /* 현재 작품의 장면 배열 반환 (DB 작품 + 개인 작품 모두 탐색) */
@@ -6890,6 +7012,7 @@ async function dubLoadFromDB() {
             mediaBlob: null,
             audioBlob: null,
             audioObjectURL: null,
+            textStyle: s.text_style ? (() => { try { return JSON.parse(s.text_style); } catch { return null; } })() : null,
           })),
         });
       }
@@ -6912,6 +7035,7 @@ async function dubSaveProjectToDB() {
         name: s.name || '',
         media_type: s.mediaType || null,
         media_data: mediaData,
+        text_style: s.textStyle || null,
         order_num: i,
       };
     }));
@@ -7214,6 +7338,174 @@ function dubStartPersonalDubbing() {
   switchDubStep(1);
 }
 
+/* ── 대본 스타일 편집 ── */
+
+// 스타일 객체를 DOM 요소에 적용 (미리보기 + 오버레이 공통)
+function _dubApplyTextStyleToEl(el, st, text) {
+  el.textContent = text;
+  const r = parseInt(st.bgColor.slice(1,3),16)||0;
+  const g = parseInt(st.bgColor.slice(3,5),16)||0;
+  const b = parseInt(st.bgColor.slice(5,7),16)||0;
+  const bgAlpha = st.bgEnabled ? (st.bgOpacity / 100) : 0;
+  el.style.fontFamily = `'${st.fontFamily}', 'Nanum Gothic', sans-serif`;
+  el.style.fontSize   = st.fontSize + 'px';
+  el.style.color      = st.color;
+  el.style.fontWeight = st.bold ? 'bold' : 'normal';
+  el.style.fontStyle  = st.italic ? 'italic' : 'normal';
+  el.style.background = `rgba(${r},${g},${b},${bgAlpha})`;
+  el.style.textAlign  = st.align;
+  el.style.left       = st.posX + '%';
+  el.style.top        = st.posY + '%';
+  if (st.strokeEnabled) {
+    el.style.textShadow = `-1px -1px 0 ${st.strokeColor},1px -1px 0 ${st.strokeColor},-1px 1px 0 ${st.strokeColor},1px 1px 0 ${st.strokeColor}`;
+  } else {
+    el.style.textShadow = '0 1px 4px rgba(0,0,0,.7)';
+  }
+}
+
+function dubOpenTextStyle(id) {
+  dubStyleEditingSceneId = id;
+  const sc = _dubScenes().find(s => s.id === id);
+  if (!sc) return;
+  _dubSpWorkingStyle = Object.assign({}, DUB_DEFAULT_STYLE, sc.textStyle || {});
+
+  // UI 초기화
+  document.getElementById('dubSpFontFamily').value = _dubSpWorkingStyle.fontFamily;
+  document.getElementById('dubSpFontSize').value   = _dubSpWorkingStyle.fontSize;
+  document.getElementById('dubSpFontSizeVal').textContent = _dubSpWorkingStyle.fontSize + 'px';
+  document.getElementById('dubSpColor').value      = _dubSpWorkingStyle.color;
+  document.getElementById('dubSpBold').classList.toggle('active', _dubSpWorkingStyle.bold);
+  document.getElementById('dubSpItalic').classList.toggle('active', _dubSpWorkingStyle.italic);
+  document.getElementById('dubSpStrokeEnabled').checked = _dubSpWorkingStyle.strokeEnabled;
+  document.getElementById('dubSpStrokeColor').value = _dubSpWorkingStyle.strokeColor;
+  document.getElementById('dubSpBgEnabled').checked = _dubSpWorkingStyle.bgEnabled;
+  document.getElementById('dubSpBgColor').value     = _dubSpWorkingStyle.bgColor;
+  document.getElementById('dubSpBgOpacity').value   = _dubSpWorkingStyle.bgOpacity;
+  document.getElementById('dubSpBgOpacityVal').textContent = _dubSpWorkingStyle.bgOpacity + '%';
+  ['Left','Center','Right'].forEach(a =>
+    document.getElementById('dubSpAlign' + a).classList.toggle('active', _dubSpWorkingStyle.align === a.toLowerCase())
+  );
+
+  // 미리보기 이미지
+  const wrap = document.getElementById('dubSpWrap');
+  wrap.querySelectorAll('img,video').forEach(el => el.remove());
+  const empty = document.getElementById('dubSpEmpty');
+  if (sc.mediaObjectURL) {
+    empty.style.display = 'none';
+    const el = document.createElement(sc.mediaType === 'video' ? 'video' : 'img');
+    el.src = sc.mediaObjectURL;
+    if (sc.mediaType === 'video') { el.muted = true; el.loop = true; el.autoplay = true; el.playsInline = true; }
+    wrap.insertBefore(el, wrap.firstChild);
+  } else {
+    empty.style.display = 'flex';
+  }
+
+  // 텍스트 박스 내용
+  document.getElementById('dubSpText').textContent = sc.text?.trim() || '(대사 없음 — 장면에 대사를 입력하면 여기 표시돼요)';
+
+  dubUpdateStylePreview();
+  openModal('dubTextStyleModal');
+  setTimeout(_dubInitStyleDrag, 150);
+}
+
+function dubUpdateStylePreview() {
+  if (!_dubSpWorkingStyle) return;
+  const st = _dubSpWorkingStyle;
+
+  // 컨트롤에서 값 읽기
+  st.fontFamily    = document.getElementById('dubSpFontFamily').value;
+  st.fontSize      = +document.getElementById('dubSpFontSize').value;
+  st.color         = document.getElementById('dubSpColor').value;
+  st.bgEnabled     = document.getElementById('dubSpBgEnabled').checked;
+  st.bgColor       = document.getElementById('dubSpBgColor').value;
+  st.bgOpacity     = +document.getElementById('dubSpBgOpacity').value;
+  st.strokeEnabled = document.getElementById('dubSpStrokeEnabled').checked;
+  st.strokeColor   = document.getElementById('dubSpStrokeColor').value;
+
+  document.getElementById('dubSpFontSizeVal').textContent = st.fontSize + 'px';
+  document.getElementById('dubSpBgOpacityVal').textContent = st.bgOpacity + '%';
+
+  const textEl = document.getElementById('dubSpText');
+  if (textEl) _dubApplyTextStyleToEl(textEl, st, textEl.textContent);
+}
+
+function dubSetAlign(align) {
+  if (!_dubSpWorkingStyle) return;
+  _dubSpWorkingStyle.align = align;
+  ['Left','Center','Right'].forEach(a =>
+    document.getElementById('dubSpAlign' + a).classList.toggle('active', a.toLowerCase() === align)
+  );
+  dubUpdateStylePreview();
+}
+
+function dubToggleStyleProp(prop) {
+  if (!_dubSpWorkingStyle) return;
+  _dubSpWorkingStyle[prop] = !_dubSpWorkingStyle[prop];
+  const key = 'dubSp' + prop.charAt(0).toUpperCase() + prop.slice(1);
+  document.getElementById(key)?.classList.toggle('active', _dubSpWorkingStyle[prop]);
+  dubUpdateStylePreview();
+}
+
+function dubSetTextPos(x, y) {
+  if (!_dubSpWorkingStyle) return;
+  _dubSpWorkingStyle.posX = x;
+  _dubSpWorkingStyle.posY = y;
+  dubUpdateStylePreview();
+}
+
+function _dubInitStyleDrag() {
+  const textEl = document.getElementById('dubSpText');
+  const wrap   = document.getElementById('dubSpWrap');
+  if (!textEl || !wrap) return;
+
+  let dragging = false, startX, startY, startLeft, startTop;
+
+  function onDown(e) {
+    dragging = true;
+    const p = e.touches ? e.touches[0] : e;
+    startX = p.clientX; startY = p.clientY;
+    const wr = wrap.getBoundingClientRect();
+    const tr = textEl.getBoundingClientRect();
+    startLeft = (tr.left + tr.width  / 2 - wr.left) / wr.width  * 100;
+    startTop  = (tr.top  + tr.height / 2 - wr.top)  / wr.height * 100;
+    textEl.style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+  function onMove(e) {
+    if (!dragging || !_dubSpWorkingStyle) return;
+    const p = e.touches ? e.touches[0] : e;
+    const wr = wrap.getBoundingClientRect();
+    const dx = (p.clientX - startX) / wr.width  * 100;
+    const dy = (p.clientY - startY) / wr.height * 100;
+    _dubSpWorkingStyle.posX = Math.max(5, Math.min(95, startLeft + dx));
+    _dubSpWorkingStyle.posY = Math.max(5, Math.min(95, startTop  + dy));
+    textEl.style.left = _dubSpWorkingStyle.posX + '%';
+    textEl.style.top  = _dubSpWorkingStyle.posY + '%';
+    e.preventDefault();
+  }
+  function onUp() { dragging = false; if (textEl) textEl.style.cursor = 'grab'; }
+
+  // 기존 이벤트 재등록 방지용 클론
+  const fresh = textEl.cloneNode(true);
+  textEl.parentNode.replaceChild(fresh, textEl);
+  fresh.addEventListener('mousedown',  onDown);
+  fresh.addEventListener('touchstart', onDown, {passive:false});
+  document.addEventListener('mousemove',  onMove);
+  document.addEventListener('touchmove',  onMove, {passive:false});
+  document.addEventListener('mouseup',  onUp);
+  document.addEventListener('touchend', onUp);
+}
+
+function dubSaveTextStyleFromModal() {
+  const sc = _dubScenes().find(s => s.id === dubStyleEditingSceneId);
+  if (sc && _dubSpWorkingStyle) {
+    sc.textStyle = Object.assign({}, _dubSpWorkingStyle);
+  }
+  closeModal('dubTextStyleModal');
+  dubRenderSceneEditList();
+  _dubShowToast('✅ 스타일 저장됨');
+}
+
 /* ── Step 1B: 장면 편집기 ── */
 function dubAddScene() {
   const scenes = _dubScenes();
@@ -7248,6 +7540,7 @@ function dubConfirmAddScene() {
     mediaType: dubPendingMedia ? dubPendingMedia.type : null,
     mediaObjectURL: dubPendingMedia ? dubPendingMedia.objectURL : null,
     audioBlob: null, audioObjectURL: null,
+    textStyle: Object.assign({}, DUB_DEFAULT_STYLE),
   });
   closeModal('dubAddModal');
   dubPendingMedia = null;
@@ -7358,6 +7651,8 @@ function dubRenderSceneEditList() {
         oninput="dubSaveSceneText(${sc.id}, this.value)">${sc.text || ''}</textarea>
       <div class="dub-scene-edit-footer">
         <div class="dub-scene-status ${sc.audioBlob ? 'done' : 'pending'}">${sc.audioBlob ? '✅ 더빙 완료' : '⏳ 더빙 대기'}</div>
+        <button class="dub-style-chip ${sc.textStyle && JSON.stringify(sc.textStyle) !== JSON.stringify(DUB_DEFAULT_STYLE) ? 'has-style' : ''}"
+          onclick="dubOpenTextStyle(${sc.id})">🎨 텍스트 스타일</button>
         <button class="dub-scene-btn" onclick="dubGoRecord(${idx})">🎤 더빙하기</button>
       </div>`;
     list.appendChild(card);
@@ -7404,7 +7699,7 @@ function dubGotoScene(idx) {
     empty.style.display = 'flex';
     label.style.display = 'none';
   }
-  // 대사/내용 표시
+  // 대사/내용 표시 (아래 스크립트 박스)
   const scriptBox = document.getElementById('dubScriptBox');
   const scriptText = document.getElementById('dubScriptText');
   if (sc.text && sc.text.trim()) {
@@ -7412,6 +7707,14 @@ function dubGotoScene(idx) {
     scriptBox.classList.add('show');
   } else {
     scriptBox.classList.remove('show');
+  }
+  // 텍스트 오버레이 (이미지 위)
+  const overlay = document.getElementById('dubTextOverlay');
+  if (overlay && sc.text && sc.text.trim() && sc.mediaObjectURL) {
+    _dubApplyTextStyleToEl(overlay, Object.assign({}, DUB_DEFAULT_STYLE, sc.textStyle || {}), sc.text);
+    overlay.style.display = '';
+  } else if (overlay) {
+    overlay.style.display = 'none';
   }
   document.getElementById('dubSceneCounter').textContent = `장면 ${idx + 1} / ${scenes.length}`;
   document.getElementById('dubPrevBtn').disabled = idx === 0;
