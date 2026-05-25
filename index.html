@@ -357,6 +357,11 @@ body.admin .add-btn{display:flex}
 .dub-proj-btns{display:flex;gap:5px;flex-shrink:0}
 .dub-new-proj-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:18px;border:3px dashed #3a0028;background:transparent;color:#666;font-family:var(--f-display-kr);font-size:16px;cursor:pointer;width:100%;transition:.15s;touch-action:manipulation}
 .dub-new-proj-btn:hover{border-color:var(--c-purple);color:var(--c-white);background:#0d0008}
+/* 작품 탭 */
+.dub-proj-tab-nav{display:flex;border-bottom:2px solid #3a0028;gap:0;width:100%}
+.dub-proj-tab{flex:1;padding:10px 6px;font-family:var(--f-display-kr);font-size:13px;text-align:center;cursor:pointer;color:#555;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;touch-action:manipulation}
+.dub-proj-tab.active{color:var(--c-yellow);border-bottom-color:var(--c-yellow);background:#0d0008}
+.dub-proj-tab:hover:not(.active){color:#ccc}
 /* 장면 편집기 */
 .dub-editor-header{display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap}
 .dub-editor-back{padding:8px 14px;border:var(--border-thin);background:var(--c-card);color:#ccc;font-family:var(--f-ui);font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;touch-action:manipulation;white-space:nowrap}
@@ -1762,10 +1767,29 @@ body.easy-mode .t-save-btn{display:none}
     <!-- A: 작품 목록 -->
     <div id="dubProjListWrap" style="display:flex;flex-direction:column;gap:14px;width:100%">
       <div style="font-family:var(--f-display-kr);font-size:20px;color:var(--c-yellow);text-align:center;letter-spacing:.02em">📚 나의 그림책 작품</div>
-      <div class="dub-proj-list" id="dubProjList"></div>
-      <button class="dub-new-proj-btn" onclick="dubAddProject()">
-        <span style="font-size:22px">📖</span> 새 작품 만들기
-      </button>
+
+      <!-- 탭 네비게이션 (비관리자 전용) -->
+      <div class="dub-proj-tab-nav" id="dubProjTabNav" style="display:none">
+        <button class="dub-proj-tab active" id="dubProjTab0" onclick="dubSwitchProjTab(0)">📚 기본 작품</button>
+        <button class="dub-proj-tab" id="dubProjTab1" onclick="dubSwitchProjTab(1)">✏️ 직접 만들기</button>
+      </div>
+
+      <!-- Tab 0: 기본 작품 (DB) -->
+      <div id="dubProjTabContent0" style="display:flex;flex-direction:column;gap:10px">
+        <div class="dub-proj-list" id="dubProjList"></div>
+        <button class="dub-new-proj-btn" onclick="dubAddProject()">
+          <span style="font-size:22px">📖</span> 새 작품 만들기
+        </button>
+      </div>
+
+      <!-- Tab 1: 직접 만들기 (사용자 개인, 로컬) -->
+      <div id="dubProjTabContent1" style="display:none;flex-direction:column;gap:10px">
+        <div style="font-family:var(--f-ui);font-size:12px;color:#888;text-align:center;line-height:1.7">나만의 대본과 이미지로 그림책을 직접 만들어보세요!<br>이 작품은 이 기기 세션에만 저장돼요.</div>
+        <div class="dub-proj-list" id="dubPersonalProjList"></div>
+        <button class="dub-new-proj-btn" onclick="dubCreatePersonalProject()">
+          <span style="font-size:22px">✏️</span> 나만의 작품 시작
+        </button>
+      </div>
     </div>
 
     <!-- B: 장면 편집기 (관리자 전용) -->
@@ -1774,6 +1798,7 @@ body.easy-mode .t-save-btn{display:none}
         <button class="dub-editor-back" onclick="dubBackToProjects()">← 작품 목록</button>
         <input class="dub-proj-title-input" id="dubProjTitleInput" placeholder="작품 제목을 입력하세요" maxlength="40" oninput="dubSaveProjTitle()">
         <button class="dub-scene-btn" id="dubSaveToDB" onclick="dubSaveProjectToDB()" style="background:var(--c-yellow);color:var(--c-black);border-color:var(--c-black);font-size:12px;padding:8px 14px;white-space:nowrap">💾 DB 저장</button>
+        <button class="dub-scene-btn" id="dubPersonalStartDubBtn" onclick="dubStartPersonalDubbing()" style="display:none;background:var(--c-purple);color:#fff;border-color:var(--c-purple);font-size:12px;padding:8px 14px;white-space:nowrap">🎤 더빙 시작!</button>
       </div>
       <div class="dub-scene-list" id="dubSceneEditList"></div>
       <button class="dub-add-scene-btn" onclick="dubAddScene()">
@@ -6794,8 +6819,11 @@ async function regenAI() {
 /* ═══════════════════════════════════════
    그림책 더빙
 ═══════════════════════════════════════ */
-let dubProjects = [];           // [{id, title, scenes:[]}]
+let dubProjects = [];           // [{id, title, scenes:[]}] — DB 작품 (관리자 관리)
+let dubPersonalProjects = [];   // [{id, title, scenes:[]}] — 사용자 직접 만든 작품 (로컬)
 let dubCurrentProjectId = null; // 현재 편집 중인 작품 id
+let dubEditorMode = 'admin';    // 'admin' | 'personal'
+let dubCurrentProjTab = 0;      // 0: 기본작품, 1: 직접만들기
 let dubCurrentIdx = 0;          // 현재 더빙 중인 장면 인덱스
 let dubRecording = false;
 let dubMediaRecorder = null;
@@ -6810,9 +6838,10 @@ let dubChangingSceneId = null;  // 미디어 변경 대상 장면 id
 let dubExporting = false;
 let _dubPlayAudio = null;
 
-/* 현재 작품의 장면 배열 반환 */
+/* 현재 작품의 장면 배열 반환 (DB 작품 + 개인 작품 모두 탐색) */
 function _dubScenes() {
-  const p = dubProjects.find(p => p.id === dubCurrentProjectId);
+  const p = dubProjects.find(p => p.id === dubCurrentProjectId)
+         || dubPersonalProjects.find(p => p.id === dubCurrentProjectId);
   return p ? p.scenes : [];
 }
 
@@ -6930,7 +6959,8 @@ function switchDubStep(idx) {
   document.querySelectorAll('.dub-view').forEach((v, i) => v.classList.toggle('active', i === idx));
   if (idx === 0 && dubCurrentProjectId) {
     // 프로젝트 선택 상태로 복귀 — 미리보기/편집기 새로고침
-    if (isAdmin) dubRenderSceneEditList(); else dubRenderScenePreview();
+    if (isAdmin || dubEditorMode === 'personal') dubRenderSceneEditList();
+    else dubRenderScenePreview();
   }
   if (idx === 1) {
     const sc = _dubScenes();
@@ -6942,11 +6972,20 @@ function switchDubStep(idx) {
 
 /* ── Step 1A: 작품 목록 ── */
 function dubRenderProjList() {
+  // 탭 표시 여부: 비관리자만 탭 보여줌
+  const tabNav = document.getElementById('dubProjTabNav');
+  if (tabNav) tabNav.style.display = isAdmin ? 'none' : 'flex';
+  // 관리자는 탭0 항상 표시, 비관리자는 현재 탭 상태 유지
+  if (isAdmin) {
+    document.getElementById('dubProjTabContent0').style.display = 'flex';
+    document.getElementById('dubProjTabContent1').style.display = 'none';
+  }
+
   const list = document.getElementById('dubProjList');
   if (!list) return;
   list.innerHTML = '';
   if (dubProjects.length === 0) {
-    list.innerHTML = `<div style="font-family:var(--f-ui);font-size:13px;color:#555;text-align:center;padding:20px 0">${isAdmin ? '아직 작품이 없어요. 새 작품을 만들어보세요.' : '등록된 작품이 없어요. 관리자에게 문의하세요.'}</div>`;
+    list.innerHTML = `<div style="font-family:var(--f-ui);font-size:13px;color:#555;text-align:center;padding:20px 0">${isAdmin ? '아직 작품이 없어요. 새 작품을 만들어보세요.' : '등록된 기본 작품이 없어요. 관리자에게 문의하세요.'}</div>`;
   }
   dubProjects.forEach(proj => {
     const done = proj.scenes.filter(s => s.audioBlob).length;
@@ -6966,12 +7005,13 @@ function dubRenderProjList() {
     card.addEventListener('click', () => isAdmin ? dubOpenProject(proj.id) : dubSelectProject(proj.id));
     list.appendChild(card);
   });
-  // 관리자만 새 작품 버튼 표시
-  const newBtn = document.querySelector('.dub-new-proj-btn');
+  // 관리자만 기본 작품 "새 작품 만들기" 버튼 표시
+  const newBtn = document.querySelector('#dubProjTabContent0 .dub-new-proj-btn');
   if (newBtn) newBtn.style.display = isAdmin ? '' : 'none';
 }
 
 function dubAddProject() {
+  dubEditorMode = 'admin';
   document.getElementById('dubNewProjTitle').value = '';
   openModal('dubNewProjModal');
   setTimeout(() => document.getElementById('dubNewProjTitle').focus(), 100);
@@ -6980,9 +7020,14 @@ function dubAddProject() {
 function dubConfirmAddProject() {
   const title = document.getElementById('dubNewProjTitle').value.trim() || '새 작품';
   const proj = { id: 'p' + Date.now(), title, scenes: [] };
-  dubProjects.push(proj);
   closeModal('dubNewProjModal');
-  dubOpenProject(proj.id);
+  if (dubEditorMode === 'personal') {
+    dubPersonalProjects.push(proj);
+    dubOpenPersonalProject(proj.id);
+  } else {
+    dubProjects.push(proj);
+    dubOpenProject(proj.id);
+  }
 }
 
 function dubDeleteProject(id) {
@@ -7000,8 +7045,9 @@ function dubDeleteProject(id) {
 }
 
 function dubOpenProject(id) {
-  // 관리자 전용: 장면 편집기 열기
+  // 관리자 전용: DB 작품 장면 편집기 열기
   dubCurrentProjectId = id;
+  dubEditorMode = 'admin';
   const proj = dubProjects.find(p => p.id === id);
   if (!proj) return;
   document.getElementById('dubProjListWrap').style.display = 'none';
@@ -7009,6 +7055,8 @@ function dubOpenProject(id) {
   const wrap = document.getElementById('dubSceneEditorWrap');
   wrap.style.display = 'flex';
   document.getElementById('dubProjTitleInput').value = proj.title;
+  document.getElementById('dubSaveToDB').style.display = '';
+  document.getElementById('dubPersonalStartDubBtn').style.display = 'none';
   dubRenderSceneEditList();
   dubUpdateStepBadges();
 }
@@ -7056,17 +7104,101 @@ function dubRenderScenePreview() {
 }
 
 function dubBackToProjects() {
+  const wasPersonal = dubEditorMode === 'personal';
   dubCurrentProjectId = null;
   document.getElementById('dubProjListWrap').style.display = 'flex';
   document.getElementById('dubSceneEditorWrap').style.display = 'none';
   document.getElementById('dubScenePreviewWrap').style.display = 'none';
   dubRenderProjList();
+  if (wasPersonal) dubSwitchProjTab(1);
   dubUpdateStepBadges();
 }
 
 function dubSaveProjTitle() {
-  const proj = dubProjects.find(p => p.id === dubCurrentProjectId);
+  const proj = dubProjects.find(p => p.id === dubCurrentProjectId)
+             || dubPersonalProjects.find(p => p.id === dubCurrentProjectId);
   if (proj) proj.title = document.getElementById('dubProjTitleInput').value;
+}
+
+/* ── Step 1: 탭 전환 (기본 작품 ↔ 직접 만들기) ── */
+function dubSwitchProjTab(tab) {
+  dubCurrentProjTab = tab;
+  document.querySelectorAll('.dub-proj-tab').forEach((b, i) => b.classList.toggle('active', i === tab));
+  document.getElementById('dubProjTabContent0').style.display = tab === 0 ? 'flex' : 'none';
+  document.getElementById('dubProjTabContent1').style.display = tab === 1 ? 'flex' : 'none';
+  if (tab === 1) dubRenderPersonalProjList();
+}
+
+/* ── Step 1: 개인 작품 목록 렌더링 ── */
+function dubRenderPersonalProjList() {
+  const list = document.getElementById('dubPersonalProjList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (dubPersonalProjects.length === 0) {
+    list.innerHTML = `<div style="font-family:var(--f-ui);font-size:13px;color:#555;text-align:center;padding:20px 0">아직 직접 만든 작품이 없어요.<br>아래 버튼으로 나만의 작품을 시작해보세요!</div>`;
+    return;
+  }
+  dubPersonalProjects.forEach(proj => {
+    const done = proj.scenes.filter(s => s.audioBlob).length;
+    const card = document.createElement('div');
+    card.className = 'dub-proj-card';
+    card.innerHTML = `
+      <div class="dub-proj-icon">✏️</div>
+      <div class="dub-proj-info">
+        <div class="dub-proj-title-text">${proj.title || '(제목 없음)'}</div>
+        <div class="dub-proj-meta">장면 ${proj.scenes.length}개${done > 0 ? ` &nbsp;·&nbsp; 더빙 ${done}/${proj.scenes.length}` : ''}</div>
+      </div>
+      <div class="dub-proj-btns">
+        <button class="dub-scene-btn" onclick="dubOpenPersonalProject('${proj.id}');event.stopPropagation()">✏️ 편집</button>
+        <button class="dub-scene-btn danger" onclick="dubDeletePersonalProject('${proj.id}');event.stopPropagation()">🗑</button>
+      </div>`;
+    card.addEventListener('click', () => dubOpenPersonalProject(proj.id));
+    list.appendChild(card);
+  });
+}
+
+/* ── Step 1: 개인 작품 만들기 ── */
+function dubCreatePersonalProject() {
+  dubEditorMode = 'personal';
+  document.getElementById('dubNewProjTitle').value = '';
+  openModal('dubNewProjModal');
+  setTimeout(() => document.getElementById('dubNewProjTitle').focus(), 100);
+}
+
+function dubOpenPersonalProject(id) {
+  dubCurrentProjectId = id;
+  dubEditorMode = 'personal';
+  const proj = dubPersonalProjects.find(p => p.id === id);
+  if (!proj) return;
+  document.getElementById('dubProjListWrap').style.display = 'none';
+  document.getElementById('dubScenePreviewWrap').style.display = 'none';
+  const wrap = document.getElementById('dubSceneEditorWrap');
+  wrap.style.display = 'flex';
+  document.getElementById('dubProjTitleInput').value = proj.title;
+  document.getElementById('dubSaveToDB').style.display = 'none';
+  document.getElementById('dubPersonalStartDubBtn').style.display = '';
+  dubRenderSceneEditList();
+  dubUpdateStepBadges();
+}
+
+function dubDeletePersonalProject(id) {
+  const proj = dubPersonalProjects.find(p => p.id === id);
+  if (!proj) return;
+  if (!confirm(`"${proj.title || '이 작품'}"을 삭제할까요?`)) return;
+  proj.scenes.forEach(s => {
+    if (s.mediaObjectURL) URL.revokeObjectURL(s.mediaObjectURL);
+    if (s.audioObjectURL) URL.revokeObjectURL(s.audioObjectURL);
+  });
+  dubPersonalProjects = dubPersonalProjects.filter(p => p.id !== id);
+  if (dubCurrentProjectId === id) dubCurrentProjectId = null;
+  dubRenderPersonalProjList();
+  dubUpdateStepBadges();
+}
+
+function dubStartPersonalDubbing() {
+  const scenes = _dubScenes();
+  if (scenes.length === 0) { alert('먼저 장면을 추가해주세요!'); return; }
+  switchDubStep(1);
 }
 
 /* ── Step 1B: 장면 편집기 ── */
@@ -7443,7 +7575,8 @@ function dubRenderSummary() {
   const el = document.getElementById('dubSummary');
   if (!el) return;
   const scenes = _dubScenes();
-  const proj = dubProjects.find(p => p.id === dubCurrentProjectId);
+  const proj = dubProjects.find(p => p.id === dubCurrentProjectId)
+             || dubPersonalProjects.find(p => p.id === dubCurrentProjectId);
   const total = scenes.length;
   const done = scenes.filter(s => s.audioBlob).length;
   el.innerHTML = `
