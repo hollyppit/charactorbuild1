@@ -5972,8 +5972,21 @@ function checkPw(){
   if(document.getElementById('pwInput').value===ADMIN_PW){closeModal('pwModal');enterAdmin();}
   else document.getElementById('pwErr').textContent='비밀번호가 틀렸습니다 🔒';
 }
-function enterAdmin(){isAdmin=true;document.body.classList.add('admin');document.getElementById('adminBtn').textContent='🔓 관리자 종료';}
-function exitAdmin(){isAdmin=false;document.body.classList.remove('admin');document.getElementById('adminBtn').textContent='🔧 관리자';deselectLayer();}
+function enterAdmin(){
+  isAdmin=true;
+  document.body.classList.add('admin');
+  document.getElementById('adminBtn').textContent='🔓 관리자 종료';
+  // 그림책 더빙 패널이 열려있으면 목록 재렌더링 (관리자 컨트롤 표시)
+  if(document.getElementById('panel-dub')?.classList.contains('active')) dubRenderProjList();
+}
+function exitAdmin(){
+  isAdmin=false;
+  document.body.classList.remove('admin');
+  document.getElementById('adminBtn').textContent='🔧 관리자';
+  deselectLayer();
+  // 그림책 더빙 패널이 열려있으면 목록 재렌더링 (관리자 컨트롤 숨김)
+  if(document.getElementById('panel-dub')?.classList.contains('active')) dubRenderProjList();
+}
 
 /* ═══════════════════════════════════════
    모달
