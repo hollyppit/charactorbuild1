@@ -166,6 +166,8 @@ export async function onRequest(context) {
     if (rows[0].password_hash !== password_hash) return json({ error: 'wrong_password' }, 403);
 
     // 썸네일 덮어쓰기
+    // 버전 파라미터를 URL에 포함해 CDN 캐시 우회
+    const version = Date.now();
     let thumbnail_url = null;
     if (thumbnail) {
       const binary = _b64ToBinary(thumbnail.split(',')[1]);
@@ -174,7 +176,7 @@ export async function onRequest(context) {
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
         body: binary,
       });
-      if (r.ok) thumbnail_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/thumb.jpg`;
+      if (r.ok) thumbnail_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/thumb.jpg?v=${version}`;
     }
 
     // 레이어 덮어쓰기
@@ -191,7 +193,7 @@ export async function onRequest(context) {
           headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': isPng ? 'image/png' : 'image/jpeg', 'x-upsert': 'true' },
           body: binary,
         });
-        if (r.ok) layer_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/layer_${i}.${ext}`;
+        if (r.ok) layer_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/layer_${i}.${ext}?v=${version}`;
       }
       layers_meta.push({
         name: layer.name, kind: layer.kind, opacity: layer.opacity ?? 1,

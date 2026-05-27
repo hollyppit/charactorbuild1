@@ -3660,6 +3660,23 @@ function _paintImageToLayer(layer, imageEl, srcUrl) {
   };
   if (imageEl && imageEl.complete && imageEl.naturalWidth) { onReady(imageEl); return; }
   if (imageEl) { imageEl.onload = () => onReady(imageEl); return; }
+
+  // 외부 URL(http/https)은 fetch → Blob URL 방식으로 로드
+  // → crossOrigin 캐시 오염 없이 캔버스에 안전하게 그릴 수 있음 (loadDrawSave와 동일 패턴)
+  if (srcUrl && /^https?:\/\//.test(srcUrl)) {
+    fetch(srcUrl)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
+      .then(blob => {
+        const blobUrl = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => { onReady(img); URL.revokeObjectURL(blobUrl); };
+        img.onerror = () => { URL.revokeObjectURL(blobUrl); ctx.fillStyle = '#fdd'; ctx.fillRect(0, 0, w, h); _renderDrawLayersList(); };
+        img.src = blobUrl;
+      })
+      .catch(() => { ctx.fillStyle = '#fdd'; ctx.fillRect(0, 0, w, h); _renderDrawLayersList(); });
+    return;
+  }
+
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => onReady(img);
@@ -3694,7 +3711,9 @@ function _redrawImageLayer(layer) {
 
 function _resizeDrawLayer(layer, w, h) {
   if (layer.canvas.width === w && layer.canvas.height === h) return;
-  if (layer.kind === 'draw') {
+  // draw 레이어 또는 _imageEl 없는 image 레이어(저장 불러오기 후)는
+  // canvas 내용을 픽셀 그대로 보존
+  if (layer.kind === 'draw' || (layer.kind === 'image' && !layer._imageEl)) {
     const data = layer.canvas.toDataURL();
     layer.canvas.width = w; layer.canvas.height = h;
     if (data !== 'data:,') {
@@ -4162,7 +4181,7 @@ function _renderDrawTemplateGrid() {
     if (t.kind === 'folder') {
       thumbHtml = `<div class="dt-card-thumb"><span class="emoji">📁</span></div>`;
     } else if (t.src) {
-      thumbHtml = `<div class="dt-card-thumb"><img src="${_escHtml(t.src)}" alt=""></div>`;
+      thumbHtml = `<div class="dt-card-thumb"><img src="${_escHtml(t.src)}" crossorigin="anonymous" alt=""></div>`;
     } else {
       thumbHtml = `<div class="dt-card-thumb"><span class="emoji">${_escHtml(t.emoji)}</span></div>`;
     }
@@ -5955,11 +5974,15 @@ async function doAI(mode) {
       imageB64 = stageCanvas.toDataURL('image/png');
     } else {
       const flat = flattenDrawCanvas();
+      try {
+        imageB64 = flat.toDataURL('image/png');
+      } catch(_) {
+        throw new Error('이미지 레이어를 캔버스에 읽을 수 없습니다. 이미지 레이어를 삭제하고 다시 추가해 보세요.');
+      }
       const thumb = document.getElementById('drawThumb');
       thumb.width = flat.width;
       thumb.height = flat.height;
-      thumb.getContext('2d').drawImage(flat, 0, 0);
-      imageB64 = flat.toDataURL('image/png');
+      try { thumb.getContext('2d').drawImage(flat, 0, 0); } catch(_) {}
     }
 
     // 재생성용 상태 저장
@@ -5999,7 +6022,12 @@ async function doAI(mode) {
   } catch (e) {
     clearInterval(iv);
     loading.classList.remove('show');
-    alert('AI 변환 오류: ' + e.message);
+    const msg = e.message || '';
+    if (msg.includes('결제 한도') || msg.includes('크레딧') || msg.includes('RESOURCE_EXHAUSTED')) {
+      alert('⚠️ AI 서비스 결제 한도 초과\n\n' + msg + '\n\n관리자에게 문의하거나 잠시 후 다시 시도해 주세요.');
+    } else {
+      alert('AI 변환 오류: ' + msg);
+    }
   }
 }
 
@@ -6149,10 +6177,19 @@ function _makeDrawThumbnail() {
   for (const layer of drawLayers) {
     if (!layer.visible) continue;
     ctx.globalAlpha = layer.opacity ?? 1;
-    ctx.drawImage(layer.canvas, 0, 0, tmp.width, tmp.height);
+    try { ctx.drawImage(layer.canvas, 0, 0, tmp.width, tmp.height); } catch(_) {}
   }
   ctx.globalAlpha = 1;
-  return tmp.toDataURL('image/jpeg', 0.7);
+  try {
+    return tmp.toDataURL('image/jpeg', 0.7);
+  } catch(_) {
+    // tainted 캔버스 폴백: 흰 배경 썸네일 반환
+    const fb = document.createElement('canvas');
+    fb.width = tmp.width; fb.height = tmp.height;
+    const fc = fb.getContext('2d');
+    fc.fillStyle = '#fff'; fc.fillRect(0, 0, fb.width, fb.height);
+    return fb.toDataURL('image/jpeg', 0.7);
+  }
 }
 
 // ── 새 저장: 항상 모달 → 새 레코드 생성 ──────────────────
@@ -6357,8 +6394,10 @@ async function loadDrawSave(saveId, session = null) {
       if (!meta.url) continue; // URL 없으면 빈 레이어로 유지
 
       // fetch → Blob URL: CORS/캐시 문제 없이 canvas에 그릴 수 있음
+      // CDN 캐시 우회를 위해 타임스탬프 쿼리 파라미터 추가
       try {
-        const blob = await fetch(meta.url).then(r => {
+        const cacheBustUrl = meta.url + (meta.url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+        const blob = await fetch(cacheBustUrl).then(r => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.blob();
         });
@@ -6372,7 +6411,16 @@ async function loadDrawSave(saveId, session = null) {
         const ctx = layer.canvas.getContext('2d');
         ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
         ctx.drawImage(img, 0, 0, layer.canvas.width, layer.canvas.height);
-        if (meta.kind === 'image') layer._imageEl = img;
+        // image 레이어: 저장된 이미지는 이미 scale/rotate/offset이 적용된 상태이므로
+        // _imageEl을 설정하지 않고 transform 값도 기본값으로 리셋.
+        // 이렇게 해야 이후 _redrawImageLayer 호출 시 scale이 중복 적용되지 않음.
+        if (meta.kind === 'image') {
+          layer._imageEl = null;
+          layer.scale = 1;
+          layer.rotate = 0;
+          layer.offsetX = 0;
+          layer.offsetY = 0;
+        }
         URL.revokeObjectURL(blobUrl);
       } catch(fetchErr) {
         console.warn('레이어 로드 실패 (빈 레이어로 유지):', meta.url, fetchErr);

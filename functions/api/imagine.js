@@ -352,10 +352,22 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
       if (!imageB64) throw new Error('이미지 데이터 없음');
       return new Response(JSON.stringify({ image: `data:image/png;base64,${imageB64}` }), { headers: corsHeaders });
     } catch (oaiErr) {
-      lastError += `[OpenAI] ${oaiErr.message}`;
+      lastError += ` | [OpenAI] ${oaiErr.message}`;
     }
 
-    throw new Error(`모든 모델 실패: ${lastError}`);
+    // 결제/한도 오류를 사람이 읽기 쉬운 메시지로 변환
+    const isGeminiExhausted = lastError.includes('RESOURCE_EXHAUSTED') || lastError.includes('spending cap');
+    const isOpenAiBilling   = lastError.includes('billing_limit_user_error') || lastError.includes('Billing hard limit') || lastError.includes('exceeded your current quota');
+    if (isGeminiExhausted && isOpenAiBilling) {
+      throw new Error('Gemini와 OpenAI 모두 이번 달 결제 한도를 초과했습니다. 각 서비스 계정에서 크레딧을 충전해 주세요.');
+    }
+    if (isGeminiExhausted) {
+      throw new Error('Gemini API 월 사용 한도 초과. Google AI Studio에서 결제를 확인해 주세요.');
+    }
+    if (isOpenAiBilling) {
+      throw new Error('OpenAI API 결제 한도 초과. OpenAI 계정에서 크레딧을 충전해 주세요.');
+    }
+    throw new Error(`모든 AI 모델 실패: ${lastError}`);
 
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
