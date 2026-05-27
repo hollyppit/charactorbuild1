@@ -2363,6 +2363,7 @@ body.easy-mode .t-save-btn{display:none}
   <div class="loading-msg" id="loadingMsg">AI가 그림을 분석하는 중... 🎨</div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/fix-webm-duration@1.0.6/fix-webm-duration.min.js"></script>
 <script>
 /* ═══════════════════════════════════════
    상수 & 설정
@@ -8173,6 +8174,7 @@ async function dubExportVideo() {
       }
       drawHandle = requestAnimationFrame(drawFrame);
     }
+    const exportStartTime = Date.now();
     rec.start(100);
     drawHandle = requestAnimationFrame(drawFrame);
     const exportScenes = _dubScenes();
@@ -8212,7 +8214,16 @@ async function dubExportVideo() {
     barLabel.textContent = '파일 저장 중...';
     await new Promise(r => { rec.onstop = r; rec.stop(); });
     audioCtx.close();
-    const blob = new Blob(chunks, { type: mimeType });
+    const rawBlob = new Blob(chunks, { type: mimeType });
+    const duration = Date.now() - exportStartTime;
+    // Duration 메타데이터 패치 → 탐색(seek) 가능한 WebM 생성
+    const blob = await new Promise(resolve => {
+      if (typeof fixWebmDuration === 'function') {
+        fixWebmDuration(rawBlob, duration, fixedBlob => resolve(fixedBlob));
+      } else {
+        resolve(rawBlob);
+      }
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = '그림책더빙_' + Date.now() + '.webm'; a.click();
