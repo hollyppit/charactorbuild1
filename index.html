@@ -3961,10 +3961,35 @@ function addBlankDrawLayer() {
   _renderDrawLayersList();
 }
 
-function addImageDrawLayer(src, name) {
-  _createDrawLayer({ kind: 'image', name: name || '이미지 레이어', src });
+async function addImageDrawLayer(src, name) {
+  const layer = _createDrawLayer({ kind: 'draw', name: name || '이미지' });
   _rebuildDrawLayerStackDOM();
   _renderDrawLayersList();
+
+  try {
+    let objectUrl = null;
+    if (/^https?:\/\//.test(src)) {
+      const cacheBust = src + (src.includes('?') ? '&' : '?') + '_t=' + Date.now();
+      const blob = await fetch(cacheBust).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      });
+      objectUrl = URL.createObjectURL(blob);
+    }
+    const img = new Image();
+    await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; img.src = objectUrl || src; });
+    const ctx = layer.canvas.getContext('2d');
+    const cw = layer.canvas.width, ch = layer.canvas.height;
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    if (iw && ih) {
+      const s = Math.min(cw / iw, ch / ih);
+      ctx.drawImage(img, (cw - iw * s) / 2, (ch - ih * s) / 2, iw * s, ih * s);
+    }
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    _renderDrawLayersList();
+  } catch (e) {
+    console.warn('이미지 레이어 로드 실패:', e.message);
+  }
 }
 
 function moveDrawLayer(id, dir) {
