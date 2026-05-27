@@ -1366,7 +1366,7 @@ body.easy-mode .t-save-btn{display:none}
 })();
 </script>
 
-<div class="admin-bar">🔧 관리자 모드 — 스테이지 레이어를 드래그해 배치하고 ✏️ 로 이미지를 교체하세요</div>
+<div class="admin-bar">🔧 관리자 모드 — 스테이지 레이어를 드래그해 배치하고 ✏️ 로 이미지를 교체하세요 &nbsp;|&nbsp; <button onclick="openAdminAiPwModal()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">⚙ AI 비밀번호</button></div>
 
 <div class="header">
   <div class="header-left">
@@ -2323,6 +2323,41 @@ body.easy-mode .t-save-btn{display:none}
   </div>
 </div>
 
+<!-- ── AI 변신 비밀번호 입력 모달 ── -->
+<div class="modal-overlay" id="aiPwModal">
+  <div class="modal" style="max-width:360px">
+    <h2>🔑 AI 변신 비밀번호</h2>
+    <p style="font-family:var(--f-ui);font-size:13px;color:#ccc;margin:0 0 12px">AI 변신을 사용하려면 비밀번호를 입력해 주세요.</p>
+    <input type="password" id="aiPwInput" class="modal-input"
+      placeholder="비밀번호 입력"
+      style="width:100%;padding:10px;background:#1a0010;border:2px solid var(--c-purple);color:#fff;font-family:var(--f-ui);font-size:14px;margin-bottom:6px"
+      onkeydown="if(event.key==='Enter')_submitAIPw()">
+    <div id="aiPwErr" style="font-family:var(--f-ui);font-size:12px;color:#E63946;min-height:16px;margin-bottom:8px"></div>
+    <div class="modal-btns">
+      <button class="btn btn-yellow" onclick="_submitAIPw()">확인</button>
+      <button class="btn btn-gray" onclick="_cancelAIPw()">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 관리자 AI 비밀번호 설정 모달 ── -->
+<div class="modal-overlay" id="adminAiPwModal">
+  <div class="modal" style="max-width:400px">
+    <h2>⚙ AI 변신 비밀번호 설정</h2>
+    <p style="font-family:var(--f-ui);font-size:12px;color:#aaa;margin:0 0 12px">설정하면 AI 변신 시 비밀번호 입력이 필요합니다.<br>비워두고 저장하면 누구나 자유롭게 사용할 수 있습니다.</p>
+    <div style="font-family:var(--f-ui);font-size:11px;color:#888;margin-bottom:4px">현재: <span id="adminAiPwCurrent" style="color:var(--c-yellow);font-weight:700"></span></div>
+    <input type="text" id="adminAiPwNew"
+      placeholder="새 비밀번호 (비워두면 해제)"
+      style="width:100%;padding:10px;background:#1a0010;border:2px solid var(--c-purple);color:#fff;font-family:var(--f-ui);font-size:14px;margin-bottom:8px"
+      onkeydown="if(event.key==='Enter')saveAIPwSetting()">
+    <div id="adminAiPwMsg" style="font-family:var(--f-ui);font-size:12px;min-height:16px;margin-bottom:8px"></div>
+    <div class="modal-btns">
+      <button class="btn btn-yellow" onclick="saveAIPwSetting()">💾 저장</button>
+      <button class="btn btn-gray" onclick="closeModal('adminAiPwModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
 <div class="loading" id="loading">
   <div class="spinner"></div>
   <div class="loading-msg" id="loadingMsg">AI가 그림을 분석하는 중... 🎨</div>
@@ -2387,6 +2422,10 @@ const SUPABASE_URL = 'https://vhhfaeyhlubvhezyagwd.supabase.co';
 const SUPABASE_STORAGE = `${SUPABASE_URL}/storage/v1/object/public/char-assets`;
 const ADMIN_PW    = 'admin1234';
 const STORAGE_KEY = 'charmaker_v4';
+
+let _aiAccessPw = '';          // DB에서 로드한 AI 접근 비밀번호 ('' = 제한 없음)
+let _aiSessionVerified = false; // 세션 내 인증 완료 여부
+let _pendingAIMode = null;      // 비밀번호 확인 대기 중인 mode
 
 const CATEGORIES = [
   {id:'bg',        label:'배경',   icon:'🌄', hasBack:false},
@@ -2488,6 +2527,11 @@ async function loadItemsFromDB() {
     const res = await fetch('/api/items');
     const rows = await res.json();
     if (!Array.isArray(rows) || !rows.length) return null;
+
+    // 앱 설정 파싱 (AI 접근 비밀번호 등)
+    const pwRow = rows.find(r => r.category === '__app_settings' && r.id === 'ai_access_pw');
+    _aiAccessPw = pwRow ? (pwRow.label || '') : '';
+
     const grouped = {};
     CATEGORIES.forEach(c => grouped[c.id] = []);
     rows.forEach(row => {
@@ -5972,6 +6016,16 @@ ${safeText ? ", " + safeText : ""}
 
 /* AI 변신 메인 */
 async function doAI(mode) {
+  // AI 접근 비밀번호 확인 (관리자·세션 인증 완료 시 스킵)
+  if (_aiAccessPw && !isAdmin && !_aiSessionVerified) {
+    _pendingAIMode = mode;
+    document.getElementById('aiPwInput').value = '';
+    document.getElementById('aiPwErr').textContent = '';
+    openModal('aiPwModal');
+    setTimeout(() => document.getElementById('aiPwInput').focus(), 100);
+    return;
+  }
+
   const style = aiStyle[mode];
   const loading = document.getElementById('loading');
   const msgs = [
@@ -6145,13 +6199,63 @@ function exitAdmin(){
   if(document.getElementById('panel-dub')?.classList.contains('active')) dubRenderProjList();
 }
 
+// ── AI 접근 비밀번호 입력 처리 ──
+function _submitAIPw() {
+  const entered = document.getElementById('aiPwInput').value;
+  const errEl = document.getElementById('aiPwErr');
+  if (!entered) { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
+  if (entered !== _aiAccessPw) { errEl.textContent = '비밀번호가 틀렸습니다 🔒'; return; }
+  _aiSessionVerified = true;
+  closeModal('aiPwModal');
+  if (_pendingAIMode) {
+    const mode = _pendingAIMode;
+    _pendingAIMode = null;
+    doAI(mode);
+  }
+}
+function _cancelAIPw() {
+  _pendingAIMode = null;
+  closeModal('aiPwModal');
+}
+
+// ── 관리자 AI 비밀번호 설정 ──
+function openAdminAiPwModal() {
+  if (!isAdmin) return;
+  document.getElementById('adminAiPwNew').value = _aiAccessPw;
+  document.getElementById('adminAiPwMsg').textContent = '';
+  document.getElementById('adminAiPwCurrent').textContent = _aiAccessPw ? `"${_aiAccessPw}"` : '없음 (누구나 사용 가능)';
+  openModal('adminAiPwModal');
+  setTimeout(() => document.getElementById('adminAiPwNew').focus(), 100);
+}
+async function saveAIPwSetting() {
+  const pw = document.getElementById('adminAiPwNew').value.trim();
+  const msgEl = document.getElementById('adminAiPwMsg');
+  msgEl.style.color = '#aaa';
+  msgEl.textContent = '저장 중...';
+  try {
+    await fetch('/api/items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'ai_access_pw', category: '__app_settings', label: pw, sort_order: 0 }),
+    });
+    _aiAccessPw = pw;
+    _aiSessionVerified = false; // 비밀번호 변경 시 기존 인증 초기화
+    document.getElementById('adminAiPwCurrent').textContent = pw ? `"${pw}"` : '없음 (누구나 사용 가능)';
+    msgEl.style.color = 'var(--c-yellow)';
+    msgEl.textContent = pw ? `✅ 저장됨 — AI 변신 시 "${pw}" 입력 필요` : '✅ 비밀번호 해제됨';
+  } catch (e) {
+    msgEl.style.color = '#E63946';
+    msgEl.textContent = '저장 실패: ' + e.message;
+  }
+}
+
 /* ═══════════════════════════════════════
    모달
 ═══════════════════════════════════════ */
 function openModal(id){document.getElementById(id).classList.add('show');document.body.style.overflow='hidden';}
 function closeModal(id){document.getElementById(id).classList.remove('show');if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';}
 document.querySelectorAll('.modal-overlay').forEach(o=>{
-  if(o.id==='aiResultModal') return; // 닫기 버튼으로만 닫을 수 있음
+  if(o.id==='aiResultModal' || o.id==='aiPwModal') return; // 닫기 버튼으로만 닫을 수 있음
   o.addEventListener('click',e=>{if(e.target===o){o.classList.remove('show');if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';}});
 });
 
