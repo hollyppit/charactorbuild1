@@ -86,8 +86,10 @@ export async function onRequest(context) {
             });
             if (upRes.ok) {
               mediaData = `${SUPABASE_URL}/storage/v1/object/public/dub-media/${storagePath}`;
+            } else {
+              mediaData = null; // 버킷 없거나 업로드 실패 → base64 저장 안 함 (timeout 방지)
             }
-          } catch { /* 업로드 실패 시 media_data null 처리 */ mediaData = null; }
+          } catch { mediaData = null; }
         }
         return {
           id: s.id,
