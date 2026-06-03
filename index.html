@@ -1983,6 +1983,12 @@ body.easy-mode .t-save-btn{display:none}
     </div>
     <div class="dub-sp-hint">💡 텍스트를 드래그해서 위치를 바꿀 수 있어요</div>
 
+    <!-- 대사 편집 -->
+    <div class="dub-style-row" style="align-items:flex-start">
+      <span class="dub-style-label" style="padding-top:6px">대사</span>
+      <textarea id="dubSpSceneText" rows="3" oninput="dubUpdateStylePreviewText()" style="flex:1;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:6px;padding:8px;font-size:13px;font-family:var(--f-ui);resize:vertical;line-height:1.5"></textarea>
+    </div>
+
     <!-- 빠른 위치 -->
     <div class="dub-style-row">
       <span class="dub-style-label">위치</span>
@@ -7578,8 +7584,10 @@ function dubOpenTextStyle(id) {
     empty.style.display = 'flex';
   }
 
-  // 텍스트 박스 내용
-  document.getElementById('dubSpText').textContent = sc.text?.trim() || '(대사 없음 — 장면에 대사를 입력하면 여기 표시돼요)';
+  // 텍스트 박스 내용 + 편집 textarea
+  const sceneText = sc.text?.trim() || '';
+  document.getElementById('dubSpSceneText').value = sceneText;
+  document.getElementById('dubSpText').textContent = sceneText || '(대사 없음 — 장면에 대사를 입력하면 여기 표시돼요)';
 
   dubUpdateStylePreview();
   openModal('dubTextStyleModal');
@@ -7675,10 +7683,17 @@ function _dubInitStyleDrag() {
   document.addEventListener('touchend', onUp);
 }
 
+function dubUpdateStylePreviewText() {
+  const text = document.getElementById('dubSpSceneText').value;
+  const textEl = document.getElementById('dubSpText');
+  if (textEl) textEl.textContent = text || '(대사 없음)';
+}
+
 function dubSaveTextStyleFromModal() {
   const sc = _dubScenes().find(s => s.id === dubStyleEditingSceneId);
   if (sc && _dubSpWorkingStyle) {
     sc.textStyle = Object.assign({}, _dubSpWorkingStyle);
+    sc.text = document.getElementById('dubSpSceneText').value;
   }
   closeModal('dubTextStyleModal');
   dubRenderSceneEditList();
