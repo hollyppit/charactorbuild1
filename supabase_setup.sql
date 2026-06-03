@@ -84,3 +84,18 @@ create table if not exists dub_scenes (
 
 alter table dub_projects disable row level security;
 alter table dub_scenes disable row level security;
+
+-- Storage 버킷: dub-media (Public)
+-- Dashboard → Storage → New Bucket → 이름: dub-media → Public 체크
+-- 아래 정책으로 anon 업로드/읽기/수정/삭제 허용
+create policy "public upload dub-media" on storage.objects
+  for insert with check (bucket_id = 'dub-media');
+
+create policy "public read dub-media" on storage.objects
+  for select using (bucket_id = 'dub-media');
+
+create policy "public update dub-media" on storage.objects
+  for update using (bucket_id = 'dub-media');
+
+create policy "public delete dub-media" on storage.objects
+  for delete using (bucket_id = 'dub-media');
