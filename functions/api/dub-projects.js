@@ -27,13 +27,14 @@ export async function onRequest(context) {
 
   // GET: 모든 작품 + 장면 목록
   if (request.method === 'GET') {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return json({ error: 'missing_env', SUPABASE_URL: !!SUPABASE_URL, SUPABASE_KEY: !!SUPABASE_KEY }, 500);
     const [projRes, sceneRes] = await Promise.all([
       sb('/rest/v1/dub_projects?select=id,title,order_num,created_at&order=order_num.asc,created_at.asc'),
       sb('/rest/v1/dub_scenes?select=id,project_id,name,scene_text,media_type,media_data,text_style,order_num&order=order_num.asc'),
     ]);
     const projects = await projRes.json();
     const scenes = await sceneRes.json();
-    if (!Array.isArray(projects)) return json({ error: 'db_error', detail: projects }, 500);
+    if (!Array.isArray(projects)) return json({ error: 'db_error', projStatus: projRes.status, sceneStatus: sceneRes.status, detail: projects, scenes }, 500);
     for (const p of projects) {
       p.scenes = Array.isArray(scenes) ? scenes.filter(s => s.project_id === p.id) : [];
     }
