@@ -8127,27 +8127,15 @@ async function dubExportPDF() {
       const ctx = c.getContext('2d');
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
-      // 상단 노란 바
-      ctx.fillStyle = '#FFDC00';
-      ctx.fillRect(0, 0, W, 12);
-      // 하단 노란 바
-      ctx.fillRect(0, H - 12, W, 12);
-      // 제목
+      // 제목만
       ctx.fillStyle = '#1a1a2e';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const titleLines = _pdfWrapText(ctx, title, `bold 88px 'Black Han Sans','Nanum Gothic',sans-serif`, W - 160, W / 2);
       const titleLineH = 110;
-      const titleY = H / 2 - (titleLines.length * titleLineH) / 2 - 40;
+      const titleY = H / 2 - (titleLines.length * titleLineH) / 2;
       ctx.font = `bold 88px 'Black Han Sans','Nanum Gothic',sans-serif`;
       titleLines.forEach((line, i) => ctx.fillText(line, W / 2, titleY + i * titleLineH));
-      // 구분선
-      ctx.fillStyle = '#FFDC00';
-      ctx.fillRect(W / 2 - 50, H / 2 + (titleLines.length * titleLineH) / 2 - 20, 100, 6);
-      // 부제
-      ctx.font = `22px 'Nanum Gothic',sans-serif`;
-      ctx.fillStyle = '#aaaaaa';
-      ctx.fillText('볼드하다 AI 매직 드로잉', W / 2, H / 2 + (titleLines.length * titleLineH) / 2 + 40);
       pdf.addImage(c.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
     }
 
@@ -8245,13 +8233,6 @@ async function dubExportPDF() {
         ctx.fillStyle = color;
         lines.forEach((ln, li) => ctx.fillText(ln, textX, startY + li * lineH));
       }
-
-      // 페이지 번호 (우하단 반투명)
-      ctx.font = `${Math.round(18 * W/600)}px 'Nanum Gothic',sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'bottom';
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.fillText(`${i + 1} / ${scenes.length}`, W - 30, H - 20);
 
       pdf.addPage();
       pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
