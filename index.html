@@ -7192,7 +7192,7 @@ async function dubLoadFromDB() {
             text: s.scene_text || '',
             mediaType: s.media_type || null,
             mediaData: s.media_data || null,
-            mediaObjectURL: s.media_data ? _dubB64ToURL(s.media_data, s.media_type) : null,
+            mediaObjectURL: s.media_data ? (s.media_data.startsWith('http') ? s.media_data : _dubB64ToURL(s.media_data, s.media_type)) : null,
             mediaBlob: null,
             audioBlob: null,
             audioObjectURL: null,

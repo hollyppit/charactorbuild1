@@ -62,15 +62,43 @@ export async function onRequest(context) {
     // 기존 장면 삭제 후 재삽입
     await sb(`/rest/v1/dub_scenes?project_id=eq.${encodeURIComponent(project.id)}`, { method: 'DELETE' });
     if (Array.isArray(scenes) && scenes.length > 0) {
-      const sceneRows = scenes.map((s, i) => ({
-        id: s.id,
-        project_id: project.id,
-        name: s.name || '',
-        scene_text: s.scene_text || '',
-        media_type: s.media_type || null,
-        media_data: s.media_data || null,
-        text_style: s.text_style ? JSON.stringify(s.text_style) : null,
-        order_num: i,
+      // base64 이미지 → Supabase Storage 업로드 후 URL로 교체
+      const sceneRows = await Promise.all(scenes.map(async (s, i) => {
+        let mediaData = s.media_data || null;
+        if (mediaData && !mediaData.startsWith('http')) {
+          // base64 → Storage 업로드
+          const ext = s.media_type === 'video' ? 'mp4' : 'jpg';
+          const contentType = s.media_type === 'video' ? 'video/mp4' : 'image/jpeg';
+          const storagePath = `${project.id}/${s.id}.${ext}`;
+          try {
+            const binary = atob(mediaData);
+            const bytes = new Uint8Array(binary.length);
+            for (let k = 0; k < binary.length; k++) bytes[k] = binary.charCodeAt(k);
+            const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/dub-media/${storagePath}`, {
+              method: 'POST',
+              headers: {
+                apikey: SUPABASE_KEY,
+                Authorization: `Bearer ${SUPABASE_KEY}`,
+                'Content-Type': contentType,
+                'x-upsert': 'true',
+              },
+              body: bytes,
+            });
+            if (upRes.ok) {
+              mediaData = `${SUPABASE_URL}/storage/v1/object/public/dub-media/${storagePath}`;
+            }
+          } catch { /* 업로드 실패 시 media_data null 처리 */ mediaData = null; }
+        }
+        return {
+          id: s.id,
+          project_id: project.id,
+          name: s.name || '',
+          scene_text: s.scene_text || '',
+          media_type: s.media_type || null,
+          media_data: mediaData,
+          text_style: s.text_style ? JSON.stringify(s.text_style) : null,
+          order_num: i,
+        };
       }));
       const sRes = await sb('/rest/v1/dub_scenes', {
         method: 'POST',
