@@ -54,7 +54,10 @@ export async function onRequest(context) {
       headers: { Prefer: 'return=representation,resolution=merge-duplicates' },
       body: JSON.stringify({ id: project.id, title: project.title, order_num: project.order_num || 0 }),
     });
-    if (!pRes.ok) return json({ error: 'project_save_failed' }, 500);
+    if (!pRes.ok) {
+      const pErr = await pRes.json().catch(() => ({}));
+      return json({ error: 'project_save_failed', status: pRes.status, detail: pErr }, 500);
+    }
 
     // 기존 장면 삭제 후 재삽입
     await sb(`/rest/v1/dub_scenes?project_id=eq.${encodeURIComponent(project.id)}`, { method: 'DELETE' });
@@ -73,7 +76,10 @@ export async function onRequest(context) {
         method: 'POST',
         body: JSON.stringify(sceneRows),
       });
-      if (!sRes.ok) return json({ error: 'scenes_save_failed' }, 500);
+      if (!sRes.ok) {
+        const sErr = await sRes.json().catch(() => ({}));
+        return json({ error: 'scenes_save_failed', status: sRes.status, detail: sErr }, 500);
+      }
     }
     return json({ ok: true });
   }
