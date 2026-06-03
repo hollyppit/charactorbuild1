@@ -7554,7 +7554,7 @@ function _dubApplyTextStyleToEl(el, st, text) {
 
 function dubOpenTextStyle(id) {
   dubStyleEditingSceneId = id;
-  const sc = _dubScenes().find(s => s.id === id);
+  const sc = _dubScenes().find(s => String(s.id) === String(id));
   if (!sc) return;
   _dubSpWorkingStyle = Object.assign({}, DUB_DEFAULT_STYLE, sc.textStyle || {});
 
@@ -7695,7 +7695,7 @@ function dubUpdateStylePreviewText() {
 }
 
 function dubSaveTextStyleFromModal() {
-  const sc = _dubScenes().find(s => s.id === dubStyleEditingSceneId);
+  const sc = _dubScenes().find(s => String(s.id) === String(dubStyleEditingSceneId));
   if (sc && _dubSpWorkingStyle) {
     sc.textStyle = Object.assign({}, _dubSpWorkingStyle);
     sc.text = document.getElementById('dubSpSceneText').value;
@@ -7771,12 +7771,12 @@ function dubMoveScene(id, dir) {
 }
 
 function dubSaveSceneName(id, val) {
-  const sc = _dubScenes().find(s => s.id === id);
+  const sc = _dubScenes().find(s => String(s.id) === String(id));
   if (sc) sc.name = val;
 }
 
 function dubSaveSceneText(id, val) {
-  const sc = _dubScenes().find(s => s.id === id);
+  const sc = _dubScenes().find(s => String(s.id) === String(id));
   if (sc) sc.text = val;
 }
 
@@ -7804,7 +7804,7 @@ function dubOnChangeMedia(e) {
 
 function dubConfirmChangeMedia() {
   if (!dubPendingMedia || !dubChangingSceneId) return;
-  const sc = _dubScenes().find(s => s.id === dubChangingSceneId);
+  const sc = _dubScenes().find(s => String(s.id) === String(dubChangingSceneId));
   if (!sc) return;
   if (sc.mediaObjectURL) URL.revokeObjectURL(sc.mediaObjectURL);
   sc.mediaBlob = dubPendingMedia.blob;
