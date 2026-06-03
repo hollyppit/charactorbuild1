@@ -8116,6 +8116,12 @@ async function dubExportPDF() {
 
   try {
     await document.fonts.ready;
+    // 각 폰트를 실제 한글 문자로 강제 로드 (fallback 방지)
+    const _pdfFonts = ['Black Han Sans','Nanum Gothic','Gowun Dodum','Nanum Pen Script','Space Grotesk','Permanent Marker'];
+    await Promise.allSettled(_pdfFonts.flatMap(f => [
+      document.fonts.load(`bold 32px '${f}'`),
+      document.fonts.load(`32px '${f}'`),
+    ]));
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 1240, H = 1754; // A4 @ 150dpi
@@ -8176,6 +8182,11 @@ async function dubExportPDF() {
         const fontSize  = Math.round((st.fontSize || 22) * scale);
         const fontFam   = `'${st.fontFamily || 'Nanum Gothic'}','Nanum Gothic',sans-serif`;
         const fontStr   = `${st.italic ? 'italic ' : ''}${st.bold ? 'bold ' : ''}${fontSize}px ${fontFam}`;
+        // 해당 폰트 강제 로드 (글자 섞임 방지)
+        await Promise.allSettled([
+          document.fonts.load(fontStr, text),
+          document.fonts.load(`${fontSize}px 'Nanum Gothic'`, text),
+        ]);
         const color     = st.color || '#ffffff';
         const align     = st.align || 'center';
         const posX      = ((st.posX ?? 50) / 100) * W;
