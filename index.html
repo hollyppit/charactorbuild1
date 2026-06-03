@@ -8102,7 +8102,7 @@ function dubRenderSummary() {
   document.getElementById('dubExportBtn').disabled = done === 0;
 }
 
-/* ── PDF 저장 ── */
+/* ── PDF 저장 (html2canvas → jsPDF, 인쇄 최적화) ── */
 async function dubExportPDF() {
   const scenes = _dubScenes();
   if (scenes.length === 0) { alert('장면이 없어요.'); return; }
@@ -8112,71 +8112,78 @@ async function dubExportPDF() {
 
   const btn = document.getElementById('dubPdfBtn');
   btn.disabled = true;
-  btn.textContent = '📄 PDF 만드는 중...';
+  btn.innerHTML = '<span>📄</span> PDF 만드는 중...';
+
+  // 렌더 컨테이너 (화면 밖)
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;background:#fff;overflow:hidden';
+  document.body.appendChild(wrap);
 
   try {
     const { jsPDF } = window.jspdf;
-    const PW = 210, PH = 297; // A4 mm
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-    // 표지
-    pdf.setFillColor(15, 10, 30);
-    pdf.rect(0, 0, PW, PH, 'F');
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(28);
-    pdf.setTextColor(255, 220, 0);
-    pdf.text(title, PW / 2, PH / 2 - 10, { align: 'center' });
-    pdf.setFontSize(12);
-    pdf.setTextColor(180, 180, 180);
-    pdf.text('볼드하다 AI 매직 드로잉', PW / 2, PH / 2 + 10, { align: 'center' });
+    // ── 표지 ──
+    wrap.innerHTML = `
+      <div style="width:794px;height:1123px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Black Han Sans','Nanum Gothic',sans-serif;border:1px solid #e0e0e0;box-sizing:border-box">
+        <div style="font-size:11px;color:#aaa;letter-spacing:2px;margin-bottom:24px">AI 그림책</div>
+        <div style="font-size:52px;color:#1a1a2e;text-align:center;line-height:1.3;padding:0 60px">${title}</div>
+        <div style="width:60px;height:3px;background:#FFDC00;margin:28px 0"></div>
+        <div style="font-size:13px;color:#999;font-family:'Nanum Gothic',sans-serif">볼드하다 AI 매직 드로잉</div>
+      </div>`;
+    await _dubWait(200);
+    const coverCanvas = await html2canvas(wrap, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+    pdf.addImage(coverCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
 
+    // ── 장면별 페이지 ──
     for (let i = 0; i < scenes.length; i++) {
+      btn.innerHTML = `<span>📄</span> PDF 만드는 중... (${i + 1}/${scenes.length})`;
       const sc = scenes[i];
-      pdf.addPage();
-
-      // 배경
-      pdf.setFillColor(15, 10, 30);
-      pdf.rect(0, 0, PW, PH, 'F');
-
-      // 이미지
-      const imgH = 180; // mm
-      const imgY = 20;
-      if (sc.mediaObjectURL && sc.mediaType !== 'video') {
-        try {
-          const imgData = await _dubURLToDataURL(sc.mediaObjectURL);
-          pdf.addImage(imgData, 'JPEG', 15, imgY, PW - 30, imgH, undefined, 'FAST');
-        } catch { /* 이미지 없으면 빈 영역 */ }
-      }
-
-      // 장면 번호
-      pdf.setFontSize(9);
-      pdf.setTextColor(150, 150, 150);
-      pdf.text(`${i + 1} / ${scenes.length}  ${sc.name || ''}`, PW / 2, imgY - 5, { align: 'center' });
-
-      // 대사 텍스트
       const text = (sc.text || '').trim();
-      if (text) {
-        const st = sc.textStyle || {};
-        const bgEnabled = st.bgEnabled !== false;
-        const textY = imgY + imgH + 8;
-        const lines = pdf.splitTextToSize(text, PW - 30);
-        const lineH = 6;
-        const boxH = lines.length * lineH + 6;
+      const hasImg = sc.mediaObjectURL && sc.mediaType !== 'video';
+      const st = sc.textStyle || {};
+      const fontFamily = st.fontFamily ? `'${st.fontFamily}','Nanum Gothic',sans-serif` : "'Nanum Gothic',sans-serif";
+      const fontWeight = st.bold ? '700' : '400';
+      const fontStyle  = st.italic ? 'italic' : 'normal';
+      const textAlign  = st.align || 'center';
+      const textColor  = st.color || '#1a1a2e';
 
-        if (bgEnabled) {
-          const hex = st.bgColor || '#000000';
-          const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-          pdf.setFillColor(r, g, b);
-          pdf.setGState && pdf.setGState(new pdf.GState({ opacity: (st.bgOpacity ?? 65) / 100 }));
-          pdf.roundedRect(15, textY - 3, PW - 30, boxH, 2, 2, 'F');
-          pdf.setGState && pdf.setGState(new pdf.GState({ opacity: 1 }));
-        }
+      // 이미지 영역 높이: 텍스트 있으면 660px, 없으면 960px
+      const imgAreaH = text ? 660 : 960;
 
-        pdf.setFontSize(13);
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFont('helvetica', st.bold ? 'bold' : 'normal');
-        pdf.text(lines, PW / 2, textY + lineH, { align: st.align === 'left' ? 'left' : st.align === 'right' ? 'right' : 'center', maxWidth: PW - 30 });
+      wrap.innerHTML = `
+        <div style="width:794px;height:1123px;background:#fff;display:flex;flex-direction:column;font-family:'Nanum Gothic',sans-serif;box-sizing:border-box">
+          <!-- 이미지 영역 -->
+          <div style="width:794px;height:${imgAreaH}px;background:#f0f0f0;flex-shrink:0;overflow:hidden;position:relative">
+            ${hasImg ? `<img src="${sc.mediaObjectURL}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:cover">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:80px">🖼️</div>'}
+            <!-- 장면 번호 배지 -->
+            <div style="position:absolute;top:16px;left:20px;background:rgba(0,0,0,0.5);color:#fff;font-size:13px;padding:4px 12px;border-radius:20px;font-family:'Nanum Gothic',sans-serif">${i + 1} / ${scenes.length}</div>
+          </div>
+          <!-- 텍스트 영역 -->
+          ${text ? `
+          <div style="flex:1;padding:32px 48px 24px;display:flex;flex-direction:column;justify-content:center;background:#fff">
+            ${sc.name ? `<div style="font-size:12px;color:#bbb;margin-bottom:10px;font-family:'Nanum Gothic',sans-serif;letter-spacing:1px">${sc.name}</div>` : ''}
+            <div style="font-size:22px;line-height:1.75;color:${textColor};font-family:${fontFamily};font-weight:${fontWeight};font-style:${fontStyle};text-align:${textAlign};white-space:pre-wrap">${text.replace(/</g,'&lt;')}</div>
+          </div>` : ''}
+          <!-- 하단 여백 + 페이지번호 -->
+          <div style="height:32px;display:flex;align-items:center;justify-content:center;background:#fff">
+            <span style="font-size:11px;color:#ccc;font-family:'Nanum Gothic',sans-serif">${title} · ${i + 1}</span>
+          </div>
+        </div>`;
+
+      // 이미지 로드 대기
+      if (hasImg) {
+        const imgEl = wrap.querySelector('img');
+        await new Promise(res => {
+          if (imgEl.complete) res();
+          else { imgEl.onload = res; imgEl.onerror = res; }
+        });
       }
+      await _dubWait(150);
+
+      const pageCanvas = await html2canvas(wrap, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+      pdf.addPage();
+      pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
     }
 
     pdf.save(`${title}.pdf`);
@@ -8185,25 +8192,13 @@ async function dubExportPDF() {
     console.error(e);
     _dubShowToast('❌ PDF 저장 실패: ' + e.message);
   } finally {
+    document.body.removeChild(wrap);
     btn.disabled = false;
     btn.innerHTML = '<span>📄</span> 그림책 PDF 저장';
   }
 }
 
-function _dubURLToDataURL(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = img.naturalWidth; c.height = img.naturalHeight;
-      c.getContext('2d').drawImage(img, 0, 0);
-      resolve(c.toDataURL('image/jpeg', 0.85));
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-}
+function _dubWait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /* ── 전체 재생 모달 ── */
 function dubPlayAll() {
