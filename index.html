@@ -7829,7 +7829,7 @@ function dubRenderSceneEditList() {
       : '<div style="font-size:22px;color:#555">🖼️</div>';
     card.innerHTML = `
       <div class="dub-scene-edit-top">
-        <div class="dub-scene-edit-thumb" onclick="dubOpenChangeMedia(${sc.id})">
+        <div class="dub-scene-edit-thumb" onclick="dubOpenChangeMedia('${sc.id}')">
           ${thumbInner}
           <div class="dub-scene-edit-thumb-ov"><span>📷</span><span>변경</span></div>
         </div>
@@ -7837,21 +7837,21 @@ function dubRenderSceneEditList() {
           <div class="dub-scene-edit-row">
             <span class="dub-scene-num">${idx + 1}</span>
             <input class="dub-scene-name-input" value="${sc.name.replace(/"/g,'&quot;')}" placeholder="장면 이름"
-              oninput="dubSaveSceneName(${sc.id}, this.value)">
+              oninput="dubSaveSceneName('${sc.id}', this.value)">
             <div class="dub-scene-order-btns">
-              <button class="dub-order-btn" onclick="dubMoveScene(${sc.id},-1)" ${idx===0?'disabled':''} title="위로">▲</button>
-              <button class="dub-order-btn" onclick="dubMoveScene(${sc.id},1)" ${idx===scenes.length-1?'disabled':''} title="아래로">▼</button>
-              <button class="dub-order-btn" style="color:#E63946;border-color:#4a0a0a" onclick="dubRemoveScene(${sc.id})" title="삭제">🗑</button>
+              <button class="dub-order-btn" onclick="dubMoveScene('${sc.id}',-1)" ${idx===0?'disabled':''} title="위로">▲</button>
+              <button class="dub-order-btn" onclick="dubMoveScene('${sc.id}',1)" ${idx===scenes.length-1?'disabled':''} title="아래로">▼</button>
+              <button class="dub-order-btn" style="color:#E63946;border-color:#4a0a0a" onclick="dubRemoveScene('${sc.id}')" title="삭제">🗑</button>
             </div>
           </div>
         </div>
       </div>
       <textarea class="dub-scene-text-input" placeholder="이 장면의 대사나 내용을 입력하세요 (아이들이 더빙 시 볼 수 있어요)"
-        oninput="dubSaveSceneText(${sc.id}, this.value)">${sc.text || ''}</textarea>
+        oninput="dubSaveSceneText('${sc.id}', this.value)">${sc.text || ''}</textarea>
       <div class="dub-scene-edit-footer">
         <div class="dub-scene-status ${sc.audioBlob ? 'done' : 'pending'}">${sc.audioBlob ? '✅ 더빙 완료' : '⏳ 더빙 대기'}</div>
         <button class="dub-style-chip ${sc.textStyle && JSON.stringify(sc.textStyle) !== JSON.stringify(DUB_DEFAULT_STYLE) ? 'has-style' : ''}"
-          onclick="dubOpenTextStyle(${sc.id})">🎨 텍스트 스타일</button>
+          onclick="dubOpenTextStyle('${sc.id}')">🎨 텍스트 스타일</button>
         <button class="dub-scene-btn" onclick="dubGoRecord(${idx})">🎤 더빙하기</button>
       </div>`;
     list.appendChild(card);
