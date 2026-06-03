@@ -60,3 +60,27 @@ create policy "public update draw_saves" on draw_saves for update using (true);
 
 -- Storage 버킷: draw-saves (Public)
 -- Dashboard → Storage → New Bucket → 이름: draw-saves → Public 체크
+
+-- ─────────────────────────────────────────────────────────
+-- 4. 그림책 더빙 테이블
+-- ─────────────────────────────────────────────────────────
+create table if not exists dub_projects (
+  id text primary key,
+  title text not null,
+  order_num integer default 0,
+  created_at timestamptz default now()
+);
+
+create table if not exists dub_scenes (
+  id text primary key,
+  project_id text not null references dub_projects(id) on delete cascade,
+  name text default '',
+  scene_text text default '',
+  media_type text,
+  media_data text,
+  text_style text,
+  order_num integer default 0
+);
+
+alter table dub_projects disable row level security;
+alter table dub_scenes disable row level security;
