@@ -8370,20 +8370,32 @@ async function dubExportVideo() {
   barLabel.textContent = '준비 중...';
   try {
     const W = 1280, H = 720;
+    // 캔버스를 DOM에 추가해야 captureStream이 일부 브라우저에서 동작
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
+    canvas.style.cssText = 'position:fixed;left:-9999px;top:-9999px;pointer-events:none;opacity:0;';
+    document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
+    // 최초 프레임 그려두기 (빈 캔버스는 스트림 생성 전 필요)
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     const audioCtx = new AudioContext();
     // AudioContext가 suspended 상태면 resume (브라우저 자동재생 정책 대응)
     if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
     const dest = audioCtx.createMediaStreamDestination();
-    const combined = new MediaStream([
-      ...canvas.captureStream(30).getVideoTracks(),
-      ...dest.stream.getAudioTracks()
-    ]);
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus'
-      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
-    const rec = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 2500000 });
+    // captureStream: fps 인수 없이 호출 (브라우저가 canvas 변경 시 자동 캡처)
+    const canvasStream = canvas.captureStream();
+    const videoTracks = canvasStream.getVideoTracks();
+    const audioTracks = dest.stream.getAudioTracks();
+    const combined = new MediaStream([...videoTracks, ...audioTracks]);
+    // mimeType 선택 — 비디오 트랙 없으면 오디오 전용으로 폴백
+    const hasVideo = videoTracks.length > 0;
+    const mimeType = hasVideo
+      ? (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus'
+        : 'video/webm')
+      : (MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm');
+    const rec = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: hasVideo ? 2500000 : undefined });
+    rec.onerror = e => console.error('MediaRecorder 오류:', e);
     const chunks = [];
     rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
     let drawHandle;
@@ -8542,6 +8554,9 @@ async function dubExportVideo() {
   } finally {
     dubExporting = false;
     exportBtn.disabled = false;
+    // DOM에 임시 추가한 캔버스 제거
+    const tmpCanvas = document.querySelector('canvas[style*="-9999px"]');
+    if (tmpCanvas) tmpCanvas.remove();
   }
 }
 </script>
