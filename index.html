@@ -8510,24 +8510,28 @@ async function dubExportVideo() {
     clearInterval(drawHandle);
     bar.style.width = '98%';
     barLabel.textContent = '파일 저장 중...';
-    // 마지막 청크 수집 후 stop
+    // 마지막 청크 강제 수집 후 stop
+    // onstop 이후 지연된 ondataavailable 대비: Blob 생성을 setTimeout으로 지연
     rec.requestData();
-    await new Promise(r => setTimeout(r, 200));
-    const rawBlob = await new Promise(resolve => {
-      rec.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
-      rec.stop();
-    });
+    await new Promise(r => setTimeout(r, 300));
+    await new Promise(resolve => { rec.onstop = resolve; rec.stop(); });
+    await new Promise(r => setTimeout(r, 150)); // Chrome late-dataavailable 대비
     audioCtx.close();
     const duration = Date.now() - exportStartTime;
-    if (rawBlob.size === 0) throw new Error('녹화 데이터가 없습니다. 더빙 후 다시 시도해 주세요.');
+    const rawBlob = new Blob(chunks, { type: mimeType });
     // Duration 메타데이터 패치 → 탐색(seek) 가능한 WebM 생성
     const blob = await new Promise(resolve => {
-      if (typeof fixWebmDuration === 'function') {
+      if (rawBlob.size > 0 && typeof fixWebmDuration === 'function') {
         fixWebmDuration(rawBlob, duration, fixedBlob => resolve(fixedBlob || rawBlob));
       } else {
         resolve(rawBlob);
       }
     });
+    if (blob.size === 0) {
+      barLabel.textContent = '⚠ 영상 데이터 없음 — 브라우저가 캔버스 녹화를 지원하지 않을 수 있어요.';
+      setTimeout(() => { progress.classList.remove('show'); bar.style.width = '0%'; }, 4000);
+      return;
+    }
     saveImageUniversal(blob, '그림책더빙_' + Date.now() + '.webm');
     bar.style.width = '100%';
     barLabel.textContent = '완료! ✅';
