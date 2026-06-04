@@ -6039,7 +6039,7 @@ ${safeText ? ", " + safeText : ""}
 /* AI 변신 메인 */
 async function doAI(mode) {
   // AI 접근 비밀번호 확인 (관리자 제외, 매번 확인)
-  if (_aiAccessPw && !isAdmin) {
+  if (_aiAccessPw && !isAdmin && !_aiSessionVerified) {
     _pendingAIMode = mode;
     document.getElementById('aiPwInput').value = '';
     document.getElementById('aiPwErr').textContent = '';
@@ -6047,6 +6047,7 @@ async function doAI(mode) {
     setTimeout(() => document.getElementById('aiPwInput').focus(), 100);
     return;
   }
+  _aiSessionVerified = false; // 일회용 — 다음 호출은 다시 비밀번호 요구
 
   const style = aiStyle[mode];
   const loading = document.getElementById('loading');
@@ -6231,6 +6232,7 @@ function _submitAIPw() {
   if (_pendingAIMode) {
     const mode = _pendingAIMode;
     _pendingAIMode = null;
+    _aiSessionVerified = true;  // doAI 한 번만 통과시키는 일회용 플래그
     doAI(mode);
   }
 }
