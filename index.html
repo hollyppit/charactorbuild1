@@ -8374,6 +8374,8 @@ async function dubExportVideo() {
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const audioCtx = new AudioContext();
+    // AudioContext가 suspended 상태면 resume (브라우저 자동재생 정책 대응)
+    if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
     const dest = audioCtx.createMediaStreamDestination();
     const combined = new MediaStream([
       ...canvas.captureStream(30).getVideoTracks(),
@@ -8398,11 +8400,12 @@ async function dubExportVideo() {
           ctx.drawImage(src, (W - sw * r) / 2, (H - sh * r) / 2, sw * r, sh * r);
         }
       }
-      drawHandle = requestAnimationFrame(drawFrame);
     }
+    // rAF 대신 setInterval 사용 — 탭 비활성화 시에도 프레임 유지
+    drawFrame();
+    drawHandle = setInterval(drawFrame, 1000 / 30);
     const exportStartTime = Date.now();
     rec.start(100);
-    drawHandle = requestAnimationFrame(drawFrame);
     const exportScenes = _dubScenes();
     for (let i = 0; i < exportScenes.length; i++) {
       const sc = exportScenes[i];
@@ -8424,36 +8427,43 @@ async function dubExportVideo() {
       }
       await new Promise(resolve => {
         if (!sc.audioBlob) { setTimeout(resolve, 2000); return; }
-        sc.audioBlob.arrayBuffer().then(buf => audioCtx.decodeAudioData(buf)).then(audioBuf => {
-          const src2 = audioCtx.createBufferSource();
-          src2.buffer = audioBuf;
-          src2.connect(dest);
-          src2.onended = resolve;
-          src2.start();
-        }).catch(() => setTimeout(resolve, 2000));
+        const timer = setTimeout(resolve, 30000); // 최대 30초 안전망
+        sc.audioBlob.arrayBuffer()
+          .then(buf => audioCtx.decodeAudioData(buf))
+          .then(audioBuf => {
+            const src2 = audioCtx.createBufferSource();
+            src2.buffer = audioBuf;
+            src2.connect(dest);
+            src2.onended = () => { clearTimeout(timer); resolve(); };
+            src2.start();
+          })
+          .catch(() => { clearTimeout(timer); setTimeout(resolve, 2000); });
       });
       if (curVid) curVid.pause();
       await new Promise(r => setTimeout(r, 300));
     }
-    cancelAnimationFrame(drawHandle);
+    clearInterval(drawHandle);
     bar.style.width = '98%';
     barLabel.textContent = '파일 저장 중...';
-    await new Promise(r => { rec.onstop = r; rec.stop(); });
+    // 마지막 청크 수집 후 stop
+    rec.requestData();
+    await new Promise(r => setTimeout(r, 200));
+    const rawBlob = await new Promise(resolve => {
+      rec.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+      rec.stop();
+    });
     audioCtx.close();
-    const rawBlob = new Blob(chunks, { type: mimeType });
     const duration = Date.now() - exportStartTime;
+    if (rawBlob.size === 0) throw new Error('녹화 데이터가 없습니다. 더빙 후 다시 시도해 주세요.');
     // Duration 메타데이터 패치 → 탐색(seek) 가능한 WebM 생성
     const blob = await new Promise(resolve => {
       if (typeof fixWebmDuration === 'function') {
-        fixWebmDuration(rawBlob, duration, fixedBlob => resolve(fixedBlob));
+        fixWebmDuration(rawBlob, duration, fixedBlob => resolve(fixedBlob || rawBlob));
       } else {
         resolve(rawBlob);
       }
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = '그림책더빙_' + Date.now() + '.webm'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    saveImageUniversal(blob, '그림책더빙_' + Date.now() + '.webm');
     bar.style.width = '100%';
     barLabel.textContent = '완료! ✅';
     setTimeout(() => { progress.classList.remove('show'); bar.style.width = '0%'; }, 2500);
