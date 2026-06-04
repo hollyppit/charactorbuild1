@@ -6038,8 +6038,8 @@ ${safeText ? ", " + safeText : ""}
 
 /* AI 변신 메인 */
 async function doAI(mode) {
-  // AI 접근 비밀번호 확인 (관리자·세션 인증 완료 시 스킵)
-  if (_aiAccessPw && !isAdmin && !_aiSessionVerified) {
+  // AI 접근 비밀번호 확인 (관리자 제외, 매번 확인)
+  if (_aiAccessPw && !isAdmin) {
     _pendingAIMode = mode;
     document.getElementById('aiPwInput').value = '';
     document.getElementById('aiPwErr').textContent = '';
@@ -6227,7 +6227,6 @@ function _submitAIPw() {
   const errEl = document.getElementById('aiPwErr');
   if (!entered) { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
   if (entered !== _aiAccessPw) { errEl.textContent = '비밀번호가 틀렸습니다 🔒'; return; }
-  _aiSessionVerified = true;
   closeModal('aiPwModal');
   if (_pendingAIMode) {
     const mode = _pendingAIMode;
