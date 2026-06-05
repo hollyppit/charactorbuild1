@@ -355,17 +355,26 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
       lastError += ` | [OpenAI] ${oaiErr.message}`;
     }
 
-    // 결제/한도 오류를 사람이 읽기 쉬운 메시지로 변환
-    const isGeminiExhausted = lastError.includes('RESOURCE_EXHAUSTED') || lastError.includes('spending cap');
-    const isOpenAiBilling   = lastError.includes('billing_limit_user_error') || lastError.includes('Billing hard limit') || lastError.includes('exceeded your current quota');
-    if (isGeminiExhausted && isOpenAiBilling) {
-      throw new Error('Gemini와 OpenAI 모두 이번 달 결제 한도를 초과했습니다. 각 서비스 계정에서 크레딧을 충전해 주세요.');
+    // 오류 원인 분류 — RESOURCE_EXHAUSTED는 rate limit일 수도 있으므로 구분
+    const isGeminiBilling  = lastError.includes('spending cap') || lastError.includes('BILLING');
+    const isGeminiRate     = lastError.includes('RESOURCE_EXHAUSTED') && !isGeminiBilling;
+    const isGeminiAny      = isGeminiBilling || isGeminiRate || lastError.includes('RESOURCE_EXHAUSTED');
+    const isOpenAiBilling  = lastError.includes('billing_limit_user_error') || lastError.includes('Billing hard limit') || lastError.includes('insufficient_quota');
+    const isOpenAiRate     = lastError.includes('exceeded your current quota') && !isOpenAiBilling;
+    const isOpenAiAny      = isOpenAiBilling || isOpenAiRate || lastError.includes('exceeded your current quota');
+
+    if (isGeminiAny && isOpenAiAny) {
+      const geminiReason = isGeminiBilling ? '결제 한도 초과' : '일시적 사용량 제한 (잠시 후 재시도)';
+      const openaiReason = isOpenAiBilling ? '크레딧 부족' : '일시적 사용량 제한 (잠시 후 재시도)';
+      throw new Error(`AI 서비스 결제 한도 초과\n\nGemini: ${geminiReason}\nOpenAI: ${openaiReason}\n\n잠시 후 다시 시도하거나 관리자에게 문의해 주세요.\n\n[상세] ${lastError.slice(0, 300)}`);
     }
-    if (isGeminiExhausted) {
-      throw new Error('Gemini API 월 사용 한도 초과. Google AI Studio에서 결제를 확인해 주세요.');
+    if (isGeminiAny) {
+      const reason = isGeminiBilling ? 'Google AI Studio에서 결제를 확인해 주세요.' : '잠시 후 다시 시도해 주세요. (일시적 사용량 제한)';
+      throw new Error(`Gemini API 오류: ${reason}\n\n[상세] ${lastError.slice(0, 200)}`);
     }
-    if (isOpenAiBilling) {
-      throw new Error('OpenAI API 결제 한도 초과. OpenAI 계정에서 크레딧을 충전해 주세요.');
+    if (isOpenAiAny) {
+      const reason = isOpenAiBilling ? 'OpenAI 계정에서 크레딧을 확인해 주세요.' : '잠시 후 다시 시도해 주세요. (일시적 사용량 제한)';
+      throw new Error(`OpenAI API 오류: ${reason}\n\n[상세] ${lastError.slice(0, 200)}`);
     }
     throw new Error(`모든 AI 모델 실패: ${lastError}`);
 
