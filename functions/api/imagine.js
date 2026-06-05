@@ -316,11 +316,13 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
       lastError = aggErr.errors?.map(e => e.message).join(' | ') ?? String(aggErr);
     }
 
-    // OpenAI 폴백
-    try {
-      const oaiPrompt = finalPrompt.slice(0, 32000);
-      let imageB64;
+    // OpenAI 폴백 — gpt-image-1 시도 후 실패 시 dall-e-3로 재시도
+    const oaiPrompt = finalPrompt.slice(0, 32000);
+    const dalle3Prompt = finalPrompt.slice(0, 4000); // dall-e-3 프롬프트 최대 4000자
 
+    // ① gpt-image-1 시도
+    try {
+      let imageB64;
       if (useImageInput) {
         const binaryStr = atob(base64);
         const bytes = new Uint8Array(binaryStr.length);
@@ -337,7 +339,7 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
           headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
           body: formData,
         });
-        if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`edits ${oaiRes.status}: ${t}`); }
+        if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`gpt-image-1 edits ${oaiRes.status}: ${t}`); }
         imageB64 = (await oaiRes.json()).data?.[0]?.b64_json;
       } else {
         const oaiRes = await fetch('https://api.openai.com/v1/images/generations', {
@@ -345,38 +347,39 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
           body: JSON.stringify({ model: 'gpt-image-1', prompt: oaiPrompt, size: '1024x1536', n: 1 }),
         });
-        if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`generations ${oaiRes.status}: ${t}`); }
+        if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`gpt-image-1 gen ${oaiRes.status}: ${t}`); }
         imageB64 = (await oaiRes.json()).data?.[0]?.b64_json;
       }
-
-      if (!imageB64) throw new Error('이미지 데이터 없음');
+      if (!imageB64) throw new Error('gpt-image-1 이미지 데이터 없음');
       return new Response(JSON.stringify({ image: `data:image/png;base64,${imageB64}` }), { headers: corsHeaders });
     } catch (oaiErr) {
-      lastError += ` | [OpenAI] ${oaiErr.message}`;
+      lastError += ` | [gpt-image-1] ${oaiErr.message}`;
+      console.warn('gpt-image-1 실패, dall-e-3 시도:', oaiErr.message);
     }
 
-    // 오류 원인 분류 — RESOURCE_EXHAUSTED는 rate limit일 수도 있으므로 구분
-    const isGeminiBilling  = lastError.includes('spending cap') || lastError.includes('BILLING');
-    const isGeminiRate     = lastError.includes('RESOURCE_EXHAUSTED') && !isGeminiBilling;
-    const isGeminiAny      = isGeminiBilling || isGeminiRate || lastError.includes('RESOURCE_EXHAUSTED');
-    const isOpenAiBilling  = lastError.includes('billing_limit_user_error') || lastError.includes('Billing hard limit') || lastError.includes('insufficient_quota');
-    const isOpenAiRate     = lastError.includes('exceeded your current quota') && !isOpenAiBilling;
-    const isOpenAiAny      = isOpenAiBilling || isOpenAiRate || lastError.includes('exceeded your current quota');
+    // ② dall-e-3 폴백 (gpt-image-1보다 접근 제한이 느슨함)
+    try {
+      const oaiRes = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
+        body: JSON.stringify({ model: 'dall-e-3', prompt: dalle3Prompt, size: '1024x1792', quality: 'standard', n: 1 }),
+      });
+      if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`dall-e-3 ${oaiRes.status}: ${t}`); }
+      const d3data = await oaiRes.json();
+      const d3url = d3data.data?.[0]?.url;
+      if (!d3url) throw new Error('dall-e-3 이미지 URL 없음');
+      // URL을 base64로 변환
+      const imgRes = await fetch(d3url);
+      const imgBuf = await imgRes.arrayBuffer();
+      const imgB64 = btoa(String.fromCharCode(...new Uint8Array(imgBuf)));
+      return new Response(JSON.stringify({ image: `data:image/png;base64,${imgB64}` }), { headers: corsHeaders });
+    } catch (d3Err) {
+      lastError += ` | [dall-e-3] ${d3Err.message}`;
+      console.warn('dall-e-3도 실패:', d3Err.message);
+    }
 
-    if (isGeminiAny && isOpenAiAny) {
-      const geminiReason = isGeminiBilling ? '결제 한도 초과' : '일시적 사용량 제한 (잠시 후 재시도)';
-      const openaiReason = isOpenAiBilling ? '크레딧 부족' : '일시적 사용량 제한 (잠시 후 재시도)';
-      throw new Error(`AI 서비스 결제 한도 초과\n\nGemini: ${geminiReason}\nOpenAI: ${openaiReason}\n\n잠시 후 다시 시도하거나 관리자에게 문의해 주세요.\n\n[상세] ${lastError.slice(0, 300)}`);
-    }
-    if (isGeminiAny) {
-      const reason = isGeminiBilling ? 'Google AI Studio에서 결제를 확인해 주세요.' : '잠시 후 다시 시도해 주세요. (일시적 사용량 제한)';
-      throw new Error(`Gemini API 오류: ${reason}\n\n[상세] ${lastError.slice(0, 200)}`);
-    }
-    if (isOpenAiAny) {
-      const reason = isOpenAiBilling ? 'OpenAI 계정에서 크레딧을 확인해 주세요.' : '잠시 후 다시 시도해 주세요. (일시적 사용량 제한)';
-      throw new Error(`OpenAI API 오류: ${reason}\n\n[상세] ${lastError.slice(0, 200)}`);
-    }
-    throw new Error(`모든 AI 모델 실패: ${lastError}`);
+    // 모든 API 실패 — 실제 에러 내용 그대로 반환
+    throw new Error(`AI 변신 실패. 잠시 후 다시 시도해 주세요.\n\n[오류 상세]\n${lastError.slice(0, 500)}`);
 
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
