@@ -357,29 +357,36 @@ IMPORTANT: Output in vertical portrait orientation (3:4 aspect ratio, optimized 
       console.warn('gpt-image-1 실패, dall-e-3 시도:', oaiErr.message);
     }
 
-    // ② dall-e-3 폴백 (gpt-image-1보다 접근 제한이 느슨함)
+    // ② dall-e-3 폴백 (gpt-image-1보다 접근 제한이 느슨함, b64_json으로 직접 수신)
     try {
       const oaiRes = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
-        body: JSON.stringify({ model: 'dall-e-3', prompt: dalle3Prompt, size: '1024x1792', quality: 'standard', n: 1 }),
+        body: JSON.stringify({
+          model: 'dall-e-3',
+          prompt: dalle3Prompt,
+          size: '1024x1792',
+          quality: 'standard',
+          response_format: 'b64_json',
+          n: 1,
+        }),
       });
       if (!oaiRes.ok) { const t = await oaiRes.text().catch(() => ''); throw new Error(`dall-e-3 ${oaiRes.status}: ${t}`); }
       const d3data = await oaiRes.json();
-      const d3url = d3data.data?.[0]?.url;
-      if (!d3url) throw new Error('dall-e-3 이미지 URL 없음');
-      // URL을 base64로 변환
-      const imgRes = await fetch(d3url);
-      const imgBuf = await imgRes.arrayBuffer();
-      const imgB64 = btoa(String.fromCharCode(...new Uint8Array(imgBuf)));
-      return new Response(JSON.stringify({ image: `data:image/png;base64,${imgB64}` }), { headers: corsHeaders });
+      const d3b64 = d3data.data?.[0]?.b64_json;
+      if (!d3b64) throw new Error('dall-e-3 이미지 데이터 없음');
+      return new Response(JSON.stringify({ image: `data:image/png;base64,${d3b64}` }), { headers: corsHeaders });
     } catch (d3Err) {
       lastError += ` | [dall-e-3] ${d3Err.message}`;
       console.warn('dall-e-3도 실패:', d3Err.message);
     }
 
-    // 모든 API 실패 — 실제 에러 내용 그대로 반환
-    throw new Error(`AI 변신 실패. 잠시 후 다시 시도해 주세요.\n\n[오류 상세]\n${lastError.slice(0, 500)}`);
+    // 모든 API 실패 — Gemini 크레딧 소진 여부 별도 안내
+    const geminiDepleted = lastError.includes('prepayment credits are depleted') || lastError.includes('credits are depleted');
+    if (geminiDepleted) {
+      throw new Error('Gemini 선불 크레딧이 소진됐습니다.\nhttps://ai.studio/projects 에서 크레딧을 충전해 주세요.\n\nOpenAI 폴백 오류:\n' + lastError.split('[gpt-image-1]').slice(1).join('').slice(0, 300));
+    }
+    throw new Error(`AI 변신 실패. 잠시 후 다시 시도해 주세요.\n\n[오류 상세]\n${lastError.slice(0, 600)}`);
 
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
