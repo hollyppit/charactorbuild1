@@ -8277,7 +8277,7 @@ function _dubLoadImg(url) {
     img.crossOrigin = 'anonymous';
     img.onload = () => res(img);
     img.onerror = () => rej(new Error('img load failed: ' + url));
-    img.src = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    img.src = url.startsWith('blob:') ? url : url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
   });
 }
 
