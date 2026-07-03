@@ -1499,6 +1499,7 @@ body.easy-mode .t-save-btn{display:none}
       <button class="tool-btn"        id="tool-eraser" onclick="setDrawTool('eraser',this)">🧹 지우개</button>
       <button class="tool-btn"        id="tool-fill"   onclick="setDrawTool('fill',this)">🪣 채우기</button>
       <button class="tool-btn"        id="tool-select" onclick="setDrawTool('select',this)" title="올가미로 영역 선택">🔲 선택</button>
+      <button class="tool-btn"        id="tool-eyedropper" onclick="setDrawTool('eyedropper',this)" title="캔버스에서 색상 추출">💧 스포이드</button>
       <div class="toolbar-sep"></div>
       <!-- 펜 굵기: ▼/▲ 버튼으로 1px씩, 바를 드래그해서 세세하게 조절 (1~100px) -->
       <div class="brush-sizes">
@@ -1515,6 +1516,8 @@ body.easy-mode .t-save-btn{display:none}
         <span>🖊️ 필압</span>
       </label>
       <button class="tool-btn" onclick="openPressureSettings()" title="필압 감도 설정" style="padding:6px 10px">⚙</button>
+      <div class="toolbar-sep"></div>
+      <button class="tool-btn" onclick="openCanvasSizeModal()" title="캔버스 방향/크기 조절">📐 캔버스</button>
       <div class="toolbar-sep"></div>
       <button class="tool-btn" onclick="undoDraw()">↩️ 되돌리기</button>
       <button class="tool-btn" onclick="clearDraw()">🗑️ 전체 지우기</button>
@@ -2124,6 +2127,35 @@ body.easy-mode .t-save-btn{display:none}
       <button class="btn btn-gray" onclick="resetPressureSettings()">기본값</button>
       <button class="btn btn-blue" onclick="clearPressurePreview()">테스트 지우기</button>
       <button class="btn btn-purple" onclick="closeModal('pressureModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 직접 그리기: 캔버스 방향/크기 설정 모달 ── -->
+<div class="modal-overlay" id="canvasSizeModal">
+  <div class="modal" style="max-width:420px">
+    <h2>📐 캔버스 크기</h2>
+    <div class="ps-row" style="justify-content:center;gap:10px">
+      <button class="tool-btn" id="orientPortraitBtn" onclick="setDrawOrientation('portrait')">📱 세로</button>
+      <button class="tool-btn" id="orientLandscapeBtn" onclick="setDrawOrientation('landscape')">🖥️ 가로</button>
+    </div>
+    <div style="font-family:var(--f-ui);font-size:11px;color:#999;margin:10px 2px 6px">빠른 선택</div>
+    <div class="dl-add-btns" style="justify-content:center">
+      <button class="dl-add-btn" onclick="applyDrawCanvasSize(210,297)">A4 (210×297)</button>
+      <button class="dl-add-btn" onclick="applyDrawCanvasSize(1000,1000)">정사각형</button>
+      <button class="dl-add-btn" onclick="applyDrawCanvasSize(800,600)">4:3</button>
+      <button class="dl-add-btn" onclick="applyDrawCanvasSize(960,540)">16:9</button>
+    </div>
+    <div style="font-family:var(--f-ui);font-size:11px;color:#999;margin:12px 2px 6px">직접 입력 (px, 50~4000)</div>
+    <div class="ps-row" style="gap:8px;align-items:center">
+      <input class="field-input" type="number" id="canvasWInput" min="50" max="4000" style="flex:0 0 90px" placeholder="가로">
+      <span style="color:#999">×</span>
+      <input class="field-input" type="number" id="canvasHInput" min="50" max="4000" style="flex:0 0 90px" placeholder="세로">
+      <button class="btn btn-blue" onclick="applyCustomDrawCanvasSize()">적용</button>
+    </div>
+    <div style="font-family:var(--f-ui);font-size:10px;color:#888;line-height:1.5;margin-top:8px">⚠️ 크기를 바꾸면 캔버스 비율이 다시 맞춰져요. 그려둔 내용은 새 크기에 맞게 유지됩니다.</div>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn btn-purple" onclick="closeModal('canvasSizeModal')">닫기</button>
     </div>
   </div>
 </div>
@@ -3564,6 +3596,8 @@ let drawLayers = [];            // 배열 인덱스 0 = 가장 아래
 let activeDrawLayerId = '';
 let drawLayerCounter = 0;
 let drawCanvasBaseW = 0, drawCanvasBaseH = 0;
+// 캔버스 방향/크기 비율 (기본: A4 세로 210:297) — setDrawOrientation/applyDrawCanvasSize 로 변경
+let drawCanvasRatioW = 210, drawCanvasRatioH = 297;
 let drawTemplatesCache = [];
 // 하위 호환을 위한 alias (다른 곳에서 drawCtx 참조 시 활성 레이어 컨텍스트 반환)
 let drawCtx = null;
@@ -3593,9 +3627,10 @@ function _escHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;',
 function initDrawCanvas() {
   const wrap = document.getElementById('drawCanvasWrap');
   if (!wrap) return;
+  _applyCanvasRatio();
   const w = wrap.offsetWidth;
-  // A4 세로 비율 (210:297) — 인쇄 최적화
-  const h = Math.round(w * 297 / 210);
+  // 캔버스 비율은 drawCanvasRatioW/H 로 결정 (기본: A4 세로 210:297)
+  const h = Math.round(w * drawCanvasRatioH / drawCanvasRatioW);
   drawCanvasBaseW = w;
   drawCanvasBaseH = h;
 
@@ -3633,6 +3668,54 @@ function initDrawCanvas() {
 
   // drawCtx alias 업데이트
   drawCtx = getActiveDrawCtx();
+}
+
+/* ── 캔버스 방향/크기 조절 ── */
+function _applyCanvasRatio() {
+  const wrap = document.getElementById('drawCanvasWrap');
+  if (wrap) wrap.style.aspectRatio = drawCanvasRatioW + ' / ' + drawCanvasRatioH;
+}
+function _updateOrientationButtons() {
+  const isLandscape = drawCanvasRatioW > drawCanvasRatioH;
+  const p = document.getElementById('orientPortraitBtn');
+  const l = document.getElementById('orientLandscapeBtn');
+  if (p) p.classList.toggle('active', !isLandscape);
+  if (l) l.classList.toggle('active', isLandscape);
+}
+function setDrawOrientation(o) {
+  const wantLandscape = o === 'landscape';
+  const isLandscape = drawCanvasRatioW > drawCanvasRatioH;
+  if (wantLandscape !== isLandscape) {
+    const tmp = drawCanvasRatioW; drawCanvasRatioW = drawCanvasRatioH; drawCanvasRatioH = tmp;
+  }
+  _updateOrientationButtons();
+  const wInput = document.getElementById('canvasWInput'), hInput = document.getElementById('canvasHInput');
+  if (wInput) wInput.value = drawCanvasRatioW;
+  if (hInput) hInput.value = drawCanvasRatioH;
+  initDrawCanvas();
+}
+function applyDrawCanvasSize(w, h) {
+  w = Math.max(50, Math.min(4000, Math.round(w)));
+  h = Math.max(50, Math.min(4000, Math.round(h)));
+  drawCanvasRatioW = w; drawCanvasRatioH = h;
+  const wInput = document.getElementById('canvasWInput'), hInput = document.getElementById('canvasHInput');
+  if (wInput) wInput.value = w;
+  if (hInput) hInput.value = h;
+  _updateOrientationButtons();
+  initDrawCanvas();
+}
+function applyCustomDrawCanvasSize() {
+  const w = parseInt(document.getElementById('canvasWInput').value, 10);
+  const h = parseInt(document.getElementById('canvasHInput').value, 10);
+  if (!w || !h || w < 50 || h < 50) { alert('가로/세로 값을 50px 이상으로 입력해 주세요.'); return; }
+  applyDrawCanvasSize(w, h);
+}
+function openCanvasSizeModal() {
+  const wInput = document.getElementById('canvasWInput'), hInput = document.getElementById('canvasHInput');
+  if (wInput) wInput.value = drawCanvasRatioW;
+  if (hInput) hInput.value = drawCanvasRatioH;
+  _updateOrientationButtons();
+  openModal('canvasSizeModal');
 }
 
 /* ── 줌/팬 변환 적용 ── */
@@ -4917,6 +5000,13 @@ function _drawLayerPointerDown(e) {
   // idle 선택이 있는데 선택 툴이 아닐 때: 무시(버튼으로만 종료)
   if (selection) return;
 
+  // 스포이드: 화면에 보이는 색(모든 레이어 합성) 추출 → 색상 선택 후 펜으로 자동 전환
+  if (drawTool === 'eyedropper') {
+    e.preventDefault();
+    _pickEyedropperColor(e);
+    return;
+  }
+
   // 일반 그리기
   const layer = getActiveDrawLayer();
   if (!layer) return;
@@ -5910,6 +6000,23 @@ function flattenDrawCanvas(){
 function saveDrawing(){
   const c = flattenDrawCanvas();
   c.toBlob(b => saveImageUniversal(b, '내그림.png'), 'image/png');
+}
+
+/* 스포이드: 클릭 지점의 합성 색을 뽑아 팔레트에 반영 후 펜으로 전환 */
+function _pickEyedropperColor(e) {
+  if (!drawLayers.length) return;
+  const refCanvas = drawLayers[0].canvas;
+  const pos = _getDrawLayerPos(refCanvas, e);
+  const x = Math.max(0, Math.min(refCanvas.width - 1, Math.round(pos.x)));
+  const y = Math.max(0, Math.min(refCanvas.height - 1, Math.round(pos.y)));
+  const flat = flattenDrawCanvas();
+  const d = flat.getContext('2d').getImageData(x, y, 1, 1).data;
+  const hex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+  const picker = document.getElementById('colorPicker');
+  if (picker) picker.value = hex;
+  document.querySelectorAll('#panel-draw .pal-dot').forEach(dot => dot.classList.remove('active'));
+  const penBtn = document.getElementById('tool-pen');
+  if (penBtn) setDrawTool('pen', penBtn);
 }
 
 /* 채우기 (flood fill) — 투명 픽셀도 올바르게 처리 */
