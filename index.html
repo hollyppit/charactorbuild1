@@ -655,6 +655,8 @@ body.admin .dt-admin-section{display:block}
 .field-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#999;min-width:40px;text-transform:uppercase;letter-spacing:.05em}
 .field-input{flex:1;padding:7px 10px;border:2px solid #3a0028;font-family:var(--f-ui);font-size:12px;color:var(--c-white);outline:none;background:#0d0008}
 .field-input:focus{background:#1a0010;border-color:var(--c-yellow);color:var(--c-yellow)}
+/* 캔버스 크기 모달: 가로/세로 px 입력 */
+.cs-size-input{flex:0 0 90px;text-align:center}
 .slider-row{display:flex;align-items:center;gap:7px;margin-bottom:5px}
 .slider-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#999;min-width:40px;text-transform:uppercase}
 .slider-input{flex:1;accent-color:var(--c-yellow)}
@@ -755,6 +757,14 @@ body.admin .dt-admin-section{display:block}
   .dl-list{max-height:180px}
   .dl-add-btn{padding:7px 8px;font-size:10px}
   .dt-grid{grid-template-columns:repeat(2,1fr)}
+
+  /* 캔버스 크기 모달: 숫자 입력 확대(iOS 자동 줌) 방지 + 터치 영역 확보 */
+  #canvasSizeModal .cs-size-input{font-size:16px;min-height:40px;flex-basis:76px}
+  #canvasSizeModal .dl-add-btn{padding:10px 8px;font-size:11px;min-height:40px}
+  #canvasSizeModal .modal-btns .btn,
+  #canvasSizeModal .ps-row .btn{min-height:40px}
+  #canvasSizeModal #orientPortraitBtn,
+  #canvasSizeModal #orientLandscapeBtn{flex:1}
 
   /* 그리기 툴바: 컴팩트 + 터치 최적화 */
   .draw-toolbar{gap:5px;padding:8px 10px}
@@ -2148,9 +2158,9 @@ body.easy-mode .t-save-btn{display:none}
     </div>
     <div style="font-family:var(--f-ui);font-size:11px;color:#999;margin:12px 2px 6px">직접 입력 (px, 50~4000)</div>
     <div class="ps-row" style="gap:8px;align-items:center">
-      <input class="field-input" type="number" id="canvasWInput" min="50" max="4000" style="flex:0 0 90px" placeholder="가로">
+      <input class="field-input cs-size-input" type="number" id="canvasWInput" min="50" max="4000" placeholder="가로">
       <span style="color:#999">×</span>
-      <input class="field-input" type="number" id="canvasHInput" min="50" max="4000" style="flex:0 0 90px" placeholder="세로">
+      <input class="field-input cs-size-input" type="number" id="canvasHInput" min="50" max="4000" placeholder="세로">
       <button class="btn btn-blue" onclick="applyCustomDrawCanvasSize()">적용</button>
     </div>
     <div style="font-family:var(--f-ui);font-size:10px;color:#888;line-height:1.5;margin-top:8px">⚠️ 크기를 바꾸면 캔버스 비율이 다시 맞춰져요. 그려둔 내용은 새 크기에 맞게 유지됩니다.</div>
