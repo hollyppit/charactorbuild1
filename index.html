@@ -7507,10 +7507,22 @@ function dubConfirmAddProject() {
   }
 }
 
-function dubDeleteProject(id) {
+async function dubDeleteProject(id) {
   const proj = dubProjects.find(p => p.id === id);
   if (!proj) return;
   if (!confirm(`"${proj.title || '이 작품'}"을 삭제할까요?`)) return;
+  try {
+    const res = await fetch('/api/dub-projects', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) throw new Error('delete_failed');
+  } catch (e) {
+    console.warn('dubDeleteProject:', e);
+    alert('삭제 중 오류가 발생했습니다. 다시 시도해주세요.');
+    return;
+  }
   proj.scenes.forEach(s => {
     if (s.mediaObjectURL) URL.revokeObjectURL(s.mediaObjectURL);
     if (s.audioObjectURL) URL.revokeObjectURL(s.audioObjectURL);
