@@ -1519,7 +1519,12 @@ body.easy-mode .t-save-btn{display:none}
       <button class="tool-btn active" id="tool-pen"    onclick="setDrawTool('pen',this)">🖊️ 펜</button>
       <button class="tool-btn"        id="tool-eraser" onclick="setDrawTool('eraser',this)">🧹 지우개</button>
       <button class="tool-btn"        id="tool-fill"   onclick="setDrawTool('fill',this)">🪣 채우기</button>
-      <button class="tool-btn"        id="tool-select" onclick="setDrawTool('select',this)" title="올가미로 영역 선택">🔲 선택</button>
+      <button class="tool-btn"        id="tool-select" onclick="setDrawTool('select',this)" title="영역 선택 (올가미/사각형/원형)">🔲 선택</button>
+      <span id="selShapeGroup" style="display:none;gap:2px">
+        <button class="tool-btn active" onclick="setSelShape('lasso',this)" title="자유 올가미 선택" style="padding:6px 8px">〰️</button>
+        <button class="tool-btn" onclick="setSelShape('rect',this)" title="사각형 선택" style="padding:6px 8px">⬜</button>
+        <button class="tool-btn" onclick="setSelShape('ellipse',this)" title="원형 선택" style="padding:6px 8px">⭕</button>
+      </span>
       <button class="tool-btn"        id="tool-eyedropper" onclick="setDrawTool('eyedropper',this)" title="캔버스에서 색상 추출">💧 스포이드</button>
       <div class="toolbar-sep"></div>
       <!-- 펜 굵기: ▼/▲ 버튼으로 1px씩, 바를 드래그해서 세세하게 조절 (1~100px) -->
@@ -4623,6 +4628,29 @@ let selection = null;
 // }
 let _selOverlayCtx = null;
 let _floatingDrag = null;
+let selShape = 'lasso'; // 'lasso' | 'rect' | 'ellipse'
+
+function setSelShape(s, btn) {
+  selShape = s;
+  document.querySelectorAll('#selShapeGroup .tool-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (selection) cancelSelection();
+}
+
+// 드래그 시작점~현재점으로 도형 경로 생성
+function _shapePath(shape, a, b) {
+  if (shape === 'rect') {
+    return [{ x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y }];
+  }
+  const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+  const rx = Math.abs(b.x - a.x) / 2, ry = Math.abs(b.y - a.y) / 2;
+  const n = 72, pts = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * Math.PI * 2;
+    pts.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) });
+  }
+  return pts;
+}
 
 function _lassoStart(e) {
   const layer = getActiveDrawLayer();
@@ -4632,6 +4660,8 @@ function _lassoStart(e) {
     layerId: layer.id,
     path: [{ x: pos.x, y: pos.y }],
     mode: 'lassoing',
+    shape: selShape,
+    origin: { x: pos.x, y: pos.y },
   };
   e.preventDefault();
   _renderSelectionOverlay();
@@ -4643,6 +4673,12 @@ function _lassoMove(e) {
   const layer = drawLayers.find(l => l.id === selection.layerId);
   if (!layer) return;
   const pos = _getDrawLayerPos(layer.canvas, e);
+  if (selection.shape !== 'lasso') {
+    selection.path = _shapePath(selection.shape, selection.origin, pos);
+    e.preventDefault();
+    _renderSelectionOverlay();
+    return;
+  }
   const last = selection.path[selection.path.length - 1];
   if (last && Math.hypot(pos.x - last.x, pos.y - last.y) < 2) return;
   selection.path.push({ x: pos.x, y: pos.y });
@@ -4832,7 +4868,7 @@ function _renderSelectionOverlay() {
   if (!selection) return;
 
   if (selection.mode === 'lassoing') {
-    _drawLassoStroke(ctx, selection.path, false);
+    _drawLassoStroke(ctx, selection.path, selection.shape !== 'lasso');
     return;
   }
   if (selection.mode === 'idle') {
@@ -5765,8 +5801,10 @@ function setDrawTool(t,btn){
     cancelSelection();
   }
   drawTool=t;
-  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup')) b.classList.remove('active'); });
   btn.classList.add('active');
+  const sg=document.getElementById('selShapeGroup');
+  if(sg) sg.style.display = t==='select' ? 'inline-flex' : 'none';
 }
 function setBrushSize(s){
   brushSize=s;
