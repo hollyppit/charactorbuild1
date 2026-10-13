@@ -489,6 +489,9 @@ body.admin .add-btn{display:flex}
 /* 터치 버튼 공통: 더블탭 줌/지연 방지 + 탭 하이라이트 제거 */
 .tool-btn,.sz-btn,.pal-dot,.btn,.mct-btn,.mode-tab,.sb-btn,.dl-add-btn,.lc-btn{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 /* 선택 영역 오버레이 */
+.brush-cursor{position:absolute;left:0;top:0;pointer-events:none;z-index:9997;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.75),inset 0 0 0 1px rgba(0,0,0,.45);display:none;will-change:transform}
+.brush-cursor::after{content:'';position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.75)}
+.draw-canvas-wrap.brush-cursor-on{cursor:none}
 .sym-guide{position:absolute;inset:0;pointer-events:none;z-index:9998;transform-origin:0 0;will-change:transform}
 .sym-guide i{position:absolute;display:none}
 .sym-guide i.sv{left:50%;top:0;bottom:0;border-left:1px dashed rgba(255,215,0,.8)}
@@ -1675,6 +1678,7 @@ body.easy-mode .t-save-btn{display:none}
     <div class="draw-canvas-wrap" id="drawCanvasWrap" oncontextmenu="return false">
       <div class="draw-canvas-stack" id="drawCanvasStack"></div>
       <canvas class="selection-overlay" id="selectionOverlay"></canvas>
+      <div class="brush-cursor" id="brushCursor"></div>
       <div class="sym-guide" id="symGuide"><i class="sv"></i><i class="sh"></i></div>
       <div class="selection-bar" id="selectionBar" style="display:none"></div>
       <div class="zoom-indicator" id="zoomIndicator">100%</div>
@@ -5559,7 +5563,38 @@ function _drawLayerPointerDown(e) {
   ctx.fill();
 }
 
+// 펜/지우개(및 흐림·유동화) 브러시 크기를 원형 커서로 표시 — 마우스/펜 호버용 (터치는 호버 없음)
+function _hideBrushCursor() {
+  const c = document.getElementById('brushCursor');
+  if (c) c.style.display = 'none';
+  const wrap = document.getElementById('drawCanvasWrap');
+  if (wrap) wrap.classList.remove('brush-cursor-on');
+}
+function _updateBrushCursor(e) {
+  const c = document.getElementById('brushCursor'), wrap = document.getElementById('drawCanvasWrap');
+  if (!c || !wrap) return;
+  const circleTool = drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'blur' || drawTool === 'liquify';
+  if (e.pointerType === 'touch' || !circleTool || selection ||
+      wrap.classList.contains('pan-ready') || wrap.classList.contains('pan-active') ||
+      (e.target && e.target.closest && e.target.closest('#selectionBar, .zoom-reset-btn'))) { _hideBrushCursor(); return; }
+  const layer = getActiveDrawLayer();
+  const ref = layer ? layer.canvas : null;
+  if (!ref) { _hideBrushCursor(); return; }
+  const rect = ref.getBoundingClientRect();
+  const scale = rect.width / ref.width;                       // 캔버스 px → 화면 px (줌 반영)
+  const bw = _currentBrushWidth(e.pressure);
+  // 펜/지우개는 굵기 = 지름, 흐림/유동화는 실제 영향 반경(_blurRadius)의 2배
+  const diameter = (drawTool === 'blur' || drawTool === 'liquify') ? _blurRadius(bw) * 2 : bw;
+  const d = Math.max(3, diameter * scale);
+  const wr = wrap.getBoundingClientRect();
+  c.style.width = c.style.height = d + 'px';
+  c.style.transform = 'translate(' + (e.clientX - wr.left - d / 2 - wrap.clientLeft) + 'px,' + (e.clientY - wr.top - d / 2 - wrap.clientTop) + 'px)';
+  c.style.display = 'block';
+  wrap.classList.add('brush-cursor-on');
+}
+
 function _drawLayerPointerMove(e) {
+  _updateBrushCursor(e);
   // === 멀티터치 제스처 추적 ===
   if (e.pointerType === 'touch') {
     const p = _drawActivePointers.get(e.pointerId);
@@ -5657,6 +5692,7 @@ function _drawLayerPointerMove(e) {
 }
 
 function _drawLayerPointerEnd(e) {
+  if (e.type === 'pointerleave') _hideBrushCursor();
   // === 멀티터치 제스처 종료 ===
   if (e.pointerType === 'touch') {
     _drawActivePointers.delete(e.pointerId);
@@ -6296,6 +6332,7 @@ function setDrawTool(t,btn){
     cancelSelection();
   }
   drawTool=t;
+  _hideBrushCursor();
   document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup, #liqModeGroup, #dockSwitch') && b.id!=='btnViewFlip' && !b.classList.contains('tool-toggle')) b.classList.remove('active'); });
   btn.classList.add('active');
   const sg=document.getElementById('selShapeGroup');
