@@ -489,8 +489,8 @@ body.admin .add-btn{display:flex}
 /* 터치 버튼 공통: 더블탭 줌/지연 방지 + 탭 하이라이트 제거 */
 .tool-btn,.sz-btn,.pal-dot,.btn,.mct-btn,.mode-tab,.sb-btn,.dl-add-btn,.lc-btn{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 /* 선택 영역 오버레이 */
-.brush-cursor{position:absolute;left:0;top:0;pointer-events:none;z-index:9997;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.75),inset 0 0 0 1px rgba(0,0,0,.45);display:none;will-change:transform}
-.brush-cursor::after{content:'';position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.75)}
+.brush-cursor{position:absolute;left:0;top:0;pointer-events:none;z-index:9997;border-radius:50%;box-sizing:border-box;border:2px solid #fff;mix-blend-mode:difference;display:none;will-change:transform}
+.brush-cursor::after{content:'';position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:#fff}
 .draw-canvas-wrap.brush-cursor-on{cursor:none}
 .sym-guide{position:absolute;inset:0;pointer-events:none;z-index:9998;transform-origin:0 0;will-change:transform}
 .sym-guide i{position:absolute;display:none}
@@ -5591,7 +5591,7 @@ function _updateBrushCursor(e) {
   const bw = _currentBrushWidth(e.pressure);
   // 펜/지우개는 굵기 = 지름, 흐림/유동화는 실제 영향 반경(_blurRadius)의 2배
   const diameter = (drawTool === 'blur' || drawTool === 'liquify') ? _blurRadius(bw) * 2 : bw;
-  const d = Math.max(3, diameter * scale);
+  const d = Math.max(8, diameter * scale);   // 너무 작으면 원이 안 보이므로 최소 8px
   const wr = wrap.getBoundingClientRect();
   c.style.width = c.style.height = d + 'px';
   c.style.transform = 'translate(' + (e.clientX - wr.left - d / 2 - wrap.clientLeft) + 'px,' + (e.clientY - wr.top - d / 2 - wrap.clientTop) + 'px)';
