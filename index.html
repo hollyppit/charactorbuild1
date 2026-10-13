@@ -489,6 +489,12 @@ body.admin .add-btn{display:flex}
 /* 터치 버튼 공통: 더블탭 줌/지연 방지 + 탭 하이라이트 제거 */
 .tool-btn,.sz-btn,.pal-dot,.btn,.mct-btn,.mode-tab,.sb-btn,.dl-add-btn,.lc-btn{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 /* 선택 영역 오버레이 */
+.sym-guide{position:absolute;inset:0;pointer-events:none;z-index:9998;transform-origin:0 0;will-change:transform}
+.sym-guide i{position:absolute;display:none}
+.sym-guide i.sv{left:50%;top:0;bottom:0;border-left:1px dashed rgba(255,215,0,.8)}
+.sym-guide i.sh{top:50%;left:0;right:0;border-top:1px dashed rgba(255,215,0,.8)}
+.sym-guide.on-h i.sv{display:block}
+.sym-guide.on-v i.sh{display:block}
 .selection-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999}
 .selection-bar{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:10000;display:flex;flex-direction:column;gap:5px;background:rgba(26,0,16,.95);border:2px solid var(--c-yellow);box-shadow:var(--shadow-yellow);padding:6px 8px;max-width:calc(100% - 16px)}
 .sb-btns{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
@@ -704,6 +710,32 @@ body.admin .dt-admin-section{display:block}
 
   /* 스토리보드: controls-col 조금 더 넓게 */
   .sb-controls-col{width:230px}
+
+  /* 직접 그리기: 도구상자 위치 (위/아래/왼쪽/오른쪽) */
+  .draw-workspace{display:flex;gap:12px;width:100%;justify-content:center;align-items:flex-start}
+  .draw-workspace[data-dock=top]{flex-direction:column;align-items:center}
+  .draw-workspace[data-dock=bottom]{flex-direction:column-reverse;align-items:center}
+  .draw-workspace[data-dock=left]{flex-direction:row}
+  .draw-workspace[data-dock=right]{flex-direction:row-reverse}
+  .draw-toolbox{display:flex;flex-direction:column;gap:10px;align-items:center;width:100%;max-width:900px}
+  .dock-switch{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center;width:100%}
+  .dock-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#aaa;margin-right:4px}
+  .dock-btn{padding:5px 10px;font-size:11px}
+  .draw-workspace[data-dock=left] .draw-toolbox,
+  .draw-workspace[data-dock=right] .draw-toolbox{width:320px;max-width:320px;flex:none;position:sticky;top:8px;max-height:calc(100vh - 16px);overflow-y:auto}
+  .draw-workspace[data-dock=left] .draw-toolbar,
+  .draw-workspace[data-dock=right] .draw-toolbar{justify-content:flex-start;padding:10px}
+  .draw-workspace[data-dock=left] .toolbar-sep,
+  .draw-workspace[data-dock=right] .toolbar-sep{flex-basis:100%;width:100%;height:2px}
+  .draw-workspace[data-dock=left] .draw-canvas-wrap,
+  .draw-workspace[data-dock=right] .draw-canvas-wrap{flex:0 1 560px;min-width:0;width:auto}
+}
+.draw-workspace,.draw-toolbox{display:contents}
+.dock-switch{display:none}
+@media(min-width:860px){
+  .draw-workspace{display:flex}
+  .draw-toolbox{display:flex}
+  .dock-switch{display:flex}
 }
 
 /* ══════════════════════════════
@@ -1513,6 +1545,17 @@ body.easy-mode .t-save-btn{display:none}
 ══════════════════════════════ -->
 <div class="mode-panel" id="panel-draw">
   <div class="draw-col">
+   <div class="draw-workspace" id="drawWorkspace" data-dock="top">
+    <div class="draw-toolbox" id="drawToolbox">
+
+    <!-- 도구상자 위치 (데스크탑 전용) -->
+    <div class="dock-switch" id="dockSwitch">
+      <span class="dock-label">🧰 도구상자 위치</span>
+      <button class="tool-btn dock-btn active" data-dock="top"    onclick="setDrawDock('top')">⬆ 위</button>
+      <button class="tool-btn dock-btn"        data-dock="left"   onclick="setDrawDock('left')">⬅ 왼쪽</button>
+      <button class="tool-btn dock-btn"        data-dock="right"  onclick="setDrawDock('right')">➡ 오른쪽</button>
+      <button class="tool-btn dock-btn"        data-dock="bottom" onclick="setDrawDock('bottom')">⬇ 아래</button>
+    </div>
 
     <!-- 툴바 -->
     <div class="draw-toolbar">
@@ -1526,6 +1569,8 @@ body.easy-mode .t-save-btn{display:none}
         <button class="tool-btn" onclick="setSelShape('ellipse',this)" title="원형 선택" style="padding:6px 8px">⭕</button>
       </span>
       <button class="tool-btn"        id="tool-eyedropper" onclick="setDrawTool('eyedropper',this)" title="캔버스에서 색상 추출">💧 스포이드</button>
+      <button class="tool-btn tool-toggle" id="btnSymH" onclick="toggleSym('h',this)" title="좌우대칭 그리기 (세로 중심선 기준)">↔️ 좌우대칭</button>
+      <button class="tool-btn tool-toggle" id="btnSymV" onclick="toggleSym('v',this)" title="상하대칭 그리기 (가로 중심선 기준)">↕️ 상하대칭</button>
       <div class="toolbar-sep"></div>
       <!-- 펜 굵기: ▼/▲ 버튼으로 1px씩, 바를 드래그해서 세세하게 조절 (1~100px) -->
       <div class="brush-sizes">
@@ -1590,16 +1635,19 @@ body.easy-mode .t-save-btn{display:none}
       <div class="dl-list" id="drawLayersList"></div>
       <input type="file" id="drawLayerFileInput" accept="image/*" style="display:none" onchange="_onDrawLayerFilePicked(event)">
     </div>
+    </div><!-- /draw-toolbox -->
 
     <!-- 캔버스 (레이어 스택) -->
     <div class="draw-canvas-wrap" id="drawCanvasWrap" oncontextmenu="return false">
       <div class="draw-canvas-stack" id="drawCanvasStack"></div>
       <canvas class="selection-overlay" id="selectionOverlay"></canvas>
+      <div class="sym-guide" id="symGuide"><i class="sv"></i><i class="sh"></i></div>
       <div class="selection-bar" id="selectionBar" style="display:none"></div>
       <div class="zoom-indicator" id="zoomIndicator">100%</div>
       <button class="zoom-reset-btn" id="zoomResetBtn" onclick="resetDrawZoom()" aria-label="줌 초기화">🔍 1:1</button>
       <div class="gesture-hint" id="gestureHint">💡 두 손가락으로 확대/이동 · 짧게 탭 = 되돌리기</div>
     </div>
+   </div><!-- /draw-workspace -->
 
     <div class="btn-row">
       <button class="btn btn-gray"   onclick="clearDraw()">🗑️ 초기화</button>
@@ -3746,6 +3794,41 @@ function openCanvasSizeModal() {
   openModal('canvasSizeModal');
 }
 
+/* ── 대칭 그리기 (좌우/상하) ── */
+let symH = false, symV = false;
+function toggleSym(axis, btn) {
+  if (axis === 'h') symH = !symH; else symV = !symV;
+  if (btn) btn.classList.toggle('active', axis === 'h' ? symH : symV);
+  const g = document.getElementById('symGuide');
+  if (g) { g.classList.toggle('on-h', symH); g.classList.toggle('on-v', symV); }
+}
+// 원점 + 켜진 대칭 축에 따른 거울 좌표들 (항상 같은 순서로 반환 → 이전 점과 인덱스 대응)
+function _symPoints(x, y, W, H) {
+  const pts = [{ x, y }];
+  if (symH) pts.push({ x: W - x, y });
+  if (symV) pts.push({ x, y: H - y });
+  if (symH && symV) pts.push({ x: W - x, y: H - y });
+  return pts;
+}
+
+/* ── 도구상자 위치 (데스크탑 ≥860px) ── */
+const DRAW_DOCK_KEY = 'drawToolboxDock';
+function setDrawDock(pos, skipResize) {
+  if (!['top', 'bottom', 'left', 'right'].includes(pos)) pos = 'top';
+  const ws = document.getElementById('drawWorkspace');
+  if (!ws) return;
+  ws.dataset.dock = pos;
+  document.querySelectorAll('#dockSwitch .dock-btn').forEach(b => b.classList.toggle('active', b.dataset.dock === pos));
+  try { localStorage.setItem(DRAW_DOCK_KEY, pos); } catch (_) {}
+  // 캔버스 가용 폭이 달라질 수 있으므로 레이아웃 반영 후 크기 재계산
+  if (!skipResize) requestAnimationFrame(() => { if (currentMode === 'draw') initDrawCanvas(); });
+}
+function _initDrawDock() {
+  let d = 'top';
+  try { d = localStorage.getItem(DRAW_DOCK_KEY) || 'top'; } catch (_) {}
+  setDrawDock(d, true);
+}
+
 /* ── 좌우반전 ── */
 let drawFlipView = false;
 // 화면상 반전(보기 전용): 그림 데이터는 건드리지 않음
@@ -3824,6 +3907,8 @@ function applyDrawTransform(){
   const t=`translate(${drawPanX}px,${drawPanY}px) scale(${drawZoom})${flip}`;
   if(stack) stack.style.transform=t;
   if(ov) ov.style.transform=t;
+  const sg=document.getElementById('symGuide');
+  if(sg) sg.style.transform=t;
   // 줌 UI 갱신
   const zoomed = Math.abs(drawZoom-1) > 0.01 || Math.abs(drawPanX) > 0.5 || Math.abs(drawPanY) > 0.5;
   const btn=document.getElementById('zoomResetBtn');
@@ -5160,7 +5245,10 @@ function _drawLayerPointerDown(e) {
   else ctx.globalCompositeOperation = 'source-over';
   const w = _currentBrushWidth(e.pressure);
   ctx.beginPath();
-  ctx.arc(pos.x, pos.y, w / 2, 0, Math.PI * 2);
+  _symPoints(pos.x, pos.y, layer.canvas.width, layer.canvas.height).forEach(p => {
+    ctx.moveTo(p.x + w / 2, p.y);
+    ctx.arc(p.x, p.y, w / 2, 0, Math.PI * 2);
+  });
   ctx.fillStyle = document.getElementById('colorPicker').value;
   ctx.fill();
 }
@@ -5227,8 +5315,9 @@ function _drawLayerPointerMove(e) {
   const pos = _getDrawLayerPos(layer.canvas, e);
   const w = _currentBrushWidth(e.pressure);
   ctx.beginPath();
-  ctx.moveTo(lastX, lastY);
-  ctx.lineTo(pos.x, pos.y);
+  const _W = layer.canvas.width, _H = layer.canvas.height;
+  const _from = _symPoints(lastX, lastY, _W, _H), _to = _symPoints(pos.x, pos.y, _W, _H);
+  _from.forEach((p, i) => { ctx.moveTo(p.x, p.y); ctx.lineTo(_to[i].x, _to[i].y); });
   ctx.strokeStyle = document.getElementById('colorPicker').value;
   ctx.lineWidth = w;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -5876,7 +5965,7 @@ function setDrawTool(t,btn){
     cancelSelection();
   }
   drawTool=t;
-  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup') && b.id!=='btnViewFlip') b.classList.remove('active'); });
+  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup, #dockSwitch') && b.id!=='btnViewFlip' && !b.classList.contains('tool-toggle')) b.classList.remove('active'); });
   btn.classList.add('active');
   const sg=document.getElementById('selShapeGroup');
   if(sg) sg.style.display = t==='select' ? 'inline-flex' : 'none';
@@ -6937,6 +7026,7 @@ async function init() {
   ensureLayers();
   buildPanels();
   applyAll();
+  _initDrawDock();
   window.addEventListener('resize', () => {
     if(currentMode==='draw') initDrawCanvas();
     if(currentMode==='storyboard') initSBCanvas();
