@@ -5541,6 +5541,7 @@ function _drawLayerPointerDown(e) {
   saveDrawHistory();
   painting = true;
   lastX = pos.x; lastY = pos.y;
+  if (e.pointerType === 'touch') _updateBrushCursor(e);
   if (drawTool === 'blur') {
     ctx.globalCompositeOperation = 'source-over';
     _blurDabAll(ctx, layer.canvas, pos.x, pos.y, _currentBrushWidth(e.pressure));
@@ -5580,23 +5581,42 @@ function _updateBrushCursor(e) {
   if (!c || !wrap) return;
   if (e.pointerType !== 'touch') _lastBrushPtr = { x: e.clientX, y: e.clientY };
   const circleTool = drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'blur' || drawTool === 'liquify';
-  if (e.pointerType === 'touch' || !circleTool || selection ||
+  // 터치는 호버가 없으므로 그리는 동안(painting)에만 손가락 위치에 표시
+  if ((e.pointerType === 'touch' && (!painting || drawPinchState)) || !circleTool || selection ||
       wrap.classList.contains('pan-ready') || wrap.classList.contains('pan-active') ||
       (e.target && e.target.closest && e.target.closest('#selectionBar, .zoom-reset-btn'))) { _hideBrushCursor(); return; }
+  if (!_placeBrushCursor(e.clientX, e.clientY, _currentBrushWidth(e.pressure))) { _hideBrushCursor(); return; }
+  if (e.pointerType !== 'touch') wrap.classList.add('brush-cursor-on');
+}
+// (clientX, clientY) 에 브러시 굵기 bw 원을 배치. 레이어가 없으면 false
+function _placeBrushCursor(cx, cy, bw) {
+  const c = document.getElementById('brushCursor'), wrap = document.getElementById('drawCanvasWrap');
   const layer = getActiveDrawLayer();
   const ref = layer ? layer.canvas : null;
-  if (!ref) { _hideBrushCursor(); return; }
+  if (!c || !wrap || !ref) return false;
   const rect = ref.getBoundingClientRect();
   const scale = rect.width / ref.width;                       // 캔버스 px → 화면 px (줌 반영)
-  const bw = _currentBrushWidth(e.pressure);
   // 펜/지우개는 굵기 = 지름, 흐림/유동화는 실제 영향 반경(_blurRadius)의 2배
   const diameter = (drawTool === 'blur' || drawTool === 'liquify') ? _blurRadius(bw) * 2 : bw;
   const d = Math.max(8, diameter * scale);   // 너무 작으면 원이 안 보이므로 최소 8px
   const wr = wrap.getBoundingClientRect();
   c.style.width = c.style.height = d + 'px';
-  c.style.transform = 'translate(' + (e.clientX - wr.left - d / 2 - wrap.clientLeft) + 'px,' + (e.clientY - wr.top - d / 2 - wrap.clientTop) + 'px)';
+  c.style.transform = 'translate(' + (cx - wr.left - d / 2 - wrap.clientLeft) + 'px,' + (cy - wr.top - d / 2 - wrap.clientTop) + 'px)';
   c.style.display = 'block';
-  wrap.classList.add('brush-cursor-on');
+  return true;
+}
+// 굵기를 슬라이더/버튼으로 바꿀 때(특히 터치) 캔버스 중앙에 원을 잠깐 보여 크기를 가늠하게 함
+let _brushPreviewTimer = null;
+function _previewBrushSize() {
+  if (!(drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'blur' || drawTool === 'liquify')) return;
+  const wrap = document.getElementById('drawCanvasWrap');
+  if (!wrap || selection) return;
+  const wr = wrap.getBoundingClientRect();
+  // 캔버스가 화면에 안 보이면 표시할 필요 없음
+  if (wr.bottom < 0 || wr.top > window.innerHeight) return;
+  if (!_placeBrushCursor(wr.left + wr.width / 2, wr.top + wr.height / 2, brushSize)) return;
+  clearTimeout(_brushPreviewTimer);
+  _brushPreviewTimer = setTimeout(_hideBrushCursor, 1200);
 }
 
 function _drawLayerPointerMove(e) {
@@ -5698,7 +5718,7 @@ function _drawLayerPointerMove(e) {
 }
 
 function _drawLayerPointerEnd(e) {
-  if (e.type === 'pointerleave') _hideBrushCursor(true);
+  if (e.type === 'pointerleave' || e.pointerType === 'touch') _hideBrushCursor(true);
   // === 멀티터치 제스처 종료 ===
   if (e.pointerType === 'touch') {
     _drawActivePointers.delete(e.pointerId);
@@ -6355,9 +6375,11 @@ function setBrushSize(s){
 }
 function onBrushSlider(val){
   setBrushSize(parseInt(val));
+  _previewBrushSize();
 }
 function stepBrushSize(delta){
   setBrushSize(Math.max(1,Math.min(100,brushSize+delta)));
+  _previewBrushSize();
 }
 function setPalColor(c,el){
   document.getElementById('colorPicker').value=c;
