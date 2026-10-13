@@ -3756,15 +3756,41 @@ function toggleDrawViewFlip() {
   applyDrawTransform();
 }
 // 캔버스 자체 반전: 모든 레이어 픽셀을 실제로 좌우 뒤집음
+// 전체 반전도 한 번에 되돌리기 위한 전역 기록.
+//  - drawFlipParity: 현재 캔버스 반전 상태 (스냅샷에 'F|' 접두로 기록 → 복원 시 반전 상태가 달라도 올바르게 복원)
+//  - drawFlipUndo/Redo: 반전 시점의 레이어별 history 길이 마커
+let drawFlipParity = false;
+let drawFlipUndo = [], drawFlipRedo = [];
+function _snapTag(layer) { return (drawFlipParity ? 'F|' : '') + layer.canvas.toDataURL(); }
+// 태그된 스냅샷을 레이어 캔버스에 복원 (스냅샷과 현재의 반전 상태가 다르면 미러링해서 그림)
+function _restoreSnapToLayer(layer, tagged) {
+  const snapFlipped = tagged.startsWith('F|');
+  const img = new Image();
+  img.onload = () => {
+    const w = layer.canvas.width, h = layer.canvas.height;
+    const ctx = layer.canvas.getContext('2d');
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, w, h);
+    if (snapFlipped !== drawFlipParity) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+    _renderDrawLayersList();
+  };
+  img.src = snapFlipped ? tagged.slice(2) : tagged;
+}
 function flipDrawCanvasH() {
+  const lens = {};
+  drawLayers.forEach(l => { lens[l.id] = l.history.length; });
+  drawFlipUndo.push({ lens });
+  if (drawFlipUndo.length > MAX_HIST) drawFlipUndo.shift();
+  drawFlipRedo = [];
+  _flipAllLayersPixels();
+}
+function _flipAllLayersPixels() {
   if (selection) cancelSelection();
+  drawFlipParity = !drawFlipParity;
   drawLayers.forEach(layer => {
-    if (layer.kind === 'draw') {
-      // 레이어별 undo 기록 (레이어마다 개별 되돌리기)
-      layer.history.push(layer.canvas.toDataURL());
-      if (layer.history.length > MAX_HIST) layer.history.shift();
-      layer.redoStack = [];
-    }
     if (layer.kind === 'image' && layer._imageEl) {
       // 이미지 레이어는 변환값을 미러링해 이후 이동/크기조절 때도 일관되게 유지
       layer.offsetX = -(layer.offsetX || 0);
@@ -6033,46 +6059,47 @@ document.addEventListener('paste', e=>{
 function saveDrawHistory(){
   const layer = getActiveDrawLayer();
   if (!layer || layer.kind !== 'draw') return;
-  layer.history.push(layer.canvas.toDataURL());
+  layer.history.push(_snapTag(layer));
   if (layer.history.length > MAX_HIST) layer.history.shift();
   layer.redoStack = [];
+  drawFlipRedo = [];
 }
 function undoDraw(){ _drawAtomicUndoN(1); }
 // N번 되돌리기를 원자적으로(이미지 한 번만 로드) 수행 — 두 손가락 탭 제스처 race 방지용
 function _drawAtomicUndoN(count){
   const layer = getActiveDrawLayer();
+  // 가장 최근 동작이 캔버스 반전이면 (활성 레이어에 그 이후 획이 없을 때) 전체 레이어를 한 번에 되돌림
+  const top = drawFlipUndo[drawFlipUndo.length - 1];
+  if (top && (!layer || layer.history.length <= (top.lens[layer.id] || 0))) {
+    drawFlipUndo.pop();
+    drawFlipRedo.push(top);
+    _flipAllLayersPixels();
+    count--;
+    if (count <= 0) return;
+  }
   if (!layer || layer.kind !== 'draw' || !layer.history.length) return;
-  layer.redoStack.push(layer.canvas.toDataURL());
+  layer.redoStack.push(_snapTag(layer));
   if (layer.redoStack.length > MAX_HIST) layer.redoStack.shift();
   let state = null;
   for (let i = 0; i < count && layer.history.length; i++) {
     state = layer.history.pop();
   }
   if (!state) return;
-  const img = new Image();
-  img.onload = () => {
-    const ctx = layer.canvas.getContext('2d');
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
-    ctx.drawImage(img, 0, 0);
-    _renderDrawLayersList();
-  };
-  img.src = state;
+  _restoreSnapToLayer(layer, state);
 }
 function redoDraw(){
   const layer = getActiveDrawLayer();
+  const top = drawFlipRedo[drawFlipRedo.length - 1];
+  if (top && (!layer || layer.history.length >= (top.lens[layer.id] || 0))) {
+    drawFlipRedo.pop();
+    drawFlipUndo.push(top);
+    _flipAllLayersPixels();
+    return;
+  }
   if (!layer || layer.kind !== 'draw' || !layer.redoStack.length) return;
-  layer.history.push(layer.canvas.toDataURL());
+  layer.history.push(_snapTag(layer));
   if (layer.history.length > MAX_HIST) layer.history.shift();
-  const img = new Image();
-  img.onload = () => {
-    const ctx = layer.canvas.getContext('2d');
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
-    ctx.drawImage(img, 0, 0);
-    _renderDrawLayersList();
-  };
-  img.src = layer.redoStack.pop();
+  _restoreSnapToLayer(layer, layer.redoStack.pop());
 }
 function clearDraw(){
   const layer = getActiveDrawLayer();
