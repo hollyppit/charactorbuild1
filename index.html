@@ -1579,6 +1579,7 @@ body.easy-mode .t-save-btn{display:none}
       <button class="tool-btn active" id="tool-pen"    onclick="setDrawTool('pen',this)">🖊️ 펜</button>
       <button class="tool-btn"        id="tool-eraser" onclick="setDrawTool('eraser',this)">🧹 지우개</button>
       <button class="tool-btn"        id="tool-fill"   onclick="setDrawTool('fill',this)">🪣 채우기</button>
+      <button class="tool-btn"        id="tool-blur"   onclick="setDrawTool('blur',this)" title="흐림 효과 (문지른 부분을 부드럽게, 굵기=범위)">🌫️ 흐림</button>
       <button class="tool-btn"        id="tool-select" onclick="setDrawTool('select',this)" title="영역 선택 (올가미/사각형/원형)">🔲 선택</button>
       <span id="selShapeGroup" style="display:none;gap:2px">
         <button class="tool-btn active" onclick="setSelShape('lasso',this)" title="자유 올가미 선택" style="padding:6px 8px">〰️</button>
@@ -3811,6 +3812,77 @@ function openCanvasSizeModal() {
   openModal('canvasSizeModal');
 }
 
+/* ── 흐림 효과 브러시 ──
+   브러시가 지나간 둥근 영역에 박스 블러를 부분 적용(가장자리는 부드럽게 페더링).
+   ctx.filter 는 iOS Safari 등에서 미지원이라 픽셀 직접 처리 (알파 투명 레이어도 premultiplied 로 정확히 처리) */
+function _blurRadius(brushW) { return Math.max(5, brushW / 2); }
+function _blurDabAll(ctx, canvas, x, y, brushW) {
+  _symPoints(x, y, canvas.width, canvas.height).forEach(p => _blurDab(ctx, canvas, p.x, p.y, brushW));
+}
+function _blurDab(ctx, canvas, cx, cy, brushW) {
+  const r = _blurRadius(brushW);
+  const k = Math.max(1, Math.min(6, Math.round(r / 3)));   // 블러 반경(px)
+  const m = k + 1;                                          // 블러 샘플용 여백
+  const x0 = Math.max(0, Math.floor(cx - r - m)), y0 = Math.max(0, Math.floor(cy - r - m));
+  const x1 = Math.min(canvas.width, Math.ceil(cx + r + m)), y1 = Math.min(canvas.height, Math.ceil(cy + r + m));
+  const w = x1 - x0, h = y1 - y0;
+  if (w < 2 || h < 2) return;
+  const img = ctx.getImageData(x0, y0, w, h);
+  const d = img.data, n = w * h;
+  // premultiplied float
+  const pm = new Float32Array(n * 4);
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    const a = d[j + 3] / 255;
+    pm[j] = d[j] * a; pm[j + 1] = d[j + 1] * a; pm[j + 2] = d[j + 2] * a; pm[j + 3] = d[j + 3];
+  }
+  // 가로 → 세로 박스 블러 (경계는 clamp)
+  const tmp = new Float32Array(n * 4), bl = new Float32Array(n * 4);
+  const win = 2 * k + 1;
+  for (let y = 0; y < h; y++) {
+    for (let c = 0; c < 4; c++) {
+      let sum = 0;
+      for (let dx = -k; dx <= k; dx++) sum += pm[(y * w + Math.min(w - 1, Math.max(0, dx))) * 4 + c];
+      for (let x = 0; x < w; x++) {
+        tmp[(y * w + x) * 4 + c] = sum / win;
+        const add = Math.min(w - 1, x + k + 1), sub = Math.max(0, x - k);
+        sum += pm[(y * w + add) * 4 + c] - pm[(y * w + sub) * 4 + c];
+      }
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    for (let c = 0; c < 4; c++) {
+      let sum = 0;
+      for (let dy = -k; dy <= k; dy++) sum += tmp[(Math.min(h - 1, Math.max(0, dy)) * w + x) * 4 + c];
+      for (let y = 0; y < h; y++) {
+        bl[(y * w + x) * 4 + c] = sum / win;
+        const add = Math.min(h - 1, y + k + 1), sub = Math.max(0, y - k);
+        sum += tmp[(add * w + x) * 4 + c] - tmp[(sub * w + x) * 4 + c];
+      }
+    }
+  }
+  // 원형 마스크(중심 100% → 가장자리 0%)로 원본과 섞기. 매 점마다 50% 만 섞어 문지를수록 점점 흐려지게 함
+  const STRENGTH = 0.5;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dist = Math.hypot(x0 + x + 0.5 - cx, y0 + y + 0.5 - cy);
+      if (dist >= r) continue;
+      const t = dist / r;
+      const mask = (t < 0.5 ? 1 : 1 - (t - 0.5) / 0.5) * STRENGTH;
+      const j = (y * w + x) * 4;
+      const oa = d[j + 3] / 255, oa255 = d[j + 3];
+      const opr = d[j] * oa, opg = d[j + 1] * oa, opb = d[j + 2] * oa;
+      const nr = opr + (bl[j] - opr) * mask, ng = opg + (bl[j + 1] - opg) * mask, nb = opb + (bl[j + 2] - opb) * mask;
+      const na = oa255 + (bl[j + 3] - oa255) * mask;
+      const naf = na / 255;
+      if (naf > 0.001) {
+        d[j] = Math.min(255, nr / naf); d[j + 1] = Math.min(255, ng / naf); d[j + 2] = Math.min(255, nb / naf);
+      }
+      d[j + 3] = na;
+    }
+  }
+  ctx.putImageData(img, x0, y0);
+}
+
 /* ── 대칭 그리기 (좌우/상하) ── */
 let symH = false, symV = false;
 function toggleSym(axis, btn) {
@@ -5258,6 +5330,11 @@ function _drawLayerPointerDown(e) {
   saveDrawHistory();
   painting = true;
   lastX = pos.x; lastY = pos.y;
+  if (drawTool === 'blur') {
+    ctx.globalCompositeOperation = 'source-over';
+    _blurDabAll(ctx, layer.canvas, pos.x, pos.y, _currentBrushWidth(e.pressure));
+    return;
+  }
   if (drawTool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
   else ctx.globalCompositeOperation = 'source-over';
   const w = _currentBrushWidth(e.pressure);
@@ -5331,6 +5408,19 @@ function _drawLayerPointerMove(e) {
   const ctx = layer.canvas.getContext('2d');
   const pos = _getDrawLayerPos(layer.canvas, e);
   const w = _currentBrushWidth(e.pressure);
+  if (drawTool === 'blur') {
+    // 이전 점 → 현재 점 사이를 일정 간격으로 채우며 흐림 적용
+    const rad = _blurRadius(w);
+    const step = Math.max(2, rad / 3);
+    const dist = Math.hypot(pos.x - lastX, pos.y - lastY);
+    const n = Math.max(1, Math.floor(dist / step));
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      _blurDabAll(ctx, layer.canvas, lastX + (pos.x - lastX) * t, lastY + (pos.y - lastY) * t, w);
+    }
+    lastX = pos.x; lastY = pos.y;
+    return;
+  }
   ctx.beginPath();
   const _W = layer.canvas.width, _H = layer.canvas.height;
   const _from = _symPoints(lastX, lastY, _W, _H), _to = _symPoints(pos.x, pos.y, _W, _H);
