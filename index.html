@@ -735,6 +735,13 @@ body.admin .dt-admin-section{display:block}
 @media(min-width:860px){
   .draw-workspace{gap:12px}
 }
+/* 도구상자 열기/닫기 탭 버튼 (모바일 전용) */
+.toolbox-fab{display:none}
+@media(max-width:620px){
+  .toolbox-fab{display:block;position:fixed;right:10px;bottom:calc(142px + env(safe-area-inset-bottom));z-index:900;padding:10px 14px;border:2px solid var(--c-black);background:var(--c-yellow);color:var(--c-black);font-family:var(--f-ui);font-size:12px;font-weight:800;box-shadow:var(--shadow-purple);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .toolbox-fab:active{transform:translateY(1px)}
+  #panel-draw .draw-workspace.toolbox-collapsed .draw-toolbox{display:none}
+}
 /* 모바일: 좁은 사이드바 + 남는 폭을 캔버스에 */
 @media(max-width:620px){
   #panel-draw .draw-workspace{gap:7px}
@@ -1562,6 +1569,7 @@ body.easy-mode .t-save-btn{display:none}
 ══════════════════════════════ -->
 <div class="mode-panel" id="panel-draw">
   <div class="draw-col">
+   <button class="toolbox-fab" id="toolboxFab" onclick="toggleToolbox()" aria-label="도구상자 열기/닫기">✕ 도구상자 닫기</button>
    <div class="draw-workspace" id="drawWorkspace" data-dock="left">
     <div class="draw-toolbox" id="drawToolbox">
 
@@ -4090,7 +4098,26 @@ function setDrawDock(pos, skipResize) {
   // 캔버스 가용 폭이 달라질 수 있으므로 레이아웃 반영 후 크기 재계산
   if (!skipResize) requestAnimationFrame(() => { if (currentMode === 'draw') initDrawCanvas(); });
 }
+// 모바일: 도구상자 접기/펴기 (캔버스 그릴 때 화면 확보)
+function _applyToolbox(open) {
+  const ws = document.getElementById('drawWorkspace'), fab = document.getElementById('toolboxFab');
+  if (!ws) return;
+  ws.classList.toggle('toolbox-collapsed', !open);
+  if (fab) fab.textContent = open ? '✕ 도구상자 닫기' : '🧰 도구상자 열기';
+}
+function toggleToolbox() {
+  const ws = document.getElementById('drawWorkspace');
+  if (!ws) return;
+  const open = ws.classList.contains('toolbox-collapsed');
+  _applyToolbox(open);
+  try { localStorage.setItem('drawToolboxOpen', open ? '1' : '0'); } catch (_) {}
+  // 캔버스 가용 폭이 바뀌므로 레이아웃 반영 후 크기 재계산
+  requestAnimationFrame(() => { if (currentMode === 'draw') initDrawCanvas(); });
+}
 function _initDrawDock() {
+  let open = true;
+  try { open = localStorage.getItem('drawToolboxOpen') !== '0'; } catch (_) {}
+  _applyToolbox(open);
   // 기본값: 왼쪽 (폭이 좁은 모바일 ≤620px 은 캔버스 폭 확보를 위해 위)
   let d = window.innerWidth <= 620 ? 'top' : 'left';
   try { d = localStorage.getItem(DRAW_DOCK_KEY) || d; } catch (_) {}
