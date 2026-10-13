@@ -5564,15 +5564,21 @@ function _drawLayerPointerDown(e) {
 }
 
 // 펜/지우개(및 흐림·유동화) 브러시 크기를 원형 커서로 표시 — 마우스/펜 호버용 (터치는 호버 없음)
-function _hideBrushCursor() {
+function _hideBrushCursor(forget) {
+  if (forget) _lastBrushPtr = null;
   const c = document.getElementById('brushCursor');
   if (c) c.style.display = 'none';
   const wrap = document.getElementById('drawCanvasWrap');
   if (wrap) wrap.classList.remove('brush-cursor-on');
 }
+let _lastBrushPtr = null;   // 마지막 마우스/펜 위치 (단축키로 굵기를 바꿀 때 커서 즉시 갱신용)
+function _refreshBrushCursor() {
+  if (_lastBrushPtr) _updateBrushCursor({ clientX: _lastBrushPtr.x, clientY: _lastBrushPtr.y, pointerType: 'mouse', pressure: 0, target: null });
+}
 function _updateBrushCursor(e) {
   const c = document.getElementById('brushCursor'), wrap = document.getElementById('drawCanvasWrap');
   if (!c || !wrap) return;
+  if (e.pointerType !== 'touch') _lastBrushPtr = { x: e.clientX, y: e.clientY };
   const circleTool = drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'blur' || drawTool === 'liquify';
   if (e.pointerType === 'touch' || !circleTool || selection ||
       wrap.classList.contains('pan-ready') || wrap.classList.contains('pan-active') ||
@@ -5692,7 +5698,7 @@ function _drawLayerPointerMove(e) {
 }
 
 function _drawLayerPointerEnd(e) {
-  if (e.type === 'pointerleave') _hideBrushCursor();
+  if (e.type === 'pointerleave') _hideBrushCursor(true);
   // === 멀티터치 제스처 종료 ===
   if (e.pointerType === 'touch') {
     _drawActivePointers.delete(e.pointerId);
@@ -6398,6 +6404,15 @@ document.addEventListener('keydown', e=>{
   if(e.key==='e'||e.key==='E'){
     const btn=document.getElementById('tool-eraser');
     if(btn){ e.preventDefault(); setDrawTool('eraser',btn); }
+    return;
+  }
+  // [ = 브러시 작게, ] = 브러시 크게 (펜/지우개/흐림/유동화 공통, 크기에 비례해 가감)
+  if(e.key==='['||e.key===']'||e.code==='BracketLeft'||e.code==='BracketRight'){
+    e.preventDefault();
+    const up = (e.key===']'||e.code==='BracketRight');
+    const delta = Math.max(1, Math.round(brushSize*0.12));
+    setBrushSize(Math.max(1, Math.min(100, brushSize + (up ? delta : -delta))));
+    _refreshBrushCursor();
     return;
   }
   if(e.key==='+'||e.key==='='){ e.preventDefault(); zoomDrawCanvas(1.2); return; }
