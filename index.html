@@ -710,32 +710,49 @@ body.admin .dt-admin-section{display:block}
 
   /* 스토리보드: controls-col 조금 더 넓게 */
   .sb-controls-col{width:230px}
-
-  /* 직접 그리기: 도구상자 위치 (위/아래/왼쪽/오른쪽) */
-  .draw-workspace{display:flex;gap:12px;width:100%;justify-content:center;align-items:flex-start}
-  .draw-workspace[data-dock=top]{flex-direction:column;align-items:center}
-  .draw-workspace[data-dock=bottom]{flex-direction:column-reverse;align-items:center}
-  .draw-workspace[data-dock=left]{flex-direction:row}
-  .draw-workspace[data-dock=right]{flex-direction:row-reverse}
-  .draw-toolbox{display:flex;flex-direction:column;gap:10px;align-items:center;width:100%;max-width:900px}
-  .dock-switch{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center;width:100%}
-  .dock-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#aaa;margin-right:4px}
-  .dock-btn{padding:5px 10px;font-size:11px}
-  .draw-workspace[data-dock=left] .draw-toolbox,
-  .draw-workspace[data-dock=right] .draw-toolbox{width:320px;max-width:320px;flex:none;position:sticky;top:8px;max-height:calc(100vh - 16px);overflow-y:auto}
-  .draw-workspace[data-dock=left] .draw-toolbar,
-  .draw-workspace[data-dock=right] .draw-toolbar{justify-content:flex-start;padding:10px}
-  .draw-workspace[data-dock=left] .toolbar-sep,
-  .draw-workspace[data-dock=right] .toolbar-sep{flex-basis:100%;width:100%;height:2px}
-  .draw-workspace[data-dock=left] .draw-canvas-wrap,
-  .draw-workspace[data-dock=right] .draw-canvas-wrap{flex:0 1 560px;min-width:0;width:auto}
 }
-.draw-workspace,.draw-toolbox{display:contents}
-.dock-switch{display:none}
+
+/* ══════════════════════════════
+   직접 그리기: 도구상자 위치 (위/아래/왼쪽/오른쪽) — 데스크탑·모바일 공통
+══════════════════════════════ */
+.draw-workspace{display:flex;gap:10px;width:100%;justify-content:center;align-items:flex-start}
+.draw-workspace[data-dock=top]{flex-direction:column;align-items:center}
+.draw-workspace[data-dock=bottom]{flex-direction:column-reverse;align-items:center}
+.draw-workspace[data-dock=left]{flex-direction:row}
+.draw-workspace[data-dock=right]{flex-direction:row-reverse}
+.draw-toolbox{display:flex;flex-direction:column;gap:10px;align-items:center;width:100%;max-width:900px}
+.dock-switch{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center;width:100%}
+.dock-label{font-family:var(--f-ui);font-size:11px;font-weight:700;color:#aaa;margin-right:4px}
+.dock-btn{padding:5px 10px;font-size:11px}
+.draw-workspace[data-dock=left] .draw-toolbox,
+.draw-workspace[data-dock=right] .draw-toolbox{width:clamp(180px,34vw,320px);max-width:320px;flex:none;position:sticky;top:8px;max-height:calc(100vh - 16px);overflow-y:auto}
+.draw-workspace[data-dock=left] .draw-toolbar,
+.draw-workspace[data-dock=right] .draw-toolbar{justify-content:flex-start;padding:10px}
+.draw-workspace[data-dock=left] .toolbar-sep,
+.draw-workspace[data-dock=right] .toolbar-sep{flex-basis:100%;width:100%;height:2px}
+.draw-workspace[data-dock=left] .draw-canvas-wrap,
+.draw-workspace[data-dock=right] .draw-canvas-wrap{flex:0 1 560px;min-width:0;width:auto}
 @media(min-width:860px){
-  .draw-workspace{display:flex}
-  .draw-toolbox{display:flex}
-  .dock-switch{display:flex}
+  .draw-workspace{gap:12px}
+}
+/* 모바일: 좁은 사이드바 + 남는 폭을 캔버스에 */
+@media(max-width:620px){
+  #panel-draw .draw-workspace{gap:7px}
+  #panel-draw .draw-toolbox{gap:7px}
+  #panel-draw .draw-workspace[data-dock=left] .draw-toolbox,
+  #panel-draw .draw-workspace[data-dock=right] .draw-toolbox{width:clamp(120px,32vw,170px);max-height:calc(100dvh - 150px);top:4px}
+  #panel-draw .draw-workspace[data-dock=left] .draw-canvas-wrap,
+  #panel-draw .draw-workspace[data-dock=right] .draw-canvas-wrap{flex:1 1 0;max-width:none;border-width:3px}
+  #panel-draw .draw-workspace[data-dock=left] .tool-btn,
+  #panel-draw .draw-workspace[data-dock=right] .tool-btn{padding:7px 8px;font-size:11px;min-height:34px}
+  #panel-draw .draw-workspace[data-dock=left] .sz-slider,
+  #panel-draw .draw-workspace[data-dock=right] .sz-slider{width:56px}
+  #panel-draw .draw-workspace[data-dock=left] .pal-dot,
+  #panel-draw .draw-workspace[data-dock=right] .pal-dot{width:24px;height:24px}
+  #panel-draw .draw-workspace[data-dock=left] .dock-label,
+  #panel-draw .draw-workspace[data-dock=right] .dock-label{flex-basis:100%;text-align:center;margin:0}
+  #panel-draw .draw-workspace[data-dock=left] .dl-add-btn,
+  #panel-draw .draw-workspace[data-dock=right] .dl-add-btn{padding:6px 5px;font-size:10px}
 }
 
 /* ══════════════════════════════
