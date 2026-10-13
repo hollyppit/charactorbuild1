@@ -1562,14 +1562,14 @@ body.easy-mode .t-save-btn{display:none}
 ══════════════════════════════ -->
 <div class="mode-panel" id="panel-draw">
   <div class="draw-col">
-   <div class="draw-workspace" id="drawWorkspace" data-dock="top">
+   <div class="draw-workspace" id="drawWorkspace" data-dock="left">
     <div class="draw-toolbox" id="drawToolbox">
 
     <!-- 도구상자 위치 (데스크탑 전용) -->
     <div class="dock-switch" id="dockSwitch">
       <span class="dock-label">🧰 도구상자 위치</span>
-      <button class="tool-btn dock-btn active" data-dock="top"    onclick="setDrawDock('top')">⬆ 위</button>
-      <button class="tool-btn dock-btn"        data-dock="left"   onclick="setDrawDock('left')">⬅ 왼쪽</button>
+      <button class="tool-btn dock-btn"        data-dock="top"    onclick="setDrawDock('top')">⬆ 위</button>
+      <button class="tool-btn dock-btn active" data-dock="left"   onclick="setDrawDock('left')">⬅ 왼쪽</button>
       <button class="tool-btn dock-btn"        data-dock="right"  onclick="setDrawDock('right')">➡ 오른쪽</button>
       <button class="tool-btn dock-btn"        data-dock="bottom" onclick="setDrawDock('bottom')">⬇ 아래</button>
     </div>
@@ -1580,6 +1580,14 @@ body.easy-mode .t-save-btn{display:none}
       <button class="tool-btn"        id="tool-eraser" onclick="setDrawTool('eraser',this)">🧹 지우개</button>
       <button class="tool-btn"        id="tool-fill"   onclick="setDrawTool('fill',this)">🪣 채우기</button>
       <button class="tool-btn"        id="tool-blur"   onclick="setDrawTool('blur',this)" title="흐림 효과 (문지른 부분을 부드럽게, 굵기=범위)">🌫️ 흐림</button>
+      <button class="tool-btn" onclick="openBlurAreaModal(false)" title="활성 레이어 전체를 흐리게">🌫️ 전체 흐림</button>
+      <button class="tool-btn"        id="tool-liquify" onclick="setDrawTool('liquify',this)" title="픽셀 유동화 (밀기·확대·축소·소용돌이)">💧 유동화</button>
+      <span id="liqModeGroup" style="display:none;gap:2px;flex-wrap:wrap">
+        <button class="tool-btn active" onclick="setLiqMode('push',this)" title="밀기: 드래그 방향으로 픽셀을 밀어냄" style="padding:6px 8px">👉 밀기</button>
+        <button class="tool-btn" onclick="setLiqMode('bloat',this)" title="확대: 브러시 중심에서 부풀림" style="padding:6px 8px">🔍 확대</button>
+        <button class="tool-btn" onclick="setLiqMode('pucker',this)" title="축소: 브러시 중심으로 오므림" style="padding:6px 8px">🔎 축소</button>
+        <button class="tool-btn" onclick="setLiqMode('twirl',this)" title="소용돌이: 시계 방향으로 비틀기" style="padding:6px 8px">🌀 소용돌이</button>
+      </span>
       <button class="tool-btn"        id="tool-select" onclick="setDrawTool('select',this)" title="영역 선택 (올가미/사각형/원형)">🔲 선택</button>
       <span id="selShapeGroup" style="display:none;gap:2px">
         <button class="tool-btn active" onclick="setSelShape('lasso',this)" title="자유 올가미 선택" style="padding:6px 8px">〰️</button>
@@ -2250,6 +2258,23 @@ body.easy-mode .t-save-btn{display:none}
     <div style="font-family:var(--f-ui);font-size:10px;color:#888;line-height:1.5;margin-top:8px">⚠️ 크기를 바꾸면 캔버스 비율이 다시 맞춰져요. 그려둔 내용은 새 크기에 맞게 유지됩니다.</div>
     <div class="modal-btns" style="margin-top:12px">
       <button class="btn btn-purple" onclick="closeModal('canvasSizeModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 흐림(영역/전체) 모달 ── -->
+<div class="modal-overlay" id="blurAreaModal">
+  <div class="modal" style="max-width:380px">
+    <h2>🌫️ 흐림 효과</h2>
+    <div id="blurAreaTarget" style="font-family:var(--f-ui);font-size:12px;color:#ccc;text-align:center;margin-bottom:10px"></div>
+    <div class="ps-row" style="gap:8px;align-items:center">
+      <span style="font-family:var(--f-ui);font-size:12px;color:#aaa">강도</span>
+      <input type="range" id="blurAreaSlider" min="1" max="40" value="8" style="flex:1" oninput="document.getElementById('blurAreaVal').textContent=this.value+'px'">
+      <span id="blurAreaVal" style="font-family:var(--f-ui);font-size:12px;color:var(--c-yellow);min-width:36px">8px</span>
+    </div>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn btn-blue" onclick="applyBlurArea()">적용</button>
+      <button class="btn btn-purple" onclick="closeModal('blurAreaModal')">닫기</button>
     </div>
   </div>
 </div>
@@ -3883,6 +3908,159 @@ function _blurDab(ctx, canvas, cx, cy, brushW) {
   ctx.putImageData(img, x0, y0);
 }
 
+/* ── 영역/레이어 전체 흐림 ── */
+let _blurAreaUseSelection = false;
+function openBlurAreaModal(useSelection) {
+  const layer = getActiveDrawLayer();
+  if (!layer || layer.kind !== 'draw') { alert('그리기 레이어를 선택하세요.\n이미지 레이어에는 흐림을 적용할 수 없어요.'); return; }
+  if (useSelection && !(selection && selection.path && selection.mode === 'idle')) return;
+  _blurAreaUseSelection = !!useSelection;
+  document.getElementById('blurAreaTarget').textContent = useSelection ? '선택한 영역을 흐리게 합니다' : '활성 레이어 「' + layer.name + '」 전체를 흐리게 합니다';
+  openModal('blurAreaModal');
+}
+function applyBlurArea() {
+  const layer = getActiveDrawLayer();
+  if (!layer || layer.kind !== 'draw') { closeModal('blurAreaModal'); return; }
+  const sigma = parseInt(document.getElementById('blurAreaSlider').value, 10) || 8;
+  const path = (_blurAreaUseSelection && selection && selection.path) ? selection.path : null;
+  closeModal('blurAreaModal');
+  saveDrawHistory();
+  _blurRegion(layer.canvas, path, sigma);
+  _renderDrawLayersList();
+}
+// path 영역(없으면 캔버스 전체)을 3회 박스 블러(≈가우시안)로 흐리게 하고 path 안쪽만 교체
+function _blurRegion(canvas, path, sigma) {
+  const ctx = canvas.getContext('2d');
+  const b = Math.max(1, Math.round(sigma * 0.9));
+  const margin = 3 * b + 1;
+  let x0 = 0, y0 = 0, x1 = canvas.width, y1 = canvas.height;
+  if (path && path.length) {
+    const xs = path.map(p => p.x), ys = path.map(p => p.y);
+    x0 = Math.max(0, Math.floor(Math.min(...xs)) - margin); y0 = Math.max(0, Math.floor(Math.min(...ys)) - margin);
+    x1 = Math.min(canvas.width, Math.ceil(Math.max(...xs)) + margin); y1 = Math.min(canvas.height, Math.ceil(Math.max(...ys)) + margin);
+  }
+  const w = x1 - x0, h = y1 - y0;
+  if (w < 2 || h < 2) return;
+  const img = ctx.getImageData(x0, y0, w, h);
+  const d = img.data, n = w * h;
+  let a = new Float32Array(n * 4), t = new Float32Array(n * 4);
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    const al = d[j + 3] / 255;
+    a[j] = d[j] * al; a[j + 1] = d[j + 1] * al; a[j + 2] = d[j + 2] * al; a[j + 3] = d[j + 3];
+  }
+  for (let pass = 0; pass < 3; pass++) {
+    _boxBlurAxis(a, t, w, h, b, true);
+    _boxBlurAxis(t, a, w, h, b, false);
+  }
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    const al = a[j + 3] / 255;
+    if (al > 0.001) { d[j] = Math.min(255, a[j] / al); d[j + 1] = Math.min(255, a[j + 1] / al); d[j + 2] = Math.min(255, a[j + 2] / al); }
+    else { d[j] = d[j + 1] = d[j + 2] = 0; }
+    d[j + 3] = a[j + 3];
+  }
+  const tmp = document.createElement('canvas');
+  tmp.width = w; tmp.height = h;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  if (path && path.length) {
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+    ctx.closePath();
+    ctx.clip();
+  }
+  ctx.clearRect(x0, y0, w, h);
+  ctx.drawImage(tmp, x0, y0);
+  ctx.restore();
+}
+// src → dst 한 방향 박스 블러 (슬라이딩 윈도우, 경계 clamp, 4채널 인터리브)
+function _boxBlurAxis(src, dst, w, h, b, horizontal) {
+  const win = 2 * b + 1;
+  const len = horizontal ? w : h, lines = horizontal ? h : w;
+  const stride = horizontal ? 4 : w * 4, lineStride = horizontal ? w * 4 : 4;
+  for (let l = 0; l < lines; l++) {
+    const base = l * lineStride;
+    for (let c = 0; c < 4; c++) {
+      let sum = 0;
+      for (let k = -b; k <= b; k++) sum += src[base + Math.min(len - 1, Math.max(0, k)) * stride + c];
+      for (let i = 0; i < len; i++) {
+        dst[base + i * stride + c] = sum / win;
+        sum += src[base + Math.min(len - 1, i + b + 1) * stride + c] - src[base + Math.max(0, i - b) * stride + c];
+      }
+    }
+  }
+}
+
+/* ── 픽셀 유동화 (밀기 / 확대 / 축소 / 소용돌이) ── */
+let liqMode = 'push';
+function setLiqMode(m, btn) {
+  liqMode = m;
+  document.querySelectorAll('#liqModeGroup .tool-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+// _symPoints 와 같은 순서의 (fx,fy) 부호 — 거울 쪽은 이동 벡터도 반전
+function _symFlags() {
+  const f = [{ fx: 1, fy: 1 }];
+  if (symH) f.push({ fx: -1, fy: 1 });
+  if (symV) f.push({ fx: 1, fy: -1 });
+  if (symH && symV) f.push({ fx: -1, fy: -1 });
+  return f;
+}
+function _liquifyAll(ctx, canvas, x, y, brushW, dx, dy) {
+  const flags = _symFlags();
+  _symPoints(x, y, canvas.width, canvas.height).forEach((p, i) =>
+    _liquifyDab(ctx, canvas, p.x, p.y, brushW, dx * flags[i].fx, dy * flags[i].fy, flags[i].fx * flags[i].fy));
+}
+function _liquifyDab(ctx, canvas, cx, cy, brushW, dx, dy, handed) {
+  const r = _blurRadius(brushW);
+  const x0 = Math.max(0, Math.floor(cx - r)), y0 = Math.max(0, Math.floor(cy - r));
+  const x1 = Math.min(canvas.width, Math.ceil(cx + r)), y1 = Math.min(canvas.height, Math.ceil(cy + r));
+  const w = x1 - x0, h = y1 - y0;
+  if (w < 2 || h < 2) return;
+  const img = ctx.getImageData(x0, y0, w, h);
+  const d = img.data, n = w * h;
+  const pm = new Float32Array(n * 4);
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    const al = d[j + 3] / 255;
+    pm[j] = d[j] * al; pm[j + 1] = d[j + 1] * al; pm[j + 2] = d[j + 2] * al; pm[j + 3] = d[j + 3];
+  }
+  const cu = cx - x0, cv = cy - y0;
+  const out = [0, 0, 0, 0];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x + 0.5, v = y + 0.5;
+      const ox = u - cu, oy = v - cv;
+      const dist = Math.hypot(ox, oy);
+      if (dist >= r) continue;
+      const f = 0.5 * (1 + Math.cos(Math.PI * dist / r));   // 중심 1 → 가장자리 0
+      let su, sv;
+      if (liqMode === 'push') { su = u - dx * f; sv = v - dy * f; }
+      else if (liqMode === 'bloat') { su = u - ox * f * 0.1; sv = v - oy * f * 0.1; }
+      else if (liqMode === 'pucker') { su = u + ox * f * 0.1; sv = v + oy * f * 0.1; }
+      else { // twirl (거울 쪽은 방향 반대)
+        const ang = f * 0.2 * handed, cs = Math.cos(ang), sn = Math.sin(ang);
+        su = cu + ox * cs - oy * sn; sv = cv + ox * sn + oy * cs;
+      }
+      // 양선형 보간 (premultiplied, 경계 clamp)
+      const fu = Math.min(w - 1, Math.max(0, su - 0.5)), fv = Math.min(h - 1, Math.max(0, sv - 0.5));
+      const iu = Math.floor(fu), iv = Math.floor(fv);
+      const tu = fu - iu, tv = fv - iv;
+      const iu2 = Math.min(w - 1, iu + 1), iv2 = Math.min(h - 1, iv + 1);
+      const i00 = (iv * w + iu) * 4, i10 = (iv * w + iu2) * 4, i01 = (iv2 * w + iu) * 4, i11 = (iv2 * w + iu2) * 4;
+      for (let c = 0; c < 4; c++) {
+        out[c] = (pm[i00 + c] * (1 - tu) + pm[i10 + c] * tu) * (1 - tv) + (pm[i01 + c] * (1 - tu) + pm[i11 + c] * tu) * tv;
+      }
+      const j = (y * w + x) * 4;
+      const al = out[3] / 255;
+      if (al > 0.001) { d[j] = Math.min(255, out[0] / al); d[j + 1] = Math.min(255, out[1] / al); d[j + 2] = Math.min(255, out[2] / al); }
+      else { d[j] = d[j + 1] = d[j + 2] = 0; }
+      d[j + 3] = out[3];
+    }
+  }
+  ctx.putImageData(img, x0, y0);
+}
+
 /* ── 대칭 그리기 (좌우/상하) ── */
 let symH = false, symV = false;
 function toggleSym(axis, btn) {
@@ -3901,20 +4079,21 @@ function _symPoints(x, y, W, H) {
 }
 
 /* ── 도구상자 위치 (데스크탑 ≥860px) ── */
-const DRAW_DOCK_KEY = 'drawToolboxDock';
+const DRAW_DOCK_KEY = 'drawToolboxDockV2'; // V2: 기본값을 왼쪽으로 바꾸며 이전 자동 저장값 무시
 function setDrawDock(pos, skipResize) {
   if (!['top', 'bottom', 'left', 'right'].includes(pos)) pos = 'top';
   const ws = document.getElementById('drawWorkspace');
   if (!ws) return;
   ws.dataset.dock = pos;
   document.querySelectorAll('#dockSwitch .dock-btn').forEach(b => b.classList.toggle('active', b.dataset.dock === pos));
-  try { localStorage.setItem(DRAW_DOCK_KEY, pos); } catch (_) {}
+  if (!skipResize) { try { localStorage.setItem(DRAW_DOCK_KEY, pos); } catch (_) {} } // 사용자가 직접 고른 경우만 저장
   // 캔버스 가용 폭이 달라질 수 있으므로 레이아웃 반영 후 크기 재계산
   if (!skipResize) requestAnimationFrame(() => { if (currentMode === 'draw') initDrawCanvas(); });
 }
 function _initDrawDock() {
-  let d = 'top';
-  try { d = localStorage.getItem(DRAW_DOCK_KEY) || 'top'; } catch (_) {}
+  // 기본값: 왼쪽 (폭이 좁은 모바일 ≤620px 은 캔버스 폭 확보를 위해 위)
+  let d = window.innerWidth <= 620 ? 'top' : 'left';
+  try { d = localStorage.getItem(DRAW_DOCK_KEY) || d; } catch (_) {}
   setDrawDock(d, true);
 }
 
@@ -5185,6 +5364,7 @@ function _showSelectionBar() {
         <button class="sb-btn primary" onclick="startSelectionMove()">↔ 이동하기</button>
         <button class="sb-btn primary" onclick="startSelectionCopy()">📋 복사하기</button>
         <button class="sb-btn primary" onclick="startSelectionEdit()">✏️ 편집하기</button>
+        <button class="sb-btn primary" onclick="openBlurAreaModal(true)">🌫️ 흐리게</button>
         <button class="sb-btn danger" onclick="deleteSelection()">🗑 지우기</button>
         <button class="sb-btn" onclick="cancelSelection()">✕ 선택 취소</button>
       </div>
@@ -5335,6 +5515,11 @@ function _drawLayerPointerDown(e) {
     _blurDabAll(ctx, layer.canvas, pos.x, pos.y, _currentBrushWidth(e.pressure));
     return;
   }
+  if (drawTool === 'liquify') {
+    ctx.globalCompositeOperation = 'source-over';
+    if (liqMode !== 'push') _liquifyAll(ctx, layer.canvas, pos.x, pos.y, _currentBrushWidth(e.pressure), 0, 0);
+    return;
+  }
   if (drawTool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
   else ctx.globalCompositeOperation = 'source-over';
   const w = _currentBrushWidth(e.pressure);
@@ -5417,6 +5602,18 @@ function _drawLayerPointerMove(e) {
     for (let i = 1; i <= n; i++) {
       const t = i / n;
       _blurDabAll(ctx, layer.canvas, lastX + (pos.x - lastX) * t, lastY + (pos.y - lastY) * t, w);
+    }
+    lastX = pos.x; lastY = pos.y;
+    return;
+  }
+  if (drawTool === 'liquify') {
+    const rad = _blurRadius(w);
+    const step = Math.max(2, rad / 4);
+    const dist = Math.hypot(pos.x - lastX, pos.y - lastY);
+    const n = Math.max(1, Math.ceil(dist / step));
+    const dx = (pos.x - lastX) / n, dy = (pos.y - lastY) / n;
+    for (let i = 1; i <= n; i++) {
+      _liquifyAll(ctx, layer.canvas, lastX + dx * i, lastY + dy * i, w, dx, dy);
     }
     lastX = pos.x; lastY = pos.y;
     return;
@@ -6072,10 +6269,12 @@ function setDrawTool(t,btn){
     cancelSelection();
   }
   drawTool=t;
-  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup, #dockSwitch') && b.id!=='btnViewFlip' && !b.classList.contains('tool-toggle')) b.classList.remove('active'); });
+  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup, #liqModeGroup, #dockSwitch') && b.id!=='btnViewFlip' && !b.classList.contains('tool-toggle')) b.classList.remove('active'); });
   btn.classList.add('active');
   const sg=document.getElementById('selShapeGroup');
   if(sg) sg.style.display = t==='select' ? 'inline-flex' : 'none';
+  const lg=document.getElementById('liqModeGroup');
+  if(lg) lg.style.display = t==='liquify' ? 'inline-flex' : 'none';
 }
 function setBrushSize(s){
   brushSize=s;
