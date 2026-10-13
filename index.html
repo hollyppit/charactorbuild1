@@ -1544,6 +1544,8 @@ body.easy-mode .t-save-btn{display:none}
       <button class="tool-btn" onclick="openPressureSettings()" title="필압 감도 설정" style="padding:6px 10px">⚙</button>
       <div class="toolbar-sep"></div>
       <button class="tool-btn" onclick="openCanvasSizeModal()" title="캔버스 방향/크기 조절">📐 캔버스</button>
+      <button class="tool-btn" onclick="flipDrawCanvasH()" title="캔버스 자체를 좌우 반전 (모든 레이어 실제 반전)">🔁 캔버스 반전</button>
+      <button class="tool-btn" id="btnViewFlip" onclick="toggleDrawViewFlip()" title="화면만 좌우 반전 (보기 전용, 저장 결과 영향 없음)">🪞 화면 반전</button>
       <div class="toolbar-sep"></div>
       <button class="tool-btn" onclick="undoDraw()">↩️ 되돌리기</button>
       <button class="tool-btn" onclick="clearDraw()">🗑️ 전체 지우기</button>
@@ -3744,11 +3746,56 @@ function openCanvasSizeModal() {
   openModal('canvasSizeModal');
 }
 
+/* ── 좌우반전 ── */
+let drawFlipView = false;
+// 화면상 반전(보기 전용): 그림 데이터는 건드리지 않음
+function toggleDrawViewFlip() {
+  drawFlipView = !drawFlipView;
+  const b = document.getElementById('btnViewFlip');
+  if (b) b.classList.toggle('active', drawFlipView);
+  applyDrawTransform();
+}
+// 캔버스 자체 반전: 모든 레이어 픽셀을 실제로 좌우 뒤집음
+function flipDrawCanvasH() {
+  if (selection) cancelSelection();
+  drawLayers.forEach(layer => {
+    if (layer.kind === 'draw') {
+      // 레이어별 undo 기록 (레이어마다 개별 되돌리기)
+      layer.history.push(layer.canvas.toDataURL());
+      if (layer.history.length > MAX_HIST) layer.history.shift();
+      layer.redoStack = [];
+    }
+    if (layer.kind === 'image' && layer._imageEl) {
+      // 이미지 레이어는 변환값을 미러링해 이후 이동/크기조절 때도 일관되게 유지
+      layer.offsetX = -(layer.offsetX || 0);
+      layer.rotate = -(layer.rotate || 0);
+      layer._flipH = !layer._flipH;
+      _redrawImageLayer(layer);
+      return;
+    }
+    const w = layer.canvas.width, h = layer.canvas.height;
+    const tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    tmp.getContext('2d').drawImage(layer.canvas, 0, 0);
+    const ctx = layer.canvas.getContext('2d');
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, w, h);
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(tmp, 0, 0);
+    ctx.restore();
+  });
+  _renderDrawLayersList();
+}
+
 /* ── 줌/팬 변환 적용 ── */
 function applyDrawTransform(){
   const stack=document.getElementById('drawCanvasStack');
   const ov=document.getElementById('selectionOverlay');
-  const t=`translate(${drawPanX}px,${drawPanY}px) scale(${drawZoom})`;
+  // 화면상 좌우반전: 캔버스 중심 기준 미러링 (저장/데이터는 그대로)
+  const flip = drawFlipView ? ` translate(${drawCanvasBaseW}px,0) scale(-1,1)` : '';
+  const t=`translate(${drawPanX}px,${drawPanY}px) scale(${drawZoom})${flip}`;
   if(stack) stack.style.transform=t;
   if(ov) ov.style.transform=t;
   // 줌 UI 갱신
@@ -5210,7 +5257,9 @@ function _getDrawLayerPos(canvas, e) {
   const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
   const cx = e.touches ? e.touches[0].clientX : e.clientX;
   const cy = e.touches ? e.touches[0].clientY : e.clientY;
-  return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
+  let x = (cx - rect.left) * sx;
+  if (drawFlipView && canvas.closest && canvas.closest('#drawCanvasStack')) x = canvas.width - x;
+  return { x, y: (cy - rect.top) * sy };
 }
 
 /* ── 호환용 래퍼 (기존 코드 경로) ── */
@@ -5801,7 +5850,7 @@ function setDrawTool(t,btn){
     cancelSelection();
   }
   drawTool=t;
-  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup')) b.classList.remove('active'); });
+  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup') && b.id!=='btnViewFlip') b.classList.remove('active'); });
   btn.classList.add('active');
   const sg=document.getElementById('selShapeGroup');
   if(sg) sg.style.display = t==='select' ? 'inline-flex' : 'none';
