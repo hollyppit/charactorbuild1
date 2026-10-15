@@ -165,45 +165,46 @@ export async function onRequest(context) {
     if (!rows.length) return json({ error: 'not_found' }, 404);
     if (rows[0].password_hash !== password_hash) return json({ error: 'wrong_password' }, 403);
 
-    // 썸네일 덮어쓰기
-    // 버전 파라미터를 URL에 포함해 CDN 캐시 우회
+    // 매 저장마다 새 경로(v{version}/)에 업로드한다.
+    //  - 덮어쓰기(upsert)는 Storage UPDATE 정책이 없으면 조용히 실패하고,
+    //    CDN 캐시 때문에 옛 파일이 보이기도 해서 유실처럼 보였음.
+    //  - 새 경로는 INSERT만 필요하고, 업로드가 전부 성공한 뒤에만 DB를 갱신하므로
+    //    중간에 실패해도 기존 저장본은 그대로 보존된다.
     const version = Date.now();
-    let thumbnail_url = null;
-    if (thumbnail) {
-      const binary = _b64ToBinary(thumbnail.split(',')[1]);
-      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/draw-saves/${id}/thumb.jpg`, {
+    const base = `${id}/v${version}`;
+    const upload = async (name, mime, dataUrl) => {
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/draw-saves/${base}/${name}`, {
         method: 'POST',
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
-        body: binary,
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': mime },
+        body: _b64ToBinary(dataUrl.split(',')[1]),
       });
-      if (r.ok) thumbnail_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/thumb.jpg?v=${version}`;
-    }
+      if (!r.ok) throw new Error(`storage_upload_failed(${name}): ${r.status} ${await r.text()}`);
+      return `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${base}/${name}`;
+    };
 
-    // 레이어 덮어쓰기
+    let thumbnail_url = null;
     const layers_meta = [];
-    for (let i = 0; i < layers.length; i++) {
-      const layer = layers[i];
-      let layer_url = null;
-      if (layer.data) {
+    try {
+      if (thumbnail) thumbnail_url = await upload('thumb.jpg', 'image/jpeg', thumbnail);
+      for (let i = 0; i < layers.length; i++) {
+        const layer = layers[i];
         const isPng = layer.kind === 'draw';
-        const ext = isPng ? 'png' : 'jpg';
-        const binary = _b64ToBinary(layer.data.split(',')[1]);
-        const r = await fetch(`${SUPABASE_URL}/storage/v1/object/draw-saves/${id}/layer_${i}.${ext}`, {
-          method: 'POST',
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': isPng ? 'image/png' : 'image/jpeg', 'x-upsert': 'true' },
-          body: binary,
+        if (!layer.data) throw new Error(`layer_data_missing(${i})`);
+        const layer_url = await upload(`layer_${i}.${isPng ? 'png' : 'jpg'}`, isPng ? 'image/png' : 'image/jpeg', layer.data);
+        layers_meta.push({
+          name: layer.name, kind: layer.kind, opacity: layer.opacity ?? 1,
+          visible: layer.visible ?? true, locked: layer.locked ?? false,
+          scale: layer.scale ?? 1, rotate: layer.rotate ?? 0,
+          offsetX: layer.offsetX ?? 0, offsetY: layer.offsetY ?? 0, url: layer_url,
         });
-        if (r.ok) layer_url = `${SUPABASE_URL}/storage/v1/object/public/draw-saves/${id}/layer_${i}.${ext}?v=${version}`;
       }
-      layers_meta.push({
-        name: layer.name, kind: layer.kind, opacity: layer.opacity ?? 1,
-        visible: layer.visible ?? true, locked: layer.locked ?? false,
-        scale: layer.scale ?? 1, rotate: layer.rotate ?? 0,
-        offsetX: layer.offsetX ?? 0, offsetY: layer.offsetY ?? 0, url: layer_url,
-      });
+    } catch (e) {
+      // DB는 건드리지 않음 → 기존 저장본 유지
+      return json({ error: String(e.message || e) }, 500);
     }
 
-    // DB 업데이트
+    // DB 업데이트 (모든 업로드 성공 후에만)
+    const oldMeta = Array.isArray(rows[0].layers_meta) ? rows[0].layers_meta : [];
     const dbRes = await sb(`/rest/v1/draw_saves?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { Prefer: 'return=representation' },
@@ -215,6 +216,18 @@ export async function onRequest(context) {
     });
 
     if (!dbRes.ok) return json({ error: await dbRes.text() }, 500);
+
+    // 이전 버전 파일 정리 (실패해도 무시)
+    const oldPaths = oldMeta.map(l => _storagePath(l.url)).filter(Boolean);
+    if (oldPaths.length) {
+      try {
+        await fetch(`${SUPABASE_URL}/storage/v1/object/draw-saves`, {
+          method: 'DELETE',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prefixes: oldPaths }),
+        });
+      } catch (_) {}
+    }
     return json({ success: true, id });
   }
 
@@ -247,6 +260,8 @@ export async function onRequest(context) {
       save.layers_meta.forEach((l, i) => {
         const ext = l.kind === 'draw' ? 'png' : 'jpg';
         filePaths.push(`${id}/layer_${i}.${ext}`);
+        const p = _storagePath(l.url);
+        if (p) filePaths.push(p);
       });
     }
     await fetch(`${SUPABASE_URL}/storage/v1/object/draw-saves`, {
@@ -266,6 +281,13 @@ export async function onRequest(context) {
   }
 
   return json({ error: 'method_not_allowed' }, 405);
+}
+
+// 공개 URL → 버킷 내부 경로 (쿼리스트링 제거)
+function _storagePath(url) {
+  if (!url) return null;
+  const m = String(url).match(/\/object\/public\/draw-saves\/([^?]+)/);
+  return m ? m[1] : null;
 }
 
 function _b64ToBinary(b64) {

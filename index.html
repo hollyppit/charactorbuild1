@@ -3732,6 +3732,10 @@ let drawCanvasRatioW = 210, drawCanvasRatioH = 297;
 let drawTemplatesCache = [];
 // 하위 호환을 위한 alias (다른 곳에서 drawCtx 참조 시 활성 레이어 컨텍스트 반환)
 let drawCtx = null;
+// 로컬 자동 저장(IndexedDB) 상태 — 구현은 파일 하단 "로컬 자동 저장" 섹션
+let _autosavePending = null;    // 시작 시 읽어 온 복원 대상 (첫 그림판 진입 때 소비)
+let _autosaveLoaded = false;    // 복원 데이터 확인 완료 전에는 저장하지 않음 (덮어쓰기 방지)
+let _autosaveDirty = false, _autosaveBusy = false;
 
 function _newDrawLayerId() { return 'dl_' + (++drawLayerCounter); }
 
@@ -3758,6 +3762,15 @@ function _escHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;',
 function initDrawCanvas() {
   const wrap = document.getElementById('drawCanvasWrap');
   if (!wrap) return;
+  // 자동 저장본이 있으면 첫 진입 때 캔버스 비율부터 복원
+  let restore = null;
+  if (drawLayers.length === 0 && _autosavePending) {
+    restore = _autosavePending; _autosavePending = null;
+    if (restore.ratioW && restore.ratioH) {
+      drawCanvasRatioW = restore.ratioW; drawCanvasRatioH = restore.ratioH;
+      _updateOrientationButtons();
+    }
+  }
   _applyCanvasRatio();
   const w = wrap.offsetWidth;
   // 캔버스 비율은 drawCanvasRatioW/H 로 결정 (기본: A4 세로 210:297)
@@ -3767,8 +3780,12 @@ function initDrawCanvas() {
 
   // 첫 진입 시: 잠금된 흰 배경 + 실제 그리기 레이어 생성
   if (drawLayers.length === 0) {
-    _createDrawLayer({ kind: 'draw', name: '흰 배경', _fillWhite: true, locked: true });
-    _createDrawLayer({ kind: 'draw', name: '레이어 1' });
+    if (restore) {
+      _restoreAutosaveLayers(restore);
+    } else {
+      _createDrawLayer({ kind: 'draw', name: '흰 배경', _fillWhite: true, locked: true });
+      _createDrawLayer({ kind: 'draw', name: '레이어 1' });
+    }
   }
 
   // 모든 레이어 크기 맞추기
@@ -7454,6 +7471,99 @@ async function init() {
   }
 }
 init();
+
+/* ═══════════════════════════════════════
+   로컬 자동 저장 (IndexedDB)
+   - 그리기 후 5초 이내 + 탭 숨김/닫힘 시 현재 레이어 전체를 브라우저에 저장
+   - 다음 방문 때 그림판에 처음 들어가면 자동 복원
+   - 클라우드 저장과 별개의 안전망 (이 브라우저에서만 유효)
+═══════════════════════════════════════ */
+const _AS_DB = 'mantra_draw_autosave', _AS_STORE = 'kv', _AS_KEY = 'current';
+
+function _asOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(_AS_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(_AS_STORE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function _asGet() {
+  const db = await _asOpen();
+  return new Promise((res, rej) => {
+    const q = db.transaction(_AS_STORE).objectStore(_AS_STORE).get(_AS_KEY);
+    q.onsuccess = () => { db.close(); res(q.result || null); };
+    q.onerror = () => { db.close(); rej(q.error); };
+  });
+}
+async function _asPut(v) {
+  const db = await _asOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(_AS_STORE, 'readwrite');
+    tx.objectStore(_AS_STORE).put(v, _AS_KEY);
+    tx.oncomplete = () => { db.close(); res(); };
+    tx.onerror = tx.onabort = () => { db.close(); rej(tx.error); };
+  });
+}
+
+async function _autosaveNow() {
+  if (!_autosaveLoaded || _autosaveBusy || !drawLayers.length || !drawCanvasBaseW) return;
+  _autosaveBusy = true; _autosaveDirty = false;
+  try {
+    const layers = [];
+    for (const l of drawLayers) {
+      const blob = await new Promise(r => l.canvas.toBlob(r, 'image/png'));
+      if (!blob) throw new Error('toBlob 실패');
+      layers.push({ name: l.name, kind: l.kind, opacity: l.opacity, visible: l.visible, locked: l.locked, blob });
+    }
+    const s = _drawSaveSession;
+    await _asPut({
+      v: 1, savedAt: Date.now(),
+      ratioW: drawCanvasRatioW, ratioH: drawCanvasRatioH,
+      session: s && s.id ? { id: s.id, name: s.name, password_hash: s.password_hash } : null,
+      layers,
+    });
+  } catch (e) {
+    _autosaveDirty = true; // 다음 주기에 재시도
+    console.warn('자동 저장 실패:', e);
+  } finally {
+    _autosaveBusy = false;
+  }
+}
+
+// 첫 그림판 진입 시 호출 — 레이어를 만들고 픽셀은 비동기로 채움
+function _restoreAutosaveLayers(rec) {
+  for (const m of rec.layers) {
+    const layer = _createDrawLayer({ kind: m.kind, name: m.name, opacity: m.opacity ?? 1, locked: !!m.locked });
+    layer.visible = m.visible ?? true;
+    createImageBitmap(m.blob).then(bmp => {
+      const ctx = layer.canvas.getContext('2d');
+      ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+      ctx.drawImage(bmp, 0, 0, layer.canvas.width, layer.canvas.height);
+      if (bmp.close) bmp.close();
+      _renderDrawLayersList();
+    }).catch(e => console.warn('자동 저장 레이어 복원 실패:', e));
+  }
+  if (rec.session && rec.session.id) {
+    _drawSaveSession = { id: rec.session.id, name: rec.session.name, pw: '', password_hash: rec.session.password_hash };
+    const btnQuick = document.getElementById('btnDrawQuickSave');
+    if (btnQuick) btnQuick.textContent = `🔄 ${rec.session.name}`;
+  }
+}
+
+(function initAutosave() {
+  if (!window.indexedDB) return;
+  const markDirty = () => { if (_autosaveLoaded) _autosaveDirty = true; };
+  ['pointerup', 'keyup', 'change', 'input'].forEach(t => document.addEventListener(t, markDirty, true));
+  setInterval(() => { if (_autosaveDirty) _autosaveNow(); }, 5000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && _autosaveDirty) _autosaveNow(); });
+  window.addEventListener('pagehide', () => { if (_autosaveDirty) _autosaveNow(); });
+  _asGet()
+    .then(rec => { if (rec && Array.isArray(rec.layers) && rec.layers.length) _autosavePending = rec; })
+    .catch(() => {})
+    .finally(() => { _autosaveLoaded = true; });
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}
+})();
 
 /* ═══════════════════════════════════════
    🎬 스토리보드
