@@ -1519,7 +1519,7 @@ body.easy-mode .t-save-btn{display:none}
           <div class="lc-row"><span class="lc-label">상하</span><input type="range" class="lc-slider" id="lcY" min="-200" max="100" value="0" oninput="onLcY()"><span class="lc-val" id="lcYVal">0</span></div>
           <div class="lc-row"><span class="lc-label">각도</span><input type="range" class="lc-slider" id="lcRotate" min="-180" max="180" value="0" oninput="onLcRotate()"><span class="lc-val" id="lcRotateVal">0°</span></div>
         </div>
-        <div class="lc-btns" style="margin-bottom:6px"><button class="lc-btn" id="lcBtnFlip" style="flex:1" onclick="toggleLayerFlip()">↔ 좌우반전</button></div>
+        <div class="lc-btns" style="margin-bottom:6px"><button class="lc-btn" id="lcBtnFlip" style="flex:1" onclick="toggleLayerFlip()">↔ 좌우반전</button><button class="lc-btn" id="lcBtnFlipV" style="flex:1" onclick="toggleLayerFlipV()">↕ 상하반전</button></div>
         <div class="lc-btns"><button class="lc-btn lc-btn-reset" onclick="resetLayerPos()">↺ 초기화</button><button class="lc-btn" id="lcBtnDelete" style="background:#E63946;color:#fff;display:none" onclick="deleteCurrentLayer()">🗑 삭제</button><button class="lc-btn lc-btn-save lc-admin-only" onclick="saveLayerPos()">✅ DB저장</button><button class="lc-btn lc-user-only" id="lcBtnDone" style="background:var(--blue);color:#fff" onclick="deselectLayer()">✓ 완료</button></div>
       </div>
     </div>
@@ -2884,8 +2884,9 @@ function applyLayer(layerId, src, catId, posKey) {
   const rot=pos.rotate||0;
   const zi=calcZIndex(layerId);
   el.src=src;
-  el.style.cssText=`display:block;width:${w}px;height:${h}px;position:absolute;left:${left}px;bottom:${bottom}px;object-fit:contain;object-position:bottom center;transform:rotate(${rot}deg)${pos.flip?' scaleX(-1)':''};transform-origin:center bottom;z-index:${zi};`;
+  el.style.cssText=`display:block;width:${w}px;height:${h}px;position:absolute;left:${left}px;bottom:${bottom}px;object-fit:contain;object-position:bottom center;transform:${layerTransform(el,pos,w,h)};transform-origin:center bottom;z-index:${zi};`;
   el.classList.add('visible');
+  el.onload=()=>{ if(pos.flipV) el.style.transform=layerTransform(el,pos,w,h); };
   el.onerror=()=>{el.style.display='none';el.classList.remove('visible');};
 }
 
@@ -3137,6 +3138,17 @@ function initStagePinch() {
     dragState = null;
   });
 }
+// 회전 + 좌우/상하 반전 transform (상하반전은 이미지 실제 표시 높이만큼 올려 제자리 유지)
+function layerTransform(el,pos,w,h){
+  let t='rotate('+(pos.rotate||0)+'deg)';
+  if(pos.flipV){
+    const nw=el.naturalWidth,nh=el.naturalHeight;
+    const rh=(nw&&nh)?Math.min(w/nw,h/nh)*nh:h;
+    t+=' translateY('+(-rh)+'px) scaleY(-1)';
+  }
+  if(pos.flip) t+=' scaleX(-1)';
+  return t;
+}
 function applyLayerLive(layerId, pos) {
   const el=document.getElementById('lyr-'+layerId); if(!el||el.style.display==='none') return;
   const stage=document.getElementById('stage');
@@ -3148,7 +3160,7 @@ function applyLayerLive(layerId, pos) {
   el.style.width=w+'px'; el.style.height=h+'px';
   el.style.left=((sw-w)/2+pos.offsetX)+'px';
   el.style.bottom=(-pos.offsetY)+'px';
-  el.style.transform='rotate('+(pos.rotate||0)+'deg)'+(pos.flip?' scaleX(-1)':'');
+  el.style.transform=layerTransform(el,pos,w,h);
   el.style.transformOrigin='center bottom';
   if(typeof updateTransformOverlay === 'function') updateTransformOverlay();
 }
@@ -3271,6 +3283,17 @@ function syncLCSliders(pos) {
   document.getElementById('lcRotateVal').textContent=(pos.rotate||0)+'°';
   const fb=document.getElementById('lcBtnFlip');
   if(fb){fb.style.background=pos.flip?'var(--blue)':'';fb.style.color=pos.flip?'#fff':'';}
+  const fv=document.getElementById('lcBtnFlipV');
+  if(fv){fv.style.background=pos.flipV?'var(--blue)':'';fv.style.color=pos.flipV?'#fff':'';}
+}
+function toggleLayerFlipV(){
+  if(!selLayer)return;
+  const {posKey}=layerToCatItem(selLayer);
+  const pos=getPos(posKey);
+  pos.flipV=!pos.flipV;
+  positions[posKey]=pos;
+  applyLayerLive(selLayer,pos);
+  syncLCSliders(pos);
 }
 function toggleLayerFlip(){
   if(!selLayer)return;
@@ -3676,6 +3699,7 @@ function exportDressup() {
         ctx.save();
         ctx.translate(pivotX,pivotY);
         ctx.rotate(rot);
+        if(pos.flipV){ ctx.translate(0,-rh); ctx.scale(1,-1); }
         if(pos.flip) ctx.scale(-1,1);
         ctx.drawImage(img,-boxW/2+rx,-boxH+ry,rw,rh);
         ctx.restore();
@@ -3722,6 +3746,7 @@ function captureDressupThumb(cb) {
         ctx.save();
         ctx.translate(pivotX,pivotY);
         ctx.rotate(rot);
+        if(pos.flipV){ ctx.translate(0,-rh); ctx.scale(1,-1); }
         if(pos.flip) ctx.scale(-1,1);
         ctx.drawImage(img,-boxW/2+rx,-boxH+ry,rw,rh);
         ctx.restore();
