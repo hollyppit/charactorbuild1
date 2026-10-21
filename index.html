@@ -1589,8 +1589,10 @@ body.easy-mode .t-save-btn{display:none}
     <!-- 툴바 -->
     <div class="draw-toolbar">
       <button class="tool-btn active" id="tool-pen"    onclick="setDrawTool('pen',this)">🖊️ 펜</button>
+      <button class="tool-btn"        id="tool-airbrush" onclick="setDrawTool('airbrush',this)" title="에어브러쉬 (부드럽게 번지는 스프레이, 오래 누르면 진해짐 · 굵기=범위)">💨 에어브러쉬</button>
       <button class="tool-btn"        id="tool-eraser" onclick="setDrawTool('eraser',this)">🧹 지우개</button>
-      <button class="tool-btn"        id="tool-fill"   onclick="setDrawTool('fill',this)">🪣 채우기</button>
+      <button class="tool-btn"        id="tool-bubble" onclick="setDrawTool('bubble',this)" title="말풍선 텍스트 (캔버스를 탭=말풍선 위치, 드래그=꼬리 방향)">💬 말풍선</button>
+      <button class="tool-btn"        id="tool-fill"  onclick="setDrawTool('fill',this)">🪣 채우기</button>
       <button class="tool-btn"        id="tool-blur"   onclick="setDrawTool('blur',this)" title="흐림 효과 (문지른 부분을 부드럽게, 굵기=범위)">🌫️ 흐림</button>
       <button class="tool-btn" onclick="openBlurAreaModal(false)" title="활성 레이어 전체를 흐리게">🌫️ 전체 흐림</button>
       <button class="tool-btn"        id="tool-liquify" onclick="setDrawTool('liquify',this)" title="픽셀 유동화 (밀기·확대·축소·소용돌이)">💧 유동화</button>
@@ -2271,6 +2273,37 @@ body.easy-mode .t-save-btn{display:none}
     <div style="font-family:var(--f-ui);font-size:10px;color:#888;line-height:1.5;margin-top:8px">⚠️ 크기를 바꾸면 캔버스 비율이 다시 맞춰져요. 그려둔 내용은 새 크기에 맞게 유지됩니다.</div>
     <div class="modal-btns" style="margin-top:12px">
       <button class="btn btn-purple" onclick="closeModal('canvasSizeModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 직접 그리기: 말풍선 텍스트 모달 ── -->
+<div class="modal-overlay" id="bubbleModal">
+  <div class="modal" style="max-width:400px">
+    <h2>💬 말풍선 텍스트</h2>
+    <textarea id="bubbleText" class="field-input" rows="3" maxlength="120" placeholder="말풍선에 들어갈 글을 입력하세요 (줄바꿈 가능)" style="width:100%;resize:vertical"></textarea>
+    <div style="font-family:var(--f-ui);font-size:11px;color:#999;margin:10px 2px 6px">말풍선 모양</div>
+    <div class="dl-add-btns" id="bubbleStyleBtns" style="justify-content:center">
+      <button class="dl-add-btn" data-bstyle="round" onclick="setBubbleStyle('round')">⭕ 둥근</button>
+      <button class="dl-add-btn" data-bstyle="rect" onclick="setBubbleStyle('rect')">⬜ 네모</button>
+      <button class="dl-add-btn" data-bstyle="cloud" onclick="setBubbleStyle('cloud')">☁️ 생각</button>
+      <button class="dl-add-btn" data-bstyle="shout" onclick="setBubbleStyle('shout')">💥 외침</button>
+    </div>
+    <div class="ps-row" style="gap:8px;align-items:center;margin-top:10px">
+      <span style="font-family:var(--f-ui);font-size:12px;color:#aaa">글자 크기</span>
+      <input type="range" id="bubbleSize" min="10" max="80" value="24" style="flex:1" oninput="document.getElementById('bubbleSizeVal').textContent=this.value+'px'">
+      <span id="bubbleSizeVal" style="font-family:var(--f-ui);font-size:12px;color:var(--c-yellow);min-width:36px">24px</span>
+    </div>
+    <div class="ps-row" style="gap:8px;align-items:center;margin-top:6px">
+      <span style="font-family:var(--f-ui);font-size:12px;color:#aaa">말풍선 색</span>
+      <input type="color" id="bubbleFill" value="#ffffff" style="width:30px;height:30px;padding:2px;border-radius:50%;cursor:pointer">
+      <span style="font-family:var(--f-ui);font-size:12px;color:#aaa;margin-left:10px">글자 색</span>
+      <input type="color" id="bubbleInk" value="#1a1a2e" style="width:30px;height:30px;padding:2px;border-radius:50%;cursor:pointer">
+    </div>
+    <div style="font-family:var(--f-ui);font-size:10px;color:#888;line-height:1.5;margin-top:8px">💡 캔버스를 탭하면 그 자리가 말풍선 중심, 드래그하면 놓은 곳이 꼬리 끝이 돼요. 현재 선택된 그리기 레이어에 그려져요.</div>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn btn-blue" onclick="applyBubble()">넣기</button>
+      <button class="btn btn-purple" onclick="cancelBubble()">취소</button>
     </div>
   </div>
 </div>
@@ -5594,10 +5627,21 @@ function _drawLayerPointerDown(e) {
     _renderDrawLayersList();
     return;
   }
+  // 말풍선: 탭=위치, 드래그=꼬리 방향 (손을 뗄 때 텍스트 입력 모달)
+  if (drawTool === 'bubble') {
+    _bubbleDrag = { layerId: layer.id, x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y };
+    if (e.pointerType === 'touch') _updateBrushCursor(e);
+    try { document.getElementById('drawCanvasWrap').setPointerCapture(e.pointerId); } catch (_) {}
+    return;
+  }
   saveDrawHistory();
   painting = true;
   lastX = pos.x; lastY = pos.y;
   if (e.pointerType === 'touch') _updateBrushCursor(e);
+  if (drawTool === 'airbrush') {
+    _airbrushStart(ctx, layer.canvas, pos, e.pressure);
+    return;
+  }
   if (drawTool === 'blur') {
     ctx.globalCompositeOperation = 'source-over';
     _blurDabAll(ctx, layer.canvas, pos.x, pos.y, _currentBrushWidth(e.pressure));
@@ -5636,7 +5680,7 @@ function _updateBrushCursor(e) {
   const c = document.getElementById('brushCursor'), wrap = document.getElementById('drawCanvasWrap');
   if (!c || !wrap) return;
   if (e.pointerType !== 'touch') _lastBrushPtr = { x: e.clientX, y: e.clientY };
-  const circleTool = drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'blur' || drawTool === 'liquify';
+  const circleTool = drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'airbrush' || drawTool === 'blur' || drawTool === 'liquify';
   // 터치는 호버가 없으므로 그리는 동안(painting)에만 손가락 위치에 표시
   if ((e.pointerType === 'touch' && (!painting || drawPinchState)) || !circleTool || selection ||
       wrap.classList.contains('pan-ready') || wrap.classList.contains('pan-active') ||
@@ -5664,7 +5708,7 @@ function _placeBrushCursor(cx, cy, bw) {
 // 굵기를 슬라이더/버튼으로 바꿀 때(특히 터치) 캔버스 중앙에 원을 잠깐 보여 크기를 가늠하게 함
 let _brushPreviewTimer = null;
 function _previewBrushSize() {
-  if (!(drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'blur' || drawTool === 'liquify')) return;
+  if (!(drawTool === 'pen' || drawTool === 'eraser' || drawTool === 'airbrush' || drawTool === 'blur' || drawTool === 'liquify')) return;
   const wrap = document.getElementById('drawCanvasWrap');
   if (!wrap || selection) return;
   const wr = wrap.getBoundingClientRect();
@@ -5729,14 +5773,28 @@ function _drawLayerPointerMove(e) {
     _floatingDragMove(e);
     return;
   }
+  // 말풍선 꼬리 방향 드래그
+  if (_bubbleDrag) {
+    const bl = drawLayers.find(l => l.id === _bubbleDrag.layerId);
+    if (!bl) { _bubbleDrag = null; return; }
+    e.preventDefault();
+    const bp = _getDrawLayerPos(bl.canvas, e);
+    _bubbleDrag.x1 = bp.x; _bubbleDrag.y1 = bp.y;
+    _drawBubbleGuide();
+    return;
+  }
   // 일반 그리기
   if (!painting) return;
   const layer = getActiveDrawLayer();
-  if (!layer || layer.kind !== 'draw') { painting = false; return; }
+  if (!layer || layer.kind !== 'draw') { painting = false; _airbrushStop(); return; }
   e.preventDefault();
   const ctx = layer.canvas.getContext('2d');
   const pos = _getDrawLayerPos(layer.canvas, e);
   const w = _currentBrushWidth(e.pressure);
+  if (drawTool === 'airbrush') {
+    _airbrushMove(ctx, layer.canvas, pos, e.pressure);
+    return;
+  }
   if (drawTool === 'blur') {
     // 이전 점 → 현재 점 사이를 일정 간격으로 채우며 흐림 적용
     const rad = _blurRadius(w);
@@ -5810,10 +5868,266 @@ function _drawLayerPointerEnd(e) {
     _floatingDragEnd();
     return;
   }
+  if (_bubbleDrag) {
+    try { document.getElementById('drawCanvasWrap').releasePointerCapture(e.pointerId); } catch (_) {}
+    _bubbleFinishDrag();
+    return;
+  }
   if (painting) {
     painting = false;
+    _airbrushStop();
     _renderDrawLayersList();
   }
+}
+
+/* ═══════════════════════════════════════
+   💨 에어브러쉬 — 부드러운 원형 그라데이션을 간격 두고 찍어 번지는 스프레이 표현
+   (굵기 = 지름, 필압 반영, 제자리에서 누르고 있으면 계속 진해짐, 대칭 그리기 지원)
+═══════════════════════════════════════ */
+let _airbrushTimer = null, _airbrushState = null;
+function _hexToRgb(hex) {
+  const h = String(hex || '#000').replace('#', '');
+  const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const n = parseInt(f, 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function _airbrushDab(ctx, W, H, x, y, w) {
+  const r = Math.max(1, w / 2);
+  const [R, G, B] = _hexToRgb(document.getElementById('colorPicker').value);
+  const flow = 0.14;   // 한 번 찍을 때의 농도 (겹칠수록 진해짐)
+  ctx.globalCompositeOperation = 'source-over';
+  _symPoints(x, y, W, H).forEach(p => {
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    g.addColorStop(0,    'rgba(' + R + ',' + G + ',' + B + ',' + flow + ')');
+    g.addColorStop(0.45, 'rgba(' + R + ',' + G + ',' + B + ',' + (flow * 0.6) + ')');
+    g.addColorStop(1,    'rgba(' + R + ',' + G + ',' + B + ',0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+  });
+}
+function _airbrushStart(ctx, canvas, pos, pressure) {
+  _airbrushStop();
+  const w = _currentBrushWidth(pressure);
+  _airbrushState = { ctx, canvas, x: pos.x, y: pos.y, w };
+  _airbrushDab(ctx, canvas.width, canvas.height, pos.x, pos.y, w);
+  // 멈춰 있는 동안에도 계속 분사
+  _airbrushTimer = setInterval(() => {
+    const s = _airbrushState;
+    if (!s || !painting) { _airbrushStop(); return; }
+    _airbrushDab(s.ctx, s.canvas.width, s.canvas.height, s.x, s.y, s.w);
+  }, 60);
+}
+function _airbrushMove(ctx, canvas, pos, pressure) {
+  const w = _currentBrushWidth(pressure);
+  const step = Math.max(1, w * 0.15);
+  const dist = Math.hypot(pos.x - lastX, pos.y - lastY);
+  const n = Math.floor(dist / step);
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    _airbrushDab(ctx, canvas.width, canvas.height, lastX + (pos.x - lastX) * t, lastY + (pos.y - lastY) * t, w);
+  }
+  if (n > 0) { lastX = pos.x; lastY = pos.y; }
+  if (_airbrushState) { _airbrushState.x = pos.x; _airbrushState.y = pos.y; _airbrushState.w = w; }
+}
+function _airbrushStop() {
+  if (_airbrushTimer) { clearInterval(_airbrushTimer); _airbrushTimer = null; }
+  _airbrushState = null;
+}
+
+/* ═══════════════════════════════════════
+   💬 말풍선 텍스트 — 탭/드래그로 위치·꼬리 지정 → 모달에서 글·모양 입력 → 활성 그리기 레이어에 합성
+═══════════════════════════════════════ */
+let _bubbleDrag = null;        // 드래그 중 {layerId, x0,y0, x1,y1}
+let _bubblePending = null;     // 모달 입력 대기 {layerId, cx, cy, tx, ty, hasTail}
+let bubbleStyle = 'round';
+
+function _clearBubbleGuide() {
+  if (_selOverlayCtx) _selOverlayCtx.clearRect(0, 0, _selOverlayCtx.canvas.width, _selOverlayCtx.canvas.height);
+}
+function _drawBubbleGuide() {
+  if (!_selOverlayCtx || !_bubbleDrag) return;
+  const c = _selOverlayCtx, d = _bubbleDrag;
+  _clearBubbleGuide();
+  c.save();
+  c.strokeStyle = '#FF6B9D'; c.fillStyle = '#FF6B9D'; c.lineWidth = 2; c.setLineDash([6, 4]);
+  c.beginPath(); c.moveTo(d.x0, d.y0); c.lineTo(d.x1, d.y1); c.stroke();
+  c.setLineDash([]);
+  c.beginPath(); c.arc(d.x0, d.y0, 5, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(d.x1, d.y1, 4, 0, Math.PI * 2); c.stroke();
+  c.restore();
+}
+function _bubbleFinishDrag() {
+  const d = _bubbleDrag; _bubbleDrag = null;
+  _clearBubbleGuide();
+  if (!d) return;
+  const hasTail = Math.hypot(d.x1 - d.x0, d.y1 - d.y0) > 20;
+  _bubblePending = { layerId: d.layerId, cx: d.x0, cy: d.y0, tx: d.x1, ty: d.y1, hasTail };
+  setBubbleStyle(bubbleStyle);
+  const ta = document.getElementById('bubbleText');
+  ta.value = '';
+  openModal('bubbleModal');
+  setTimeout(() => { try { ta.focus(); } catch (_) {} }, 50);
+}
+function setBubbleStyle(s) {
+  bubbleStyle = s;
+  document.querySelectorAll('#bubbleStyleBtns .dl-add-btn').forEach(b => {
+    const on = b.dataset.bstyle === s;
+    b.style.outline = on ? '2px solid var(--c-yellow)' : '';
+  });
+}
+function cancelBubble() {
+  _bubblePending = null;
+  closeModal('bubbleModal');
+}
+function applyBubble() {
+  const p = _bubblePending;
+  const text = document.getElementById('bubbleText').value.replace(/\s+$/g, '');
+  if (!p) { closeModal('bubbleModal'); return; }
+  if (!text.trim()) { alert('말풍선에 넣을 글을 입력해 주세요.'); return; }
+  const layer = drawLayers.find(l => l.id === p.layerId);
+  if (!layer || layer.kind !== 'draw' || layer.locked) {
+    _bubblePending = null; closeModal('bubbleModal');
+    alert('말풍선을 그릴 레이어를 찾을 수 없어요. 그리기 레이어를 선택 후 다시 시도해 주세요.');
+    return;
+  }
+  // 되돌리기는 활성 레이어 기준이므로 대상 레이어를 활성으로 맞춘 뒤 기록
+  activeDrawLayerId = layer.id;
+  saveDrawHistory();
+  drawSpeechBubble(layer.canvas.getContext('2d'), {
+    text, style: bubbleStyle,
+    cx: p.cx, cy: p.cy, tx: p.tx, ty: p.ty, hasTail: p.hasTail,
+    fontSize: Number(document.getElementById('bubbleSize').value) || 24,
+    fill: document.getElementById('bubbleFill').value,
+    ink: document.getElementById('bubbleInk').value,
+    maxW: layer.canvas.width
+  });
+  _bubblePending = null;
+  closeModal('bubbleModal');
+  _renderDrawLayersList();
+}
+
+// 텍스트를 maxLineW 안에서 줄바꿈 (공백 없는 한글도 글자 단위로 끊음)
+function _wrapBubbleText(ctx, text, maxLineW) {
+  const lines = [];
+  text.split('\n').forEach(para => {
+    if (!para) { lines.push(''); return; }
+    let cur = '';
+    for (const ch of Array.from(para)) {
+      if (cur && ctx.measureText(cur + ch).width > maxLineW) { lines.push(cur); cur = ch.trim() === '' ? '' : ch; }
+      else cur += ch;
+    }
+    lines.push(cur);
+  });
+  return lines;
+}
+
+function drawSpeechBubble(ctx, o) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  const fs = o.fontSize;
+  ctx.font = '700 ' + fs + 'px "Jua","Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif';
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  const lh = fs * 1.3;
+  const lines = _wrapBubbleText(ctx, o.text, Math.max(fs * 4, o.maxW * 0.5));
+  const textW = Math.max(fs, ...lines.map(l => ctx.measureText(l).width));
+  const textH = lines.length * lh;
+  const pad = fs * 0.7;
+  const lw = Math.max(2, fs * 0.12);
+  // 텍스트 사각형 + 여백을 감싸는 반축 (둥근 모양은 사각형이 타원에 내접하도록 √2 배)
+  let hw = textW / 2 + pad, hh = textH / 2 + pad;
+  const k = (o.style === 'round' || o.style === 'cloud' || o.style === 'shout') ? Math.SQRT2 : 1;
+  hw *= k; hh *= k;
+  if (o.style === 'shout') { hw *= 1.08; hh *= 1.08; }
+  const cx = o.cx, cy = o.cy;
+
+  ctx.fillStyle = o.fill; ctx.strokeStyle = o.ink; ctx.lineWidth = lw;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+
+  // 꼬리 방향 (드래그 안 했으면 아래쪽 왼편으로 기본 꼬리)
+  let tx = o.tx, ty = o.ty;
+  if (!o.hasTail) { tx = cx - hw * 0.35; ty = cy + hh + fs * 1.1; }
+  let dx = tx - cx, dy = ty - cy;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  // 중심에서 tip 방향으로 본 도형 경계까지의 거리
+  let bt;
+  if (o.style === 'rect') bt = Math.min(hw / (Math.abs(ux) || 1e-6), hh / (Math.abs(uy) || 1e-6));
+  else bt = 1 / Math.sqrt((ux / hw) * (ux / hw) + (uy / hh) * (uy / hh));
+
+  const shapePath = () => {
+    ctx.beginPath();
+    if (o.style === 'rect') {
+      const r = Math.min(fs * 0.6, hw, hh);
+      ctx.moveTo(cx - hw + r, cy - hh);
+      ctx.arcTo(cx + hw, cy - hh, cx + hw, cy + hh, r);
+      ctx.arcTo(cx + hw, cy + hh, cx - hw, cy + hh, r);
+      ctx.arcTo(cx - hw, cy + hh, cx - hw, cy - hh, r);
+      ctx.arcTo(cx - hw, cy - hh, cx + hw, cy - hh, r);
+      ctx.closePath();
+    } else if (o.style === 'cloud') {
+      const n = Math.max(8, Math.round((hw + hh) / (fs * 0.9)));
+      const pt = (a, s) => [cx + Math.cos(a) * hw * s, cy + Math.sin(a) * hh * s];
+      ctx.moveTo(...pt(0, 1));
+      for (let i = 0; i < n; i++) {
+        const a1 = (i + 0.5) / n * Math.PI * 2, a2 = (i + 1) / n * Math.PI * 2;
+        const c = pt(a1, 1.18), e = pt(a2, 1);
+        ctx.quadraticCurveTo(c[0], c[1], e[0], e[1]);
+      }
+      ctx.closePath();
+    } else if (o.style === 'shout') {
+      const n = Math.max(14, Math.round((hw + hh) / (fs * 0.55)));
+      for (let i = 0; i < n * 2; i++) {
+        const a = i / (n * 2) * Math.PI * 2 + (i % 2 ? 0.03 : 0);
+        const s = i % 2 ? 0.9 : 1.2;
+        const x = cx + Math.cos(a) * hw * s, y = cy + Math.sin(a) * hh * s;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+    } else {
+      ctx.ellipse(cx, cy, hw, hh, 0, 0, Math.PI * 2);
+    }
+  };
+
+  // 외침 모양은 가시 때문에 경계가 바깥쪽이라 꼬리 시작점을 살짝 바깥으로 보정
+  const bd = bt * (o.style === 'shout' ? 1.05 : 1);
+  const tailVis = len > bd + 4;
+
+  if (o.style === 'cloud') {
+    shapePath(); ctx.fill(); ctx.stroke();
+    if (tailVis) {
+      // 생각 말풍선: 점점 작아지는 동그라미 꼬리
+      const start = bd * 1.18, total = Math.max(0, len - start);
+      const sizes = [fs * 0.5, fs * 0.34, fs * 0.22];
+      sizes.forEach((r, i) => {
+        const t = (i + 0.5) / sizes.length;
+        const px = cx + ux * (start + total * t * 0.95), py = cy + uy * (start + total * t * 0.95);
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      });
+    }
+  } else {
+    shapePath(); ctx.fill(); ctx.stroke();
+    if (tailVis) {
+      // 말꼬리: 도형 경계에서 뻗는 삼각형. 안쪽을 채워 경계선을 덮고, 바깥 두 변만 선으로 그림
+      const bh = Math.min(fs * 0.7, Math.min(hw, hh) * 0.5);
+      const px = -uy, py = ux;
+      const bx = cx + ux * bd, by = cy + uy * bd;
+      const p1 = [bx + px * bh, by + py * bh], p2 = [bx - px * bh, by - py * bh];
+      const back = bh * 1.6;
+      const q1 = [p1[0] - ux * back, p1[1] - uy * back], q2 = [p2[0] - ux * back, p2[1] - uy * back];
+      ctx.beginPath();
+      ctx.moveTo(...q1); ctx.lineTo(...p1); ctx.lineTo(tx, ty); ctx.lineTo(...p2); ctx.lineTo(...q2); ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(...p1); ctx.lineTo(tx, ty); ctx.lineTo(...p2);
+      ctx.stroke();
+    }
+  }
+
+  // 글자
+  ctx.fillStyle = o.ink;
+  lines.forEach((l, i) => ctx.fillText(l, cx, cy - textH / 2 + lh * (i + 0.5)));
+  ctx.restore();
 }
 
 function _getDrawLayerPos(canvas, e) {
