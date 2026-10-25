@@ -1301,6 +1301,95 @@ body.easy-mode .t-save-btn{display:none}
   background: #0A0A0A;
   transition: width 2.7s linear;
 }
+
+/* ══════════════════════════════
+   스토리 만들기
+══════════════════════════════ */
+.st-wrap{width:100%;max-width:820px;display:flex;flex-direction:column;gap:12px;padding-bottom:90px}
+.st-seg{display:flex;border:var(--border-thin);background:var(--c-black)}
+.st-seg button{flex:1;padding:11px 6px;font-family:var(--f-display-kr);font-size:14px;color:#777;background:none;border:none;cursor:pointer;word-break:keep-all}
+.st-seg button.active{background:var(--c-yellow);color:var(--c-black)}
+.st-head{display:flex;gap:14px;align-items:center;background:var(--c-card);border:2px solid var(--c-purple);box-shadow:var(--shadow-purple);padding:12px}
+.st-ref{width:96px;height:96px;flex:none;border:3px dashed var(--c-yellow);background:#120009;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;text-align:center;font-size:11px;color:var(--muted);line-height:1.4}
+.st-ref img{width:100%;height:100%;object-fit:cover}
+.st-ref-t{font-family:var(--f-display-kr);color:var(--c-yellow);font-size:16px}
+.st-ref-s{font-size:12px;color:#aaa;line-height:1.6;margin-top:4px;word-break:keep-all}
+.st-mini{background:var(--c-black);color:#ccc;border:1px solid #555;font-size:11px;padding:4px 9px;cursor:pointer;font-family:var(--f-ui);margin-top:6px;margin-right:4px}
+.st-mini:hover{border-color:var(--c-yellow);color:var(--c-yellow)}
+.st-field{display:flex;flex-direction:column;gap:5px}
+.st-field label{font-family:var(--f-display-kr);font-size:13px;color:var(--c-yellow)}
+.st-input,.st-ta,.st-select{width:100%;background:var(--c-card);color:var(--c-white);border:2px solid var(--c-purple);padding:10px 12px;font-family:var(--f-ui);font-size:14px;outline:none;font-weight:600}
+.st-input:focus,.st-ta:focus,.st-select:focus{border-color:var(--c-yellow);background:#2d0020}
+.st-ta{resize:vertical;min-height:70px;line-height:1.6;font-family:'Nanum Gothic',var(--f-ui)}
+.st-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--c-black);border:2px solid #333;padding:10px}
+.st-toolbar .btn{font-family:var(--f-display-kr);font-size:13px;text-transform:none;padding:9px 12px}
+.st-sizes{display:flex;align-items:center;gap:4px;margin-left:auto;flex-wrap:wrap}
+.st-sizes span{font-size:12px;color:#aaa;margin-right:2px}
+.st-sizes button{background:var(--c-card);color:#bbb;border:2px solid #444;padding:6px 9px;font-size:12px;cursor:pointer;font-family:var(--f-ui);font-weight:700}
+.st-sizes button.active{background:var(--c-yellow);color:var(--c-black);border-color:var(--c-black)}
+.st-sizes .st-select{width:auto;padding:6px 8px;font-size:12px}
+.st-prog{display:none;background:#120009;border:2px solid var(--c-purple);padding:8px 12px;font-size:12px;color:var(--c-yellow);font-weight:700}
+.st-prog.show{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.st-prog-bar{flex:1;min-width:120px;height:8px;background:#333}
+.st-prog-bar i{display:block;height:100%;width:0;background:var(--c-yellow);transition:width .3s}
+.st-sec{font-family:var(--f-display-kr);font-size:17px;color:var(--c-yellow);margin-top:6px;text-shadow:2px 2px 0 var(--c-purple)}
+.st-card{background:var(--c-card);border:2px solid var(--c-purple);box-shadow:var(--shadow-purple);padding:12px;display:flex;flex-direction:column;gap:9px}
+.st-q{border:2px solid var(--c-white);padding:10px 12px;background:#0a0a0a}
+.st-tag{display:inline-block;background:var(--c-yellow);color:var(--c-black);font-size:11px;font-weight:700;padding:1px 7px;margin-bottom:5px}
+.st-qt{font-family:var(--f-display-kr);font-size:15px;line-height:1.5;word-break:keep-all}
+.st-tip{font-size:12px;color:#999;line-height:1.6;margin-top:4px;word-break:keep-all}
+.st-row{display:flex;gap:9px;align-items:stretch}
+.st-no{width:42px;flex:none;border:2px solid var(--c-yellow);color:var(--c-yellow);display:flex;align-items:center;justify-content:center;font-family:var(--f-display-en);font-size:22px}
+.st-act{display:flex;flex-wrap:wrap;gap:6px}
+.st-act button{background:var(--c-black);color:var(--c-white);border:2px solid #555;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--f-ui)}
+.st-act button:hover:not(:disabled){border-color:var(--c-yellow);color:var(--c-yellow)}
+.st-act button:disabled{opacity:.4;cursor:not-allowed}
+.st-act .primary{background:var(--c-purple);border-color:var(--c-black)}
+.st-hints{display:flex;flex-direction:column;gap:6px}
+.st-hint{text-align:left;background:#1d0030;border:1px dashed var(--c-purple);color:#e8d4ff;padding:8px 10px;font-size:13px;line-height:1.55;cursor:pointer;font-family:'Nanum Gothic',var(--f-ui);word-break:keep-all}
+.st-hint:hover{border-style:solid;color:var(--c-yellow)}
+.st-chips{display:flex;flex-wrap:wrap;gap:5px}
+.st-chip{background:var(--c-black);color:#ddd;border:1px solid var(--c-purple);padding:4px 9px;font-size:12px;cursor:pointer;font-family:var(--f-ui)}
+.st-chip.on,.st-chip:hover{background:var(--c-yellow);color:var(--c-black)}
+.st-img{container-type:inline-size;width:100%;border:2px solid #444;background:#120009;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#666;font-size:13px;text-align:center}
+.st-img img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.st-spin{position:absolute;inset:0;background:rgba(0,0,0,.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--c-yellow);font-weight:700;font-size:13px}
+.st-spin::before{content:'';width:30px;height:30px;border:4px solid #444;border-top-color:var(--c-yellow);border-radius:50%;animation:stspin .8s linear infinite}
+@keyframes stspin{to{transform:rotate(360deg)}}
+.st-err{color:#ff7b86;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+.st-edit{display:flex;gap:6px;flex-wrap:wrap}
+.st-edit .st-input{flex:1;min-width:160px;padding:8px 10px;font-size:13px}
+.st-export{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;background:var(--c-card);border:2px solid var(--c-yellow);padding:14px}
+.st-export .btn{font-family:var(--f-display-kr);font-size:14px;text-transform:none}
+.st-fab{display:none;position:fixed;right:14px;bottom:18px;z-index:300;background:var(--c-yellow);color:var(--c-black);border:3px solid var(--c-black);box-shadow:var(--shadow-solid-sm);padding:12px 16px;font-family:var(--f-display-kr);font-size:14px;cursor:pointer}
+body.st-active .st-fab{display:block}
+#storyPreviewModal{align-items:flex-start}
+.st-pv{margin:auto 0;width:100%;max-width:900px;display:flex;flex-direction:column;gap:10px;align-items:center}
+.st-pv-top{width:100%;display:flex;justify-content:space-between;align-items:center;color:var(--c-yellow);font-family:var(--f-display-kr);font-size:15px}
+.st-pv-top button{background:var(--c-black);color:#fff;border:2px solid #666;font-size:16px;padding:4px 12px;cursor:pointer}
+.st-pv-stage{display:flex;align-items:center;gap:8px;width:100%;justify-content:center}
+.st-pv-nav{background:var(--c-yellow);color:var(--c-black);border:2px solid var(--c-black);font-size:18px;width:40px;height:56px;flex:none;cursor:pointer}
+.st-pv-page{container-type:inline-size;position:relative;aspect-ratio:var(--ar,4/3);width:min(calc(100vw - 120px),calc(56vh * var(--arn,1.3333)));background:#fffaf0;color:#222;display:flex;flex-direction:column;box-shadow:0 0 0 4px var(--c-black),8px 8px 0 4px var(--c-purple);overflow:hidden;user-select:none}
+.st-pv-img{flex:1;background:#eadfc8;display:flex;align-items:center;justify-content:center;color:#a39a86;font-size:3.2cqw;overflow:hidden;text-align:center}
+.st-pv-img img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+.st-pv-img.cover img{object-fit:contain;width:auto;height:70%}
+.st-pv-txt{font-family:'Gowun Dodum','Nanum Gothic',sans-serif;line-height:1.5;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;word-break:keep-all;text-align:center}
+.st-pv-cover{font-family:'Black Han Sans',sans-serif;font-size:7cqw;padding:2cqw 6cqw;flex:0 0 auto;text-align:center;white-space:pre-wrap}
+/* 장면 글자 오버레이 (미리보기=드래그, 카드=표시 전용). 크기·테두리는 페이지 너비(cqw) 기준 → 캔버스 내보내기와 동일 비율 */
+.st-ov{position:absolute;width:max-content;max-width:86cqw;line-height:1.4;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;word-break:keep-all;paint-order:stroke fill;stroke-linejoin:round;pointer-events:none;transform:translate(-50%,-50%)}
+.st-ov.drag{pointer-events:auto;cursor:move;touch-action:none;outline:2px dashed rgba(251,234,26,.9);outline-offset:.8cqw}
+.st-pvc{width:100%;max-width:900px;background:var(--c-card);border:2px solid var(--c-purple);padding:10px;display:flex;flex-direction:column;gap:8px}
+.st-pvc-row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12px;color:#ccc}
+.st-pvc-row label{display:flex;align-items:center;gap:5px;font-weight:700}
+.st-pvc input[type=range]{accent-color:var(--c-yellow);width:110px}
+.st-pvc input[type=color]{width:34px;height:26px;padding:0;border:2px solid #555;background:none}
+.st-pvc .st-select{width:auto;padding:5px 8px;font-size:12px}
+.st-pvc .st-ta{min-height:44px;font-size:13px}
+.st-pvc .st-hintline{font-size:11px;color:#999}
+.st-pv-dots{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.st-pv-dots i{width:10px;height:10px;border-radius:50%;background:#555;cursor:pointer}
+.st-pv-dots i.on{background:var(--c-yellow)}
+@media(max-width:560px){.st-sizes{margin-left:0}.st-head{align-items:flex-start}}
 </style>
 
 <script>
@@ -1468,6 +1557,7 @@ body.easy-mode .t-save-btn{display:none}
   <button class="mode-tab active" onclick="switchMode('dressup',this)">👗 캐릭터 꾸미기</button>
   <button class="mode-tab" onclick="switchMode('draw',this)">✏️ 직접 그리기</button>
   <button class="mode-tab" onclick="switchMode('storyboard',this)">🎬 스토리보드</button>
+  <button class="mode-tab" onclick="switchMode('story',this)">📖 스토리 만들기</button>
   <button class="mode-tab" onclick="switchMode('quiz',this)">🧠 이미지 상식 퀴즈</button>
   <button class="mode-tab" onclick="switchMode('dub',this)">📚 그림책 더빙</button>
 </div>
@@ -1830,6 +1920,108 @@ body.easy-mode .t-save-btn{display:none}
   </div>
 </div>
 
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     스토리 만들기 패널
+══════════════════════════════ -->
+<div class="mode-panel" id="panel-story">
+<div class="st-wrap">
+  <div class="st-seg">
+    <button id="stModeShort" class="active" onclick="storySetMode('short')">📄 단편 만들기</button>
+    <button id="stModeLong" onclick="storySetMode('long')">📚 장편 만들기</button>
+  </div>
+
+  <!-- 캐릭터 일관성 레퍼런스 -->
+  <div class="st-head">
+    <div class="st-ref" id="stRefBox" onclick="document.getElementById('stRefInput').click()" style="cursor:pointer"></div>
+    <input type="file" id="stRefInput" accept="image/*" style="display:none" onchange="storyLoadRef(this)">
+    <div>
+      <div class="st-ref-t">캐릭터 일관성 레퍼런스</div>
+      <div class="st-ref-s">주인공 그림을 올리면 모든 장면에서 같은 모습으로 그려요.</div>
+      <button class="st-mini" onclick="document.getElementById('stRefInput').click()">🖼️ 이미지 올리기</button><button class="st-mini" id="stRefClear" onclick="storyClearRef()" style="display:none">🗑 지우기</button>
+    </div>
+  </div>
+
+  <div class="st-field">
+    <label for="stTitle">작품 제목</label>
+    <input class="st-input" id="stTitle" maxlength="40" placeholder="작품 제목 입력" oninput="storyField('title',this.value)">
+  </div>
+  <div class="st-field">
+    <label for="stLogline">로그라인 <span style="color:#999;font-weight:400">— 전체 이야기를 한 문장으로</span></label>
+    <textarea class="st-ta" id="stLogline" rows="2" maxlength="300" placeholder="예) 겁쟁이 토끼가 사라진 달을 찾아 숲속 모험을 떠나지만, 달을 훔친 건 가장 친한 친구였다." oninput="storyField('logline',this.value)"></textarea>
+    <div class="st-act"><button onclick="storyHint('logline',0)">💡 로그라인 AI 제안</button></div>
+    <div class="st-hints" id="stLoglineHints"></div>
+  </div>
+
+  <div class="st-toolbar">
+    <button class="btn btn-pink" onclick="storyPolishAll()">✨ AI로 대본 다듬기</button>
+    <button class="btn btn-purple" onclick="storyGenAll()">🎨 장면 일괄 생성하기</button>
+    <button class="btn btn-gray" onclick="storyOpenPreview(0)">👁 미리보기</button>
+    <div class="st-sizes">
+      <span>📐 그림책 사이즈</span>
+      <button data-asp="4:3" onclick="storySetAspect('4:3')">가로 4:3</button>
+      <button data-asp="3:4" onclick="storySetAspect('3:4')">세로 3:4</button>
+      <button data-asp="1:1" onclick="storySetAspect('1:1')">정사각</button>
+      <select class="st-select" id="stStyle" onchange="storyField('style',this.value)">
+        <option value="storybook">동화 수채화</option>
+        <option value="anime">애니메이션</option>
+        <option value="3d">3D 캐릭터</option>
+        <option value="crayon">크레용 낙서</option>
+        <option value="flat">플랫 일러스트</option>
+      </select>
+    </div>
+  </div>
+  <div class="st-prog" id="stProg"><span id="stProgTxt"></span><div class="st-prog-bar"><i id="stProgBar"></i></div><button class="st-mini" id="stCancel" onclick="storyCancel()" style="margin:0">⏹ 중지</button></div>
+
+  <div id="stBody"></div>
+
+  <div class="st-export">
+    <div style="width:100%;text-align:center;font-family:var(--f-display-kr);color:var(--c-yellow);font-size:15px">📤 그림책 내보내기</div>
+    <button class="btn btn-gray" id="stImgBtn" onclick="storyExportImages()">🖼️ 장면별 이미지 내보내기</button>
+    <button class="btn btn-purple" id="stPdfBtn" onclick="storyExportPDF()">📄 PDF 내보내기</button>
+    <button class="btn btn-pink" id="stMp4Btn" onclick="storyExportVideo()">🎞️ MP4 영상 내보내기</button>
+    <div class="st-prog" id="stExpProg" style="width:100%"><span id="stExpTxt"></span><div class="st-prog-bar"><i id="stExpBar"></i></div></div>
+  </div>
+</div>
+</div>
+
+<button class="st-fab" id="stFab" onclick="storyOpenPreview(0)">👁 미리보기</button>
+
+<div class="modal-overlay" id="storyPreviewModal">
+  <div class="st-pv">
+    <div class="st-pv-top"><span id="stPvLabel"></span><button onclick="closeModal('storyPreviewModal')">✕</button></div>
+    <div class="st-pv-stage">
+      <button class="st-pv-nav" onclick="storyPvGo(-1)">◀</button>
+      <div class="st-pv-page" id="stPvPage"></div>
+      <button class="st-pv-nav" onclick="storyPvGo(1)">▶</button>
+    </div>
+    <div class="st-pv-dots" id="stPvDots"></div>
+    <div class="st-pvc" id="stPvCtl">
+      <textarea class="st-ta" id="stPvText" rows="2" placeholder="이 장면의 글 (그림 위에 표시돼요)" oninput="storyPvText(this.value)"></textarea>
+      <div class="st-pvc-row">
+        <label>글꼴
+          <select class="st-select" id="stPvFont" onchange="storyPvStyle('font',this.value)">
+            <option value="Gowun Dodum">고운돋움</option>
+            <option value="Nanum Gothic">나눔고딕</option>
+            <option value="Black Han Sans">검은고딕</option>
+            <option value="Nanum Pen Script">나눔손글씨 펜</option>
+            <option value="Permanent Marker">Marker (영문)</option>
+          </select></label>
+        <label>크기 <input type="range" id="stPvSize" min="2" max="12" step="0.2" oninput="storyPvStyle('size',+this.value)"></label>
+        <label>글자색 <input type="color" id="stPvColor" oninput="storyPvStyle('color',this.value)"></label>
+        <label>테두리색 <input type="color" id="stPvStroke" oninput="storyPvStyle('stroke',this.value)"></label>
+        <label>테두리 굵기 <input type="range" id="stPvSw" min="0" max="60" step="1" oninput="storyPvStyle('sw',+this.value)"></label>
+        <label><input type="checkbox" id="stPvBold" onchange="storyPvStyle('bold',this.checked)"> 굵게</label>
+      </div>
+      <div class="st-act">
+        <button onclick="storyPvResetPos()">↺ 위치 초기화</button>
+        <button onclick="storyPvApplyAll()">📋 이 스타일을 모든 장면에 적용</button>
+        <button onclick="storySaveScene(stS.pv - 1)">💾 이 장면 이미지 저장</button>
+      </div>
+      <div class="st-hintline">💡 글자를 손가락/마우스로 끌어서 위치를 옮기세요. 그림은 [장면 생성]으로 바꿀 수 있어요.</div>
+    </div>
   </div>
 </div>
 
@@ -2838,14 +3030,16 @@ function switchMode(mode, btn) {
   if(mode==='storyboard') setTimeout(initSBCanvas, 50);
   if(mode==='quiz') setTimeout(initQuizPanel, 50);
   if(mode==='dub') setTimeout(initDubPanel, 50);
-  // 모바일 하단 바: 스토리보드/퀴즈/더빙은 자체 버튼 사용
+  if(mode==='story') setTimeout(initStoryPanel, 50);
+  document.body.classList.toggle('st-active', mode==='story');
+  // 모바일 하단 바: 스토리보드/퀴즈/더빙/스토리는 자체 버튼 사용
   const mobileBar = document.getElementById('mobileAiBar');
   if(mobileBar){
-    mobileBar.style.display = (mode==='storyboard' || mode==='quiz' || mode==='dub') ? 'none' : '';
+    mobileBar.style.display = (mode==='storyboard' || mode==='quiz' || mode==='dub' || mode==='story') ? 'none' : '';
     // 다른 모드 진입 시 드레스업 레이어 선택 상태로 숨겨졌던 transform 초기화
     mobileBar.style.transform = '';
   }
-  if(mode!=='storyboard' && mode!=='quiz' && mode!=='dub') syncMobileStyleBtns(aiStyle[mode]);
+  if(mode!=='storyboard' && mode!=='quiz' && mode!=='dub' && mode!=='story') syncMobileStyleBtns(aiStyle[mode]);
 }
 
 /* ═══════════════════════════════════════
@@ -7342,6 +7536,7 @@ function _submitAIPw() {
     _pendingAIMode = null;
     _aiSessionVerified = true;  // doAI/doStoryboard 한 번만 통과시키는 일회용 플래그
     if (mode === 'storyboard') doStoryboard();
+    else if (mode === 'story') { const f = _stPendingFn; _stPendingFn = null; if (f) f(); }
     else doAI(mode);
   }
 }
@@ -9783,6 +9978,858 @@ async function dubExportVideo() {
     // DOM에 임시 추가한 캔버스 제거
     const tmpCanvas = document.querySelector('canvas[style*="-9999px"]');
     if (tmpCanvas) tmpCanvas.remove();
+  }
+}
+
+/* ═══════════════════════════════════════
+   📖 스토리 만들기 (단편 / 장편)
+   기획 질문 → 장면 대본 → AI 장면 이미지 → 미리보기 → PDF/MP4
+═══════════════════════════════════════ */
+let _stPendingFn = null; // AI 비밀번호 확인 후 실행할 함수
+
+const ST_SETUP = [
+  { k:'idea', tag:'아이디어', q:'어떤 이야기를 만들고 싶으세요?',
+    tip:['이야기의 재료는 \'인물-배경-행동\'입니다.','끌리게 된 키워드와 사람들의 반응 요소를 결합해 보길 제안합니다.'],
+    ai:'요즘 사람들이 많이 검색하고 반응하는 인기 주제·이슈 키워드를 섞어서 \'인물-배경-행동\' 조합을 서로 다른 측면으로 제안한다. (실시간 검색 데이터가 아니라 AI가 아는 범위의 트렌드임)' },
+  { k:'genre', tag:'장르', q:'이야기의 장르는 무엇인가요?',
+    tip:['장르 선택에 따라 사람들의 반응 패턴은 달라집니다.'],
+    chips:['모험','판타지','SF','미스터리','코미디','감동 드라마','로맨스','스릴러','역사'],
+    ai:'앞선 답변에 반응하는 식으로 \'그 아이디어와는 이런 장르가 어울릴 것 같다\'고 심리학 기반 근거를 들어 제안한다.' },
+  { k:'hero', tag:'인물', q:'주인공을 먼저 간략하게 만들어 볼까요?',
+    tip:['같이 모험을 떠나게 될 아바타입니다.','사람들이 마음을 내줄 수 있는 호감형 캐릭터입니다.'],
+    ai:'\'다른 작품에서는 앞서 선택한 장르에서 이런 주인공을 만들었습니다\'라는 식으로 레퍼런스 형태로 제안한다.' },
+  { k:'world', tag:'배경', q:'이 작품의 세계관은 어때요?',
+    tip:['주인공이 움직일 공간입니다.'],
+    ai:'지금까지 나온 아이디어·장르·주인공을 비춰볼 때 \'이런 세계관이 어울릴 것 같아요\'라는 식으로 그 근거를 들어 제안한다.' },
+  { k:'want', tag:'행동', q:'주인공은 뭘 하고 싶어 하나요?',
+    tip:['등장인물은 극 중에서 반드시 움직여야 합니다.','움직이게 만드는 건 강력한 동기구요.'],
+    ai:'\'다른 작품에서는 주인공의 강력한 동기를 이런 식으로 만들었어요\'라는 식으로 레퍼런스 형태로 제안한다.' },
+  { k:'enemy', tag:'시련', q:'이번엔 안타고니스트(적대자)를 만들어 볼까요?',
+    tip:['주인공의 반대편에 선 인물들입니다.','희망이 아닌 두려움으로 인해 \'욕망\'에 굴복한 사람들이죠.','주인공이 처한 시련은 절대 쉬워선 안 됩니다.'],
+    ai:'앞서 설계된 주인공을 볼 때 \'이런 안타고니스트가 적절해요\'라고 제안하고 그 근거도 함께 댄다.' },
+];
+const ST_LOGLINE = {
+  tag:'핵심 축', q:'로그라인을 만들어 봐요!',
+  tip:['전체 이야기를 관통하는 한 문장이자 질문일 수 있습니다.','주인공이 목표를 위해 모험을 떠나지만 딜레마에 빠져 매우 어렵다는 내용이 들어가야 합니다.'],
+  ai:'지금까지 나온 아이디어·장르·주인공·세계관·강력한 동기를 종합해 \'이런 로그라인이 적절해요\'라고 제안한다. 독자와 편집자가 직관적으로 꽂힐 수 있게, 그 로그라인이 왜 후킹되는지 근거도 한 줄 덧붙인다.'
+};
+const ST_PLANS = {
+  short: {
+    setup: ST_SETUP,
+    scenes: [
+      { k:'s_comic', tag:'코믹 릴리프', q:'주인공은-언제-어디서-일상을 보내고 있나요?',
+        tip:['독자와의 라포(친근감)를 형성하는 첫인상 구간입니다.','사람들끼리 친해질 때 스몰토킹하거나 유머를 던지듯 이야기도 똑같습니다.'] },
+      { k:'s_trouble', tag:'트러블', q:'그러던 어느 날, 어떤 문제가 터질까요?', tip:[] },
+      { k:'s_dilemma', tag:'딜레마', q:'어떤 갈등으로 고통 받게 될까요?', tip:[] },
+      { k:'s_suspense', tag:'서스펜스', q:'설상가상으로 악화되는 순간입니다. 그게 뭘까요?',
+        tip:['긴장감이 고조되는 순간입니다.','시간적, 공간적 제약으로 인해 아슬아슬합니다.'] },
+      { k:'s_climax', tag:'클라이막스', q:'결국 걱정한 일이 터져 버렸습니다. 그게 뭘까요?', tip:[] },
+      { k:'s_resolve', tag:'획기적인 해결', q:'전혀 생각치 못 했던 방법으로 해결합니다. 그게 뭘까요?',
+        tip:['반전으로 쾌감을 주는 가장 중요한 구간입니다.'] },
+    ]
+  },
+  long: {
+    setup: ST_SETUP,
+    scenes: [
+      { k:'l_prologue', tag:'프롤로그', q:'첫인상입니다. 처음엔 어떤 장면으로 이목을 끌어 볼까요?',
+        tip:['어떤 컨셉이며 어떤 이야기인지 보여주는 동시에 초장부터 \'반전\'을 보여주며 이목을 확 집중시켜야 합니다.'],
+        ai:'\'다른 작품에서는 이런 식으로 프롤로그 설계를 했어요\'라는 식으로 레퍼런스 형태로 제안한다.' },
+      { k:'l_face', tag:'문제 직면의 순간', q:'주인공이 어쩔 수 없이 마주해야 할 시련은 무엇이 있을까요?',
+        tip:['지금은 내면적 결핍으로 힘든 상태입니다.'],
+        ai:'\'다른 작품에서는 이런 식으로 주인공이 처하는 시련 설계를 했어요\'라는 레퍼런스를 들고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_bait', tag:'미끼의 순간', q:'뭔가 악순환이 반복되고 있어요.. 주인공의 내적 변화를 일으키려면 어떻게 해야 할까요?',
+        tip:['강력한 동기를 만들 만한 사건입니다.','악순환을 방치할 것인가, 미끼에 걸려들 것인가? 선택하는 순간입니다.'],
+        ai:'\'다른 작품에서는 이런 식으로 미끼의 순간 설계를 했어요\'라는 레퍼런스를 들고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_proof', tag:'검증의 순간', q:'주인공은 어떤 잠재력을 가졌고 이 여정을 떠나기 위한 조건은 뭘까요?',
+        tip:['모험 시작의 열쇠를 찾은 순간입니다.'],
+        ai:'\'다른 작품에서는 이런 식으로 주인공 잠재력 설계를 했어요\'라는 레퍼런스를 들고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_belief', tag:'신념의 순간', q:'주인공이 그리는 청사진은 무엇일까?',
+        tip:['이제 다신 일상으로 돌아갈 수 없다.'],
+        ai:'\'앞서 선택한 주인공의 강력한 동기와는 이 목표 설정이 어울려요\'라는 식으로 제안하고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_rise', tag:'상승의 순간', q:'갈등, 변화를 겪은 주인공은 앞으로 어떤 흥미진진한 일을 벌일까요?', tip:[],
+        ai:'\'다른 작품에서는 이런 식으로 작품의 흥미진진한 부분을 설계했어요\'라는 레퍼런스를 앞서 선택한 장르에 맞게 제안하고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_fakewin', tag:'가짜 승리', q:'주인공과 동료들은 어떤 활약을 펼칠까요?',
+        tip:['앞으로 치고 나가 공략할 수 있는 뭔가를 발견한 순간입니다.'], ai:'질문에 맞게 종합한 적절한 답변을 제시한다.' },
+      { k:'l_careless', tag:'방심의 순간', q:'엉뚱한 데서 사건이 터져 계획이 완전 틀어져 버렸어요! 그게 뭘까요?',
+        tip:['건들지 말아야 할 걸 건드려버렸거나 가지 말아야 할 곳을 가버렸어요.'], ai:'질문에 맞게 종합한 적절한 답변을 제시한다.' },
+      { k:'l_chaos', tag:'혼란의 순간', q:'실패하면 어떤 참극을 초래할까요?',
+        tip:['그냥 말이 아닌, 눈앞에 시련을 보여주며 주인공을 흔들리게 만드세요. 여기서는 내부 분열이 일어나기도 합니다.'], ai:'질문에 맞게 종합한 적절한 답변을 제시한다.' },
+      { k:'l_awake', tag:'각성의 순간', q:'비밀은 바로 이거였어?!',
+        tip:['게임에 대한 실마리를 조금은 알 것 같은 순간입니다.','클라이막스를 위한 추진력을 얻는 구간입니다.'], ai:'질문에 맞게 종합한 적절한 답변을 제시한다.' },
+      { k:'l_urgent', tag:'초긴박한 순간', q:'회심의 프로젝트, 과연 성공할 수 있을까요?',
+        tip:['시간적, 공간적 제약으로 인해 아슬아슬한 긴장감이 고조됩니다.'],
+        ai:'\'다른 작품에서는 서스펜스 설계를 이런 식으로 했어요\'라는 레퍼런스를 들고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_climax', tag:'클라이막스-폭발의 순간', q:'마지막 끝판왕 갈등. 최악의 순간에서 주인공은 어떤 선택을 할까요?',
+        tip:['지독하게 괴롭혀 왔던 내면적 결핍과 극한으로 마주하는 순간입니다.','각성해서 발견했던 희망이 통하지 않아요. 죽음에 필적하는 고통이 느껴집니다.','감정-행동-갈등이 극한으로 폭발하는 순간입니다.'],
+        ai:'\'다른 작품에서는 클라이막스 설계를 이런 식으로 했어요\'라는 레퍼런스를 들고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_twist', tag:'반전의 순간', q:'이건 미처 몰랐지?! 충격, 갈등 해결의 열쇠가 이거였다니!',
+        tip:['완전한 각성을 이루는 순간입니다.','초반부터 무심코 지나쳤는데 이게 이렇게 중요했다니 무릎을 탁 치는 순간입니다.','사건 해결은 반드시 주인공이 관여해야 합니다.'],
+        ai:'\'다른 작품에서는 반전 설계를 이런 식으로 했어요\'라는 레퍼런스를 들고, 질문에 맞게 종합한 답변을 제시한다.' },
+      { k:'l_relax', tag:'이완의 순간', q:'주인공과 동료들은 이렇게 내적 변화하거나 성장했어요.',
+        tip:['긴장 해소, 주인공들의 일상 복귀와 아이러닉한 변화가 보입니다.'],
+        ai:'앞서 선택한 주인공의 설정과 극 중 과정을 종합해 \'주인공에게는 이런 내적 변화가 생겼을 거예요\'라고 근거를 대며 제안한다.' },
+      { k:'l_epilogue', tag:'에필로그', q:'이 여정 이후 어떻게 될까요?',
+        tip:['처음부터 꽁꽁 숨겨왔던 비밀을 풀거나, 질문을 던지면서 끝날 수도 있습니다.'],
+        ai:'\'다른 작품에서는 에필로그 설계를 이런 식으로 했어요\'라는 레퍼런스를 들고, 질문에 맞게 종합한 답변을 제시한다.' },
+    ]
+  }
+};
+const ST_ASPECT = {
+  '4:3': { css:'4/3', n:1.3333, w:1600, h:1200, vw:1280, vh:960 },
+  '3:4': { css:'3/4', n:0.75,   w:1200, h:1600, vw:960,  vh:1280 },
+  '1:1': { css:'1/1', n:1,      w:1400, h:1400, vw:1080, vh:1080 },
+};
+
+const stS = { cur:'short', proj:{}, hints:{}, loaded:false, batch:false, cancel:false, pv:0 };
+
+function stNewProj(mode){
+  return {
+    title:'', logline:'', charRef:'', aspect:'4:3', style:'storybook', answers:{},
+    scenes: ST_PLANS[mode].scenes.map(s => ({ k:s.k, script:'', prevScript:'', image:'', prevImage:'', edit:'', busy:false, err:'', ts:{} }))
+  };
+}
+/* 장면 글자 스타일: 기본값은 흰 글자 + 검은 테두리. 위치(x,y)는 페이지 대비 %, size는 페이지 너비 대비 %, sw는 글자 크기 대비 테두리 % */
+const ST_TS_DEFAULT = { x:50, y:86, font:'Gowun Dodum', size:4.8, color:'#ffffff', stroke:'#000000', sw:22, bold:false };
+function stTs(sc){ return Object.assign({}, ST_TS_DEFAULT, sc.ts || {}); }
+function stOvCss(t){
+  return `left:${t.x}%;top:${t.y}%;font-family:'${t.font}','Nanum Gothic',sans-serif;font-size:${t.size}cqw;font-weight:${t.bold ? 800 : 400};color:${t.color};-webkit-text-stroke:${(t.size * t.sw / 100).toFixed(3)}cqw ${t.stroke};`;
+}
+function stP(){ return stS.proj[stS.cur]; }
+function stPlan(){ return ST_PLANS[stS.cur]; }
+function stEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function stEl(id){ return document.getElementById(id); }
+
+/* ── 저장/복원 (IndexedDB) ── */
+function stIdb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('bold_story', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+let _stSaveTimer = null;
+function stSave(){
+  clearTimeout(_stSaveTimer);
+  _stSaveTimer = setTimeout(async () => {
+    try {
+      const db = await stIdb();
+      db.transaction('kv', 'readwrite').objectStore('kv').put({ cur:stS.cur, proj:stS.proj }, 'state');
+    } catch(e) { console.warn('스토리 저장 실패', e); }
+  }, 600);
+}
+async function stLoad(){
+  stS.proj.short = stNewProj('short');
+  stS.proj.long = stNewProj('long');
+  try {
+    const db = await stIdb();
+    const saved = await new Promise((res, rej) => {
+      const q = db.transaction('kv').objectStore('kv').get('state');
+      q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+    });
+    if (saved && saved.proj) {
+      ['short', 'long'].forEach(m => {
+        const sp = saved.proj[m]; if (!sp) return;
+        const np = stNewProj(m);
+        Object.assign(np, { title:sp.title||'', logline:sp.logline||'', charRef:sp.charRef||'', aspect:ST_ASPECT[sp.aspect]?sp.aspect:'4:3', style:sp.style||'storybook', answers:sp.answers||{} });
+        np.scenes.forEach(sc => {
+          const o = (sp.scenes || []).find(x => x.k === sc.k);
+          if (o) Object.assign(sc, { script:o.script||'', prevScript:o.prevScript||'', image:o.image||'', prevImage:o.prevImage||'', ts:o.ts||{} });
+        });
+        stS.proj[m] = np;
+      });
+      if (saved.cur === 'long') stS.cur = 'long';
+    }
+  } catch(e) { console.warn('스토리 복원 실패', e); }
+  stS.loaded = true;
+}
+
+async function initStoryPanel(){
+  if (!stS.loaded) await stLoad();
+  storyRenderAll();
+}
+function storySetMode(m){
+  stS.cur = m;
+  storyRenderAll();
+  stSave();
+}
+function storyRenderAll(){
+  const p = stP();
+  stEl('stModeShort').classList.toggle('active', stS.cur === 'short');
+  stEl('stModeLong').classList.toggle('active', stS.cur === 'long');
+  stEl('stTitle').value = p.title;
+  stEl('stLogline').value = p.logline;
+  stEl('stStyle').value = p.style;
+  document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === p.aspect));
+  stRenderRef();
+  stEl('stLoglineHints').innerHTML = stHintsHtml('logline');
+  storyRenderBody();
+}
+function stRenderRef(){
+  const p = stP();
+  stEl('stRefBox').innerHTML = p.charRef ? `<img src="${p.charRef}" alt="캐릭터 레퍼런스">` : '🧑‍🎨<br>클릭해서<br>업로드';
+  stEl('stRefClear').style.display = p.charRef ? '' : 'none';
+}
+function storyField(f, v){ stP()[f] = v; stSave(); }
+function storySetAspect(a){
+  stP().aspect = a;
+  document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === a));
+  stP().scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = ST_ASPECT[a].css; });
+  stSave();
+}
+function stShrink(src, max, q){
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => {
+      const s = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(im.naturalWidth * s)); c.height = Math.max(1, Math.round(im.naturalHeight * s));
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+      res(c.toDataURL('image/jpeg', q));
+    };
+    im.onerror = () => res(src);
+    im.src = src;
+  });
+}
+function storyLoadRef(input){
+  const f = input.files && input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = async () => { stP().charRef = await stShrink(r.result, 768, .9); stRenderRef(); stSave(); };
+  r.readAsDataURL(f);
+  input.value = '';
+}
+function storyClearRef(){ stP().charRef = ''; stRenderRef(); stSave(); }
+
+/* ── 본문 렌더 ── */
+function stSetupHtml(s){
+  const p = stP();
+  const chips = s.chips ? `<div class="st-chips">${s.chips.map(c => `<button class="st-chip ${(p.answers[s.k]||'') === c ? 'on' : ''}" onclick="storyPickChip('${s.k}','${c}')">${c}</button>`).join('')}</div>` : '';
+  return `<div class="st-card" id="stSu_${s.k}">
+    <div class="st-q"><span class="st-tag">${stEsc(s.tag)}</span><div class="st-qt">Q. ${stEsc(s.q)}</div>
+      <div class="st-tip">${s.tip.map(t => '* ' + stEsc(t)).join('<br>')}</div></div>
+    ${chips}
+    <textarea class="st-ta" id="stA_${s.k}" rows="2" placeholder="여기에 답을 적어 보세요" oninput="storyAnswer('${s.k}',this.value)">${stEsc(p.answers[s.k] || '')}</textarea>
+    <div class="st-act"><button onclick="storyHint('setup','${s.k}')">💡 AI 제안 받기</button></div>
+    <div class="st-hints" id="stH_${s.k}">${stHintsHtml(s.k)}</div>
+  </div>`;
+}
+function stSceneInner(i){
+  const p = stP(), st = stPlan().scenes[i], sc = p.scenes[i], A = ST_ASPECT[p.aspect];
+  const hasScript = !!sc.script.trim();
+  const img = sc.image
+    ? `<img src="${sc.image}" alt="장면 ${i+1}" onclick="storyOpenPreview(${i+1})">`
+    : '🖼️ 아직 그려지지 않았어요<br>대본을 쓰고 [장면 생성]을 눌러 보세요';
+  return `
+    <div class="st-q"><span class="st-tag">장면 ${i+1} · ${stEsc(st.tag)}</span><div class="st-qt">Q. ${stEsc(st.q)}</div>
+      ${st.tip.length ? `<div class="st-tip">${st.tip.map(t => '* ' + stEsc(t)).join('<br>')}</div>` : ''}</div>
+    <div class="st-row"><div class="st-no">${i+1}</div>
+      <textarea class="st-ta" id="stT_${i}" rows="3" placeholder="학생이 입력하는 대본 (비워두고 [AI로 작성]을 눌러도 돼요)" oninput="storyScript(${i},this.value)">${stEsc(sc.script)}</textarea></div>
+    <div class="st-act">
+      <button onclick="storyHint('scene',${i})">💡 힌트</button>
+      <button onclick="storyPolishOne(${i})" ${sc.busy ? 'disabled' : ''}>✨ ${hasScript ? 'AI로 다듬기' : 'AI로 작성'}</button>
+      ${sc.prevScript ? `<button onclick="storyUndoScript(${i})">↩ 이전 대본</button>` : ''}
+      <button class="primary" onclick="storyGenOne(${i})" ${sc.busy ? 'disabled' : ''}>🎨 ${sc.image ? '장면 다시 생성' : '장면 생성'}</button>
+    </div>
+    <div class="st-hints" id="stH_${st.k}">${stHintsHtml(st.k)}</div>
+    <div class="st-img" id="stImg${i}" style="aspect-ratio:${A.css}">${img}${sc.script.trim() ? `<div class="st-ov" style="${stOvCss(stTs(sc))}">${stEsc(sc.script.trim())}</div>` : ''}${sc.busy ? '<div class="st-spin">AI가 그리는 중...</div>' : ''}</div>
+    ${sc.err ? `<div class="st-err">⚠ ${stEsc(sc.err)}</div>` : ''}
+    <div class="st-edit">
+      <input class="st-input" id="stE_${i}" placeholder="그린 뒤 추가 수정 요청 (예: 배경을 밤으로 바꿔줘)" value="${stEsc(sc.edit)}" oninput="stP().scenes[${i}].edit=this.value">
+      <div class="st-act">
+        <button onclick="storyEditScene(${i})" ${(!sc.image || sc.busy) ? 'disabled' : ''}>✏️ 수정 적용</button>
+        ${sc.prevImage ? `<button onclick="storyUndoImage(${i})">↩ 이전 그림</button>` : ''}
+        <button onclick="storyOpenPreview(${i+1})">👁 미리보기·글자 편집</button>
+        <button onclick="storySaveScene(${i})">💾 이미지 저장</button>
+      </div>
+    </div>`;
+}
+function storyRenderBody(){
+  const plan = stPlan();
+  let h = '<div class="st-sec">📋 기획 질문</div>' + plan.setup.map(stSetupHtml).join('');
+  h += `<div class="st-sec">🎬 장면 만들기 · 대본 → 그림</div>`;
+  h += plan.scenes.map((_, i) => `<div class="st-card" id="stSc${i}">${stSceneInner(i)}</div>`).join('');
+  stEl('stBody').innerHTML = h;
+}
+function stRenderScene(i, p){
+  if (p && p !== stP()) return; // 다른 작품으로 전환된 경우 화면 갱신 생략
+  const el = stEl('stSc' + i); if (el) el.innerHTML = stSceneInner(i);
+}
+
+function storyAnswer(k, v){ stP().answers[k] = v; stSave(); }
+function storyPickChip(k, v){
+  stP().answers[k] = v; stSave();
+  const ta = stEl('stA_' + k); if (ta) ta.value = v;
+  const card = stEl('stSu_' + k);
+  if (card) card.querySelectorAll('.st-chip').forEach(c => c.classList.toggle('on', c.textContent === v));
+}
+function storyScript(i, v){ stP().scenes[i].script = v; stSave(); }
+function storyUndoScript(i){
+  const sc = stP().scenes[i];
+  const cur = sc.script; sc.script = sc.prevScript; sc.prevScript = cur;
+  stRenderScene(i); stSave();
+}
+function storyUndoImage(i){
+  const sc = stP().scenes[i];
+  const cur = sc.image; sc.image = sc.prevImage; sc.prevImage = cur;
+  stRenderScene(i); stSave();
+}
+
+/* ── 공용: AI 게이트 / API / 진행 표시 ── */
+function stGate(fn){
+  if (_aiAccessPw && !isAdmin && !_aiSessionVerified) {
+    _pendingAIMode = 'story'; _stPendingFn = fn;
+    stEl('aiPwInput').value = ''; stEl('aiPwErr').textContent = '';
+    openModal('aiPwModal');
+    setTimeout(() => stEl('aiPwInput').focus(), 100);
+    return;
+  }
+  _aiSessionVerified = false; // 일회용
+  fn();
+}
+async function stApi(path, body){
+  const res = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  let d = {};
+  try { d = await res.json(); } catch(e) {}
+  if (!res.ok || d.error) throw new Error(d.error || ('요청 실패 (' + res.status + ')'));
+  return d;
+}
+function stProg(show, txt, pct, cancellable){
+  const el = stEl('stProg');
+  el.classList.toggle('show', !!show);
+  if (txt != null) stEl('stProgTxt').textContent = txt;
+  if (pct != null) stEl('stProgBar').style.width = pct + '%';
+  stEl('stCancel').style.display = cancellable ? '' : 'none';
+}
+function storyCancel(){ stS.cancel = true; stEl('stProgTxt').textContent = '중지하는 중... (진행 중인 장면까지만 마무리해요)'; }
+
+/* 누적 맥락: 기획 답변 + (선택) 앞선 장면 대본 */
+function stContext(p, o){
+  o = o || {};
+  const L = [];
+  if (p.logline && o.key !== 'logline') L.push('[로그라인] ' + p.logline);
+  stPlan().setup.forEach(s => {
+    const a = (p.answers[s.k] || '').trim();
+    if (a && s.k !== o.key) L.push(`[${s.tag}] ${a.slice(0, o.clip || 200)}`);
+  });
+  if (o.sceneIdx != null) {
+    const from = o.lastN ? Math.max(0, o.sceneIdx - o.lastN) : 0;
+    for (let i = from; i < o.sceneIdx; i++) {
+      const t = (p.scenes[i].script || '').trim();
+      if (t) L.push(`[장면${i+1} ${stPlan().scenes[i].tag}] ${t.slice(0, 150)}`);
+    }
+  }
+  return L.join('\n').slice(0, o.max || 2800);
+}
+
+/* ── 힌트 ── */
+function stHintsHtml(key){
+  const h = stS.hints[stS.cur + ':' + key];
+  if (!h) return '';
+  if (h.loading) return '<div class="st-prog show">💡 AI가 제안을 만드는 중...</div>';
+  if (h.err) return `<div class="st-err">⚠ ${stEsc(h.err)}</div>`;
+  return h.items.map((t, n) => `<button class="st-hint" onclick="storyUseHint('${key}',${n})">${stEsc(t)}</button>`).join('');
+}
+function stUpdHints(key){
+  const el = key === 'logline' ? stEl('stLoglineHints') : stEl('stH_' + key);
+  if (el) el.innerHTML = stHintsHtml(key);
+}
+function storyHint(kind, ref){
+  const p = stP(), plan = stPlan(), mode = stS.cur;
+  let step, current, key, ctx;
+  if (kind === 'logline') { step = ST_LOGLINE; current = p.logline; key = 'logline'; ctx = stContext(p, { key:'logline' }); }
+  else if (kind === 'setup') { step = plan.setup.find(s => s.k === ref); current = p.answers[ref] || ''; key = ref; ctx = stContext(p, { key:ref }); }
+  else { step = plan.scenes[ref]; current = p.scenes[ref].script; key = step.k; ctx = stContext(p, { key:'', sceneIdx:ref }); }
+  stGate(async () => {
+    const hk = mode + ':' + key;
+    stS.hints[hk] = { loading:true, kind, ref };
+    stUpdHints(key);
+    try {
+      const d = await stApi('/api/story-text', {
+        task:'hint', mode, title:p.title, question:step.q, tip:step.tip.join(' '),
+        guide: mode === 'long' ? (step.ai || '') : (kind === 'logline' ? ST_LOGLINE.ai : ''),
+        current, context: ctx
+      });
+      const items = d.items.filter(x => typeof x === 'string' && x.trim()).slice(0, 3);
+      stS.hints[hk] = items.length ? { items, kind, ref } : { err:'제안을 받지 못했어요. 다시 눌러 주세요.' };
+    } catch(e) { stS.hints[hk] = { err:e.message }; }
+    if (stS.cur === mode) stUpdHints(key);
+  });
+}
+function storyUseHint(key, n){
+  const h = stS.hints[stS.cur + ':' + key]; if (!h || !h.items) return;
+  const text = h.items[n], p = stP();
+  if (h.kind === 'logline') {
+    p.logline = text; stEl('stLogline').value = text;
+  } else if (h.kind === 'setup') {
+    const cur = (p.answers[h.ref] || '').trim();
+    p.answers[h.ref] = cur ? cur + '\n' + text : text;
+    stEl('stA_' + h.ref).value = p.answers[h.ref];
+  } else {
+    const sc = p.scenes[h.ref], cur = sc.script.trim();
+    sc.script = cur ? cur + '\n' + text : text;
+    const ta = stEl('stT_' + h.ref); if (ta) ta.value = sc.script;
+  }
+  stSave();
+}
+
+/* ── 대본 작성/다듬기 (로그라인 기반) ── */
+function stPolishItems(p, idxs){
+  return idxs.map(i => ({ i, step:stPlan().scenes[i].tag, question:stPlan().scenes[i].q, text:p.scenes[i].script }));
+}
+async function stPolish(idxs){
+  const p = stP(), mode = stS.cur;
+  const items = stPolishItems(p, idxs);
+  const d = await stApi('/api/story-text', {
+    task:'polish', mode, title:p.title, logline:p.logline,
+    context: stContext(p, { key:'logline' }), items
+  });
+  let n = 0;
+  (d.items || []).forEach(r => {
+    const i = Number(r.i), t = typeof r.text === 'string' ? r.text.trim() : '';
+    if (!t || !idxs.includes(i)) return;
+    const sc = p.scenes[i];
+    sc.prevScript = sc.script; sc.script = t; n++;
+  });
+  if (!n) throw new Error('AI가 대본을 만들지 못했어요. 다시 시도해 주세요.');
+  stSave();
+  return n;
+}
+function storyPolishAll(){
+  const p = stP();
+  const all = p.scenes.map((_, i) => i);
+  const hasDraft = p.scenes.some(s => s.script.trim());
+  if (!p.logline.trim() && !hasDraft) { alert('로그라인(또는 대본 초안)을 먼저 입력해 주세요.\n로그라인을 쓰고 이 버튼을 누르면 장면별 대본이 자동으로 작성돼요.'); return; }
+  const empty = p.scenes.filter(s => !s.script.trim()).length;
+  stGate(async () => {
+    if (stS.batch) return;
+    stS.batch = true;
+    stProg(true, `✨ AI가 대본을 ${empty ? '작성' : '다듬'}하는 중... (빈 장면 ${empty}개는 새로 써요)`, 45, false);
+    try {
+      const n = await stPolish(all);
+      storyRenderBody();
+      stProg(true, `✅ ${n}개 장면 대본 완성! 내용을 읽어 보고 마음대로 고쳐도 돼요.`, 100, false);
+      setTimeout(() => stProg(false), 3500);
+    } catch(e) { stProg(false); alert('대본 작성 오류: ' + e.message); }
+    finally { stS.batch = false; }
+  });
+}
+function storyPolishOne(i){
+  const p = stP();
+  if (!p.scenes[i].script.trim() && !p.logline.trim()) { alert('로그라인을 먼저 입력하거나 대본 초안을 적어 주세요.'); return; }
+  stGate(async () => {
+    const sc = p.scenes[i]; sc.busy = true; sc.err = ''; stRenderScene(i, p);
+    try {
+      // 한 장면만 처리: 앞 장면 흐름을 맥락으로 전달
+      const d = await stApi('/api/story-text', {
+        task:'polish', mode:stS.cur, title:p.title, logline:p.logline,
+        context: stContext(p, { key:'logline', sceneIdx:i }), items: stPolishItems(p, [i])
+      });
+      const t = (d.items && d.items[0] && typeof d.items[0].text === 'string') ? d.items[0].text.trim() : '';
+      if (!t) throw new Error('AI가 대본을 만들지 못했어요.');
+      sc.prevScript = sc.script; sc.script = t; stSave();
+    } catch(e) { sc.err = e.message; }
+    sc.busy = false; stRenderScene(i, p);
+  });
+}
+
+/* ── 장면 이미지 생성 ── */
+async function stGenScene(i, edit){
+  const p = stP(), sc = p.scenes[i];
+  sc.busy = true; sc.err = ''; stRenderScene(i, p);
+  try {
+    const body = {
+      script: sc.script, pageNo:i + 1, total:p.scenes.length, title:p.title, aspect:p.aspect, style:p.style,
+      context: stContext(p, { key:'', sceneIdx:i, lastN:2, clip:120, max:1400 }), charRef: p.charRef
+    };
+    if (edit) { body.edit = edit; body.baseImage = await stShrink(sc.image, 1024, .85); }
+    const d = await stApi('/api/story-scene', body);
+    sc.prevImage = sc.image;
+    sc.image = await stShrink(d.image, 1600, .9);
+    if (edit) sc.edit = '';
+    stSave();
+  } catch(e) { sc.err = e.message; throw e; }
+  finally { sc.busy = false; stRenderScene(i, p); }
+}
+function storyGenOne(i){
+  const sc = stP().scenes[i];
+  if (!sc.script.trim()) { alert('대본을 먼저 입력해 주세요. (비워두고 [AI로 작성]을 눌러도 돼요)'); return; }
+  stGate(() => { stGenScene(i).catch(() => {}); });
+}
+function storyEditScene(i){
+  const sc = stP().scenes[i];
+  if (!sc.edit.trim()) { alert('어떻게 고치고 싶은지 적어 주세요.'); return; }
+  const edit = sc.edit.trim();
+  stGate(() => { stGenScene(i, edit).catch(() => {}); });
+}
+function storyGenAll(){
+  const p = stP();
+  const todo = p.scenes.map((s, i) => (s.script.trim() && !s.image) ? i : -1).filter(i => i >= 0);
+  if (!todo.length) {
+    alert(p.scenes.some(s => s.script.trim())
+      ? '이미 모든 장면이 그려져 있어요.\n다시 그리고 싶은 장면은 [장면 다시 생성]을 눌러 주세요.'
+      : '대본이 있는 장면이 없어요. 대본을 쓰거나 [AI로 대본 다듬기]를 먼저 눌러 주세요.');
+    return;
+  }
+  if (!p.charRef && !confirm('캐릭터 레퍼런스가 없어요.\n장면마다 주인공 모습이 달라질 수 있어요. 그래도 생성할까요?')) return;
+  stGate(async () => {
+    if (stS.batch) return;
+    stS.batch = true; stS.cancel = false;
+    let done = 0, fail = 0, next = 0;
+    const total = todo.length;
+    const tick = () => stProg(true, `🎨 장면 생성 중... ${done + fail} / ${total}${fail ? ` (실패 ${fail})` : ''}`, Math.round((done + fail) / total * 100), true);
+    tick();
+    const worker = async () => {
+      while (next < todo.length && !stS.cancel) {
+        const i = todo[next++];
+        try { await stGenScene(i); done++; } catch(e) { fail++; }
+        tick();
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    stS.batch = false;
+    stProg(true, stS.cancel ? `⏹ 중지됨 — ${done}개 완료` : `✅ ${done}개 완료${fail ? `, ${fail}개 실패 (장면 카드에서 다시 시도해 주세요)` : ''}`, 100, false);
+    setTimeout(() => stProg(false), 4500);
+  });
+}
+
+/* ── 미리보기 ── */
+function stPages(all){
+  const p = stP();
+  const pages = [{ type:'cover', title:p.title, src:p.charRef }];
+  p.scenes.forEach((sc, i) => {
+    if (all || sc.script.trim() || sc.image) pages.push({ type:'scene', idx:i, no:i + 1, tag:stPlan().scenes[i].tag, text:sc.script.trim(), src:sc.image, ts:stTs(sc) });
+  });
+  return pages;
+}
+function storyOpenPreview(idx){
+  stS.pv = idx || 0;
+  stPvRender();
+  openModal('storyPreviewModal');
+}
+function storyPvGo(d){
+  const n = stPages(true).length;
+  stS.pv = Math.max(0, Math.min(n - 1, stS.pv + d));
+  stPvRender();
+}
+function stPvRender(){
+  const p = stP(), A = ST_ASPECT[p.aspect], pages = stPages(true);
+  stS.pv = Math.max(0, Math.min(pages.length - 1, stS.pv));
+  const pg = pages[stS.pv];
+  const page = stEl('stPvPage');
+  page.style.setProperty('--ar', A.css); page.style.setProperty('--arn', A.n);
+  const ctl = stEl('stPvCtl');
+  if (pg.type === 'cover') {
+    page.innerHTML = `<div class="st-pv-img cover">${pg.src ? `<img src="${pg.src}" alt="">` : '🖼️ 캐릭터 레퍼런스'}</div><div class="st-pv-cover">${stEsc(pg.title || '제목 없음')}</div>`;
+    stEl('stPvLabel').textContent = '표지';
+    ctl.style.display = 'none';
+  } else {
+    page.innerHTML = `<div class="st-pv-img">${pg.src ? `<img src="${pg.src}" alt="">` : '🖼️ 아직 그려지지 않았어요'}</div><div class="st-ov st-pv-txt drag" id="stPvOv"></div>`;
+    stEl('stPvLabel').textContent = `장면 ${pg.no} · ${pg.tag}`;
+    ctl.style.display = '';
+    const sc = p.scenes[pg.idx], t = stTs(sc);
+    stEl('stPvText').value = sc.script;
+    stEl('stPvFont').value = t.font; stEl('stPvSize').value = t.size;
+    stEl('stPvColor').value = t.color; stEl('stPvStroke').value = t.stroke;
+    stEl('stPvSw').value = t.sw; stEl('stPvBold').checked = !!t.bold;
+    stPvOverlay();
+    stPvDragInit();
+  }
+  stEl('stPvDots').innerHTML = pages.map((_, n) => `<i class="${n === stS.pv ? 'on' : ''}" onclick="stS.pv=${n};stPvRender()"></i>`).join('');
+}
+/* 미리보기 글자 편집 */
+function stPvScene(){ const i = stS.pv - 1; return i >= 0 ? stP().scenes[i] : null; }
+function stPvOverlay(){
+  const sc = stPvScene(), ov = stEl('stPvOv'); if (!sc || !ov) return;
+  ov.style.cssText = stOvCss(stTs(sc));
+  ov.textContent = sc.script.trim() || '글을 입력해 보세요';
+  ov.style.opacity = sc.script.trim() ? '1' : '.45';
+}
+function storyPvText(v){ const sc = stPvScene(); if (!sc) return; sc.script = v; stPvOverlay(); stSave(); }
+function storyPvStyle(k, v){
+  const sc = stPvScene(); if (!sc) return;
+  sc.ts = Object.assign({}, sc.ts, { [k]: v });
+  stPvOverlay(); stSave();
+}
+function storyPvResetPos(){
+  const sc = stPvScene(); if (!sc) return;
+  sc.ts = Object.assign({}, sc.ts, { x:ST_TS_DEFAULT.x, y:ST_TS_DEFAULT.y });
+  stPvOverlay(); stSave();
+}
+function storyPvApplyAll(){
+  const sc = stPvScene(); if (!sc) return;
+  const t = stTs(sc);
+  if (!confirm('이 장면의 글꼴·크기·색상·테두리 설정을 모든 장면에 적용할까요?\n(글자 위치는 장면마다 그대로 유지돼요)')) return;
+  stP().scenes.forEach(s => { s.ts = Object.assign({}, s.ts, { font:t.font, size:t.size, color:t.color, stroke:t.stroke, sw:t.sw, bold:t.bold }); });
+  stSave();
+  alert('모든 장면에 적용했어요.');
+}
+function stPvDragInit(){
+  const ov = stEl('stPvOv'), page = stEl('stPvPage'); if (!ov) return;
+  ov.addEventListener('pointerdown', e => {
+    const sc = stPvScene(); if (!sc) return;
+    e.preventDefault();
+    ov.setPointerCapture(e.pointerId);
+    const r = page.getBoundingClientRect(), t0 = stTs(sc);
+    const sx = e.clientX, sy = e.clientY;
+    const move = ev => {
+      const x = Math.max(5, Math.min(95, t0.x + (ev.clientX - sx) / r.width * 100));
+      const y = Math.max(5, Math.min(95, t0.y + (ev.clientY - sy) / r.height * 100));
+      sc.ts = Object.assign({}, sc.ts, { x:+x.toFixed(2), y:+y.toFixed(2) });
+      ov.style.left = sc.ts.x + '%'; ov.style.top = sc.ts.y + '%';
+    };
+    const up = () => { ov.removeEventListener('pointermove', move); ov.removeEventListener('pointerup', up); ov.removeEventListener('pointercancel', up); stSave(); };
+    ov.addEventListener('pointermove', move); ov.addEventListener('pointerup', up); ov.addEventListener('pointercancel', up);
+  });
+}
+document.addEventListener('keydown', e => {
+  if (!stEl('storyPreviewModal').classList.contains('show')) return;
+  if (/^(TEXTAREA|INPUT|SELECT)$/.test(e.target.tagName)) return; // 글 입력 중에는 페이지 이동 금지
+  if (e.key === 'ArrowLeft') storyPvGo(-1);
+  else if (e.key === 'ArrowRight') storyPvGo(1);
+});
+// 미리보기를 닫으면 장면 카드(그림 위 글자)를 최신 편집 내용으로 갱신
+new MutationObserver(() => {
+  if (!stEl('storyPreviewModal').classList.contains('show') && stS.loaded) storyRenderBody();
+}).observe(stEl('storyPreviewModal'), { attributes:true, attributeFilter:['class'] });
+
+/* ── 내보내기 (PDF / MP4) ── */
+function stLoadImg(src){
+  return new Promise(res => {
+    if (!src) return res(null);
+    const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src;
+  });
+}
+async function stExportPages(){
+  const base = stPages(false);
+  if (base.length < 2) { alert('내보낼 장면이 없어요. 대본이나 그림을 먼저 만들어 주세요.'); return null; }
+  await Promise.all(base.map(async pg => { pg.img = await stLoadImg(pg.src); }));
+  await document.fonts.ready;
+  await Promise.allSettled(["Black Han Sans", "Gowun Dodum", "Nanum Gothic", "Nanum Pen Script", "Permanent Marker"].flatMap(f => [document.fonts.load(`32px '${f}'`, '가나다ABC'), document.fonts.load(`800 32px '${f}'`, '가나다ABC')]));
+  return base;
+}
+function stWrap(ctx, text, maxW){
+  const lines = [];
+  // 단어(공백) 단위로 줄바꿈, 한 단어가 너무 길면 글자 단위로 쪼갬 — 미리보기(word-break:keep-all)와 같은 방식
+  String(text).split('\n').forEach(par => {
+    let cur = '';
+    par.split(' ').forEach((word, wi) => {
+      const trial = cur ? cur + ' ' + word : word;
+      if (!cur || ctx.measureText(trial).width <= maxW) { cur = trial; return; }
+      lines.push(cur); cur = '';
+      for (const ch of word) {
+        if (cur && ctx.measureText(cur + ch).width > maxW) { lines.push(cur); cur = ch; }
+        else cur += ch;
+      }
+    });
+    lines.push(cur);
+  });
+  return lines;
+}
+function stCover(ctx, im, x, y, w, h){
+  const s = Math.max(w / im.naturalWidth, h / im.naturalHeight);
+  const dw = im.naturalWidth * s, dh = im.naturalHeight * s;
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.drawImage(im, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+function stDrawPage(ctx, W, H, pg){
+  ctx.fillStyle = '#fffaf0'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (pg.type === 'cover') {
+    const bx = H * 0.1, bw = W - bx * 2, bh = H * 0.58;
+    if (pg.img) {
+      const s = Math.min(bw / pg.img.naturalWidth, bh / pg.img.naturalHeight);
+      const dw = pg.img.naturalWidth * s, dh = pg.img.naturalHeight * s;
+      ctx.drawImage(pg.img, (W - dw) / 2, H * 0.08 + (bh - dh) / 2, dw, dh);
+    }
+    let fs = Math.round(W * 0.075);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = `${fs}px 'Black Han Sans','Nanum Gothic',sans-serif`;
+    const lines = stWrap(ctx, pg.title || '나의 그림책', W * 0.82);
+    const lh = fs * 1.3, y0 = H * 0.8 - (lines.length - 1) * lh / 2;
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, y0 + i * lh));
+    return;
+  }
+  // 장면: 그림 전체 + 그 위에 테두리 글자 (미리보기 오버레이와 같은 비율)
+  if (pg.img) stCover(ctx, pg.img, 0, 0, W, H);
+  else { ctx.fillStyle = '#eadfc8'; ctx.fillRect(0, 0, W, H); }
+  const text = (pg.text || '').trim();
+  if (!text) return;
+  const t = pg.ts || ST_TS_DEFAULT;
+  const fs = W * t.size / 100;
+  ctx.font = `${t.bold ? '800 ' : ''}${fs}px '${t.font}','Nanum Gothic',sans-serif`;
+  const lines = stWrap(ctx, text, W * 0.86);
+  const lh = fs * 1.4;
+  const y0 = H * t.y / 100 - (lines.length * lh) / 2 + lh / 2;
+  ctx.lineJoin = 'round'; ctx.miterLimit = 2;
+  ctx.lineWidth = fs * t.sw / 100;
+  ctx.strokeStyle = t.stroke; ctx.fillStyle = t.color;
+  lines.forEach((l, i) => {
+    const y = y0 + i * lh, x = W * t.x / 100;
+    if (ctx.lineWidth > 0) ctx.strokeText(l, x, y);
+    ctx.fillText(l, x, y);
+  });
+}
+function stFileBase(){ return ((stP().title || '').replace(/[\\/:*?"<>|]/g, '').trim() || '나의그림책'); }
+function stExpProg(show, txt, pct){
+  stEl('stExpProg').classList.toggle('show', !!show);
+  if (txt != null) stEl('stExpTxt').textContent = txt;
+  if (pct != null) stEl('stExpBar').style.width = pct + '%';
+}
+
+/* 장면 이미지 (글자 포함 PNG) */
+function stSceneCanvas(pg, A){
+  const c = document.createElement('canvas'); c.width = A.w; c.height = A.h;
+  stDrawPage(c.getContext('2d'), A.w, A.h, pg);
+  return c;
+}
+function stCanvasBlob(c){ return new Promise(res => c.toBlob(res, 'image/png')); }
+async function storySaveScene(i){
+  if (i < 0) return;
+  const p = stP(), sc = p.scenes[i], A = ST_ASPECT[p.aspect];
+  if (!sc.image && !sc.script.trim()) { alert('저장할 그림이나 글이 없어요.'); return; }
+  await stExportFonts();
+  const pg = { type:'scene', no:i + 1, text:sc.script.trim(), ts:stTs(sc), img:await stLoadImg(sc.image) };
+  const blob = await stCanvasBlob(stSceneCanvas(pg, A));
+  saveImageUniversal(blob, `${stFileBase()}_장면${i + 1}.png`);
+}
+async function stExportFonts(){
+  await document.fonts.ready;
+  await Promise.allSettled(["Black Han Sans", "Gowun Dodum", "Nanum Gothic", "Nanum Pen Script", "Permanent Marker"].flatMap(f => [document.fonts.load(`32px '${f}'`, '가나다ABC'), document.fonts.load(`800 32px '${f}'`, '가나다ABC')]));
+}
+/* 압축 없는(store) ZIP 생성 — 외부 라이브러리 없이 장면 이미지를 한 파일로 묶음 */
+const _stCrcTable = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function stCrc32(u8){ let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = _stCrcTable[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function stZip(files){
+  const enc = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const data = new Uint8Array(await f.blob.arrayBuffer()), name = enc.encode(f.name), crc = stCrc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true);
+    parts.push(lh.buffer, name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(ch.buffer, name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, b) => s + (b.byteLength != null ? b.byteLength : b.length), 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end.buffer], { type:'application/zip' });
+}
+async function storyExportImages(){
+  if (stS.exporting) return;
+  stS.exporting = true;
+  const p = stP(), A = ST_ASPECT[p.aspect];
+  try {
+    const pages = (await stExportPages());
+    if (!pages) return;
+    const scenes = pages.filter(pg => pg.type === 'scene');
+    const files = [];
+    for (let n = 0; n < scenes.length; n++) {
+      stExpProg(true, `🖼️ 장면 이미지 만드는 중... (${n + 1}/${scenes.length})`, 5 + Math.round(n / scenes.length * 85));
+      files.push({ name:`${stFileBase()}_장면${String(scenes[n].no).padStart(2, '0')}.png`, blob:await stCanvasBlob(stSceneCanvas(scenes[n], A)) });
+      await new Promise(r => setTimeout(r, 0));
+    }
+    if (files.length === 1) saveImageUniversal(files[0].blob, files[0].name);
+    else saveImageUniversal(await stZip(files), stFileBase() + '_장면이미지.zip');
+    stExpProg(true, `완료! ✅ 장면 이미지 ${files.length}장을 저장했어요`, 100);
+    setTimeout(() => stExpProg(false), 3000);
+  } catch(e) { stExpProg(false); alert('이미지 내보내기 실패: ' + e.message); }
+  finally { stS.exporting = false; }
+}
+
+async function storyExportPDF(){
+  if (stS.exporting) return;
+  stS.exporting = true;
+  const p = stP(), A = ST_ASPECT[p.aspect];
+  try {
+    stExpProg(true, '📄 PDF 준비 중...', 3);
+    const pages = await stExportPages();
+    if (!pages) return;
+    const { jsPDF } = window.jspdf;
+    const mmW = A.w / 150 * 25.4, mmH = A.h / 150 * 25.4;
+    const orient = A.w >= A.h ? 'landscape' : 'portrait';
+    const pdf = new jsPDF({ orientation:orient, unit:'mm', format:[mmW, mmH] });
+    const c = document.createElement('canvas'); c.width = A.w; c.height = A.h;
+    const ctx = c.getContext('2d');
+    for (let i = 0; i < pages.length; i++) {
+      stExpProg(true, `📄 PDF 만드는 중... (${i + 1}/${pages.length})`, 5 + Math.round(i / pages.length * 90));
+      stDrawPage(ctx, A.w, A.h, pages[i]);
+      if (i > 0) pdf.addPage([mmW, mmH], orient);
+      pdf.addImage(c.toDataURL('image/jpeg', .92), 'JPEG', 0, 0, mmW, mmH);
+      await new Promise(r => setTimeout(r, 0));
+    }
+    saveImageUniversal(pdf.output('blob'), stFileBase() + '.pdf');
+    stExpProg(true, '완료! ✅ PDF를 저장했어요', 100);
+    setTimeout(() => stExpProg(false), 3000);
+  } catch(e) { stExpProg(false); alert('PDF 내보내기 실패: ' + e.message); }
+  finally { stS.exporting = false; }
+}
+
+async function storyExportVideo(){
+  if (stS.exporting) return;
+  if (typeof MediaRecorder === 'undefined') { alert('이 브라우저는 영상 내보내기를 지원하지 않아요. 크롬 최신 버전을 이용해 주세요.'); return; }
+  stS.exporting = true;
+  const p = stP(), A = ST_ASPECT[p.aspect];
+  let timer = null, canvas = null;
+  try {
+    stExpProg(true, '🎞️ 영상 준비 중...', 3);
+    const pages = await stExportPages();
+    if (!pages) return;
+    const W = A.vw, H = A.vh;
+    const frames = pages.map(pg => {
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      stDrawPage(c.getContext('2d'), W, H, pg);
+      return c;
+    });
+    canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+    canvas.style.cssText = 'position:fixed;left:-9999px;top:-9999px;pointer-events:none;opacity:0;';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    let cur = 0;
+    const draw = () => ctx.drawImage(frames[cur], 0, 0);
+    draw();
+    const stream = canvas.captureStream(30);
+    const mimes = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const mime = mimes.find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const rec = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond:3000000 } : { videoBitsPerSecond:3000000 });
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    timer = setInterval(draw, 1000 / 30);
+    const t0 = Date.now();
+    rec.start(200);
+    for (let i = 0; i < pages.length; i++) {
+      cur = i;
+      stExpProg(true, `🎞️ 영상 만드는 중... (${i + 1}/${pages.length})`, 5 + Math.round(i / pages.length * 88));
+      const len = pages[i].type === 'cover' ? 2500 : Math.max(3000, Math.min(9000, 2500 + (pages[i].text || '').length * 110));
+      await new Promise(r => setTimeout(r, len));
+    }
+    clearInterval(timer); timer = null;
+    rec.requestData();
+    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => { rec.onstop = r; rec.stop(); });
+    await new Promise(r => setTimeout(r, 150));
+    const type = rec.mimeType || mime || 'video/webm';
+    const isMp4 = type.includes('mp4');
+    let blob = new Blob(chunks, { type });
+    if (!isMp4 && blob.size > 0 && typeof fixWebmDuration === 'function') {
+      blob = await new Promise(r => fixWebmDuration(blob, Date.now() - t0, fb => r(fb || blob)));
+    }
+    if (!blob.size) throw new Error('영상 데이터가 만들어지지 않았어요.');
+    saveImageUniversal(blob, stFileBase() + (isMp4 ? '.mp4' : '.webm'));
+    stExpProg(true, isMp4 ? '완료! ✅ MP4를 저장했어요' : '완료! ✅ 이 브라우저는 MP4 대신 WebM으로 저장했어요', 100);
+    setTimeout(() => stExpProg(false), 4000);
+  } catch(e) { stExpProg(false); alert('영상 내보내기 실패: ' + e.message); }
+  finally {
+    if (timer) clearInterval(timer);
+    if (canvas) canvas.remove();
+    stS.exporting = false;
   }
 }
 </script>
