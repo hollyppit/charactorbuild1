@@ -10309,7 +10309,7 @@ function stRenderCustomSize(){
 }
 function stApplySizeUI(){
   const p = stP();
-  stP().scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = stA(p).css; });
+  stP().scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = stA(p).css; }); { const cb = stEl('stImgCover'); if (cb) cb.style.aspectRatio = stA(p).css; }
   stEl('stCsHint').textContent = stSizeHint(p);
   stSave();
 }
@@ -10341,6 +10341,7 @@ const stS = { cur:'short', proj:{}, hints:{}, loaded:false, batch:false, cancel:
 function stNewProj(mode){
   return {
     title:'', logline:'', styleText:'', durDefault:0, coverDur:2.5, charRef:'', charDesc:'', charPrev:'', charEdit:'', charBusy:false, charErr:'', aspect:'4:3', size:{ w:210, h:297, unit:'mm' }, style:'storybook', answers:{},
+    cover: stNewScene('cover'),
     scenes: ST_PLANS[mode].scenes.map(s => stNewScene(s.k))
   };
 }
@@ -10394,7 +10395,8 @@ function stMeta(sc){
 }
 /* 장면 글자 스타일: 기본값은 흰 글자 + 검은 테두리. 위치(x,y)는 페이지 대비 %, size는 페이지 너비 대비 %, sw는 글자 크기 대비 테두리 % */
 const ST_TS_DEFAULT = { x:50, y:86, font:'Gowun Dodum', size:4.8, color:'#ffffff', stroke:'#000000', sw:22, bold:false };
-function stTs(sc){ return Object.assign({}, ST_TS_DEFAULT, sc.ts || {}); }
+const ST_TS_COVER = { x:50, y:18, font:'Black Han Sans', size:8, color:'#ffffff', stroke:'#000000', sw:22, bold:false }; // 표지 제목 기본값(위쪽 가운데, 큼직하게)
+function stTs(sc){ return Object.assign({}, sc.k === 'cover' ? ST_TS_COVER : ST_TS_DEFAULT, sc.ts || {}); }
 function stOvCss(t){
   return `left:${t.x}%;top:${t.y}%;font-family:'${t.font}','Nanum Gothic',sans-serif;font-size:${t.size}cqw;font-weight:${t.bold ? 800 : 400};color:${t.color};-webkit-text-stroke:${(t.size * t.sw / 100).toFixed(3)}cqw ${t.stroke};`;
 }
@@ -10436,6 +10438,7 @@ async function stLoad(){
         const sp = saved.proj[m]; if (!sp) return;
         const np = stNewProj(m);
         Object.assign(np, { title:sp.title||'', logline:sp.logline||'', charRef:sp.charRef||'', charDesc:sp.charDesc||'', charPrev:sp.charPrev||'', aspect:(ST_ASPECT[sp.aspect] || (sp.aspect === 'custom' && sp.size)) ? sp.aspect : '4:3', size:sp.size && ST_SIZE_LIMIT[sp.size.unit] ? sp.size : { w:210, h:297, unit:'mm' }, style:sp.style||'storybook', styleText:sp.styleText||'', durDefault:sp.durDefault>0 ? sp.durDefault : 0, coverDur:sp.coverDur>0 ? sp.coverDur : 2.5, answers:sp.answers||{} });
+        if (sp.cover) Object.assign(np.cover, { image:sp.cover.image||'', prevImage:sp.cover.prevImage||'', ts:sp.cover.ts||{}, sig:sp.cover.sig||'' });
         if (Array.isArray(sp.scenes) && sp.scenes.length) {
           // 저장된 장면 목록(추가·삭제·순서 변경 반영)을 그대로 복원. 기본 질문 장면 또는 사용자가 추가한 장면(x_)만 인정
           const known = new Set(ST_PLANS[m].scenes.map(s => s.k));
@@ -10488,7 +10491,10 @@ function stRenderRef(){
   stEl('stCharGen').disabled = stEl('stCharEditBtn').disabled = p.charBusy;
   stEl('stCharErr').textContent = p.charErr ? '⚠ ' + p.charErr : '';
 }
-function storyField(f, v){ stP()[f] = v; stSave(); }
+function storyField(f, v){
+  stP()[f] = v; stSave();
+  if (f === 'title') stRenderCover(stP()); // 표지 그림 위 제목 글자 갱신
+}
 function stRenderStyle(){
   const s = stP().style;
   document.querySelectorAll('#stStyleChips .st-chip').forEach(c => c.classList.toggle('on', c.dataset.style === s));
@@ -10502,12 +10508,15 @@ function storySetStyle(s){
 /* 그림체 일관성: 이미 그려진 다른 장면 중 가장 가까운 페이지를 그림체 기준으로 함께 전달 */
 async function stStyleRef(p, i){
   let best = -1;
-  for (let k = 1; k < p.scenes.length; k++) {
+  for (let k = 1; k <= p.scenes.length; k++) {
     const ok = n => n >= 0 && n < p.scenes.length && p.scenes[n].image && p.scenes[n].sig === stSig(p); // 지금 그림체로 그려진 것만 기준으로
     if (ok(i - k)) { best = i - k; break; }
     if (ok(i + k)) { best = i + k; break; }
   }
-  return best >= 0 ? await stShrink(p.scenes[best].image, 640, .8) : '';
+  if (best >= 0) return await stShrink(p.scenes[best].image, 640, .8);
+  // 기준이 될 장면이 없으면 같은 그림체로 그려진 표지를 기준으로 (표지 자신은 제외)
+  if (i >= 0 && p.cover.image && p.cover.sig === stSig(p)) return await stShrink(p.cover.image, 640, .8);
+  return '';
 }
 function storySetAspect(a){
   const p = stP();
@@ -10515,7 +10524,7 @@ function storySetAspect(a){
   if (a === 'custom' && !p.size) p.size = { w:210, h:297, unit:'mm' };
   document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === a));
   stRenderCustomSize();
-  p.scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = stA(p).css; });
+  p.scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = stA(p).css; }); { const cb = stEl('stImgCover'); if (cb) cb.style.aspectRatio = stA(p).css; }
   stSave();
 }
 function stShrink(src, max, q){
@@ -10639,6 +10648,7 @@ function storyRenderBody(){
   const plan = stPlan();
   let h = plan.setup.length ? '<div class="st-sec">📋 기획 질문</div>' + plan.setup.map(stSetupHtml).join('') : '';
   h += `<div class="st-sec">🎬 장면 만들기 · 대본 → 그림</div>`;
+  h += `<div class="st-card" id="stCover">${stCoverInner()}</div>`;
   h += stP().scenes.map((_, i) => `<div class="st-card" id="stSc${i}">${stSceneInner(i)}</div>`).join('');
   h += `<button class="st-addbtn" onclick="storyAddScene(${stP().scenes.length - 1})">➕ 장면 추가 <span>(맨 뒤에 새 장면)</span></button>`;
   stEl('stBody').innerHTML = h;
@@ -10657,6 +10667,87 @@ function storyPickChip(k, v){
   if (card) card.querySelectorAll('.st-chip').forEach(c => c.classList.toggle('on', c.textContent === v));
 }
 function storyScript(i, v){ stP().scenes[i].script = v; stSave(); stRenderDurTotal(); }
+/* ── 표지 만들기 ── 장면 맨 앞. 표지 그림(AI) 위에 작품 제목을 올림 */
+function stCoverInner(){
+  const p = stP(), c = p.cover, A = stA(p), t = p.title.trim();
+  const media = c.image
+    ? `<img src="${c.image}" alt="표지" onclick="storyOpenPreview(0)">`
+    : (p.charRef ? `<img src="${p.charRef}" alt="" style="object-fit:contain;width:80%;height:62%;position:absolute;left:10%;top:34%;cursor:default">` : '')
+      + `<div style="position:relative;z-index:0">📕 아직 표지 그림이 없어요<br>[표지 생성]을 눌러 보세요</div>`;
+  return `
+    <div class="st-q"><span class="st-tag">표지</span><div class="st-qt">📕 표지 만들기</div>
+      <div class="st-tip">* 작품 제목과 캐릭터, 로그라인으로 책 표지를 만들어요.<br>* 표지 글자는 위쪽 [작품 제목]을 따라가요. [미리보기·글자 편집]에서 끌어서 위치와 글꼴을 바꿀 수 있어요.</div></div>
+    <div class="st-act">
+      <button class="primary" onclick="storyCoverGen()" ${c.busy ? 'disabled' : ''}>🎨 ${c.image ? '표지 다시 생성' : '표지 생성'}</button>
+      ${p.charRef ? `<button onclick="storyCoverUseChar()" ${c.busy ? 'disabled' : ''}>🖼️ 캐릭터 그림을 표지로 사용</button>` : ''}
+      <button class="st-reset" onclick="storyCoverReset()" ${c.busy ? 'disabled' : ''}>🔄 표지 초기화</button>
+    </div>
+    <div class="st-img" id="stImgCover" style="aspect-ratio:${A.css}">${media}${t ? `<div class="st-ov" style="${stOvCss(stTs(c))}">${stEsc(t)}</div>` : ''}${c.busy ? '<div class="st-spin">AI가 그리는 중...</div>' : ''}</div>
+    ${c.err ? `<div class="st-err">⚠ ${stEsc(c.err)}</div>` : ''}
+    <div class="st-edit">
+      <input class="st-input" placeholder="그린 뒤 추가 수정 요청 (예: 배경을 밤하늘로 바꿔줘)" value="${stEsc(c.edit)}" oninput="stP().cover.edit=this.value">
+      <div class="st-act">
+        <button onclick="storyCoverEdit()" ${(!c.image || c.busy) ? 'disabled' : ''}>✏️ 수정 적용</button>
+        ${c.prevImage ? `<button onclick="storyCoverUndo()">↩ 이전 그림</button>` : ''}
+        <button onclick="storyOpenPreview(0)">👁 미리보기·글자 편집</button>
+        <button onclick="storySaveScene(-1)">💾 이미지 저장</button>
+      </div>
+    </div>`;
+}
+function stRenderCover(p){
+  if (p && p !== stP()) return;
+  const el = stEl('stCover'); if (el) el.innerHTML = stCoverInner();
+}
+async function stGenCover(edit){
+  const p = stP(), c = p.cover;
+  const brief = `표지 — 제목: ${p.title.trim() || '(미정)'}.${p.logline.trim() ? ' 줄거리: ' + p.logline.trim() : ''} 주인공이 돋보이는 책 표지.`;
+  c.busy = true; c.err = ''; stRenderCover(p);
+  try {
+    const body = {
+      kind:'cover', script:brief, pageNo:0, title:p.title, aspect:stAiAspect(p), style:p.style, styleDirection:p.styleText,
+      context: stContext(p, { key:'', clip:120, max:1400 }), charRef:p.charRef
+    };
+    if (edit) { body.edit = edit; body.baseImage = await stShrink(c.image, 1024, .85); }
+    else { const sr = await stStyleRef(p, -1); if (sr) body.styleRef = sr; }
+    const d = await stApi('/api/story-scene', body);
+    c.prevImage = c.image;
+    c.image = await stShrink(d.image, 1600, .9);
+    c.sig = stSig(p);
+    if (edit) c.edit = '';
+    stSave();
+  } catch(e) { c.err = e.message; throw e; }
+  finally { c.busy = false; stRenderCover(p); }
+}
+function storyCoverGen(){
+  const p = stP();
+  if (!p.title.trim() && !p.logline.trim() && !p.charRef) { alert('작품 제목이나 로그라인, 캐릭터 레퍼런스 중 하나는 먼저 입력해 주세요.'); return; }
+  stGate(() => { stGenCover('').catch(() => {}); });
+}
+function storyCoverEdit(){
+  const c = stP().cover;
+  if (!c.edit.trim()) { alert('어떻게 고치고 싶은지 적어 주세요.'); return; }
+  const edit = c.edit.trim();
+  stGate(() => { stGenCover(edit).catch(() => {}); });
+}
+function storyCoverUseChar(){
+  const p = stP(), c = p.cover;
+  if (c.image && !confirm('지금 표지 그림을 캐릭터 그림으로 바꿀까요?\n([이전 그림]으로 되돌릴 수 있어요)')) return;
+  c.prevImage = c.image; c.image = p.charRef; c.sig = ''; c.err = '';
+  stRenderCover(p); stSave();
+}
+function storyCoverUndo(){
+  const p = stP(), c = p.cover;
+  const cur = c.image; c.image = c.prevImage; c.prevImage = cur;
+  stRenderCover(p); stSave();
+}
+function storyCoverReset(){
+  const p = stP(), c = p.cover;
+  if (c.busy) return;
+  if (c.image && !confirm('표지 그림과 글자 스타일을 비울까요?\n(작품 제목은 그대로예요. 되돌릴 수 없어요)')) return;
+  Object.assign(c, { image:'', prevImage:'', edit:'', err:'', ts:{}, sig:'' });
+  stRenderCover(p); stSave();
+}
+
 /* 영상화(KLING API 연동 예정) — 아직 준비중 */
 function storyAnimateComing(){ alert('🎬 영상화 기능은 준비중입니다.'); }
 
@@ -10910,7 +11001,8 @@ function storyEditScene(i){
 function storyGenAll(){
   const p = stP();
   const todo = p.scenes.map((s, i) => (s.script.trim() && !s.image) ? i : -1).filter(i => i >= 0);
-  if (!todo.length) {
+  const needCover = !p.cover.image && !!(p.title.trim() || p.logline.trim()); // 표지도 함께 (제목이나 로그라인이 있을 때)
+  if (!todo.length && !needCover) {
     alert(p.scenes.some(s => s.script.trim())
       ? '이미 모든 장면이 그려져 있어요.\n다시 그리고 싶은 장면은 [장면 다시 생성]을 눌러 주세요.'
       : '대본이 있는 장면이 없어요. 대본을 쓰거나 [AI로 대본 다듬기]를 먼저 눌러 주세요.');
@@ -10921,11 +11013,16 @@ function storyGenAll(){
     if (stS.batch) return;
     stS.batch = true; stS.cancel = false;
     let done = 0, fail = 0, next = 0;
-    const total = todo.length;
-    const tick = () => stProg(true, `🎨 장면 생성 중... ${done + fail} / ${total}${fail ? ` (실패 ${fail})` : ''}`, Math.round((done + fail) / total * 100), true);
+    const total = todo.length + (needCover ? 1 : 0);
+    const tick = () => stProg(true, `🎨 ${needCover && !p.cover.image ? '표지' : '장면'} 생성 중... ${done + fail} / ${total}${fail ? ` (실패 ${fail})` : ''}`, Math.round((done + fail) / total * 100), true);
     tick();
-    // 현재 그림체로 그려진 장면이 아직 없으면 첫 장면을 먼저 혼자 그려서, 나머지가 그 그림을 그림체 기준으로 삼게 함
-    if (!p.scenes.some(s => s.image && s.sig === stSig(p))) {
+    // 표지를 먼저 혼자 그려서 그림체의 기준으로 삼음
+    if (needCover) {
+      try { await stGenCover(''); done++; } catch(e) { fail++; }
+      tick();
+    }
+    // 현재 그림체로 그려진 장면·표지가 아직 없으면 첫 장면을 먼저 혼자 그려서, 나머지가 그 그림을 그림체 기준으로 삼게 함
+    if (todo.length && !p.scenes.some(s => s.image && s.sig === stSig(p)) && !(p.cover.image && p.cover.sig === stSig(p))) {
       const first = todo[next++];
       try { await stGenScene(first); done++; } catch(e) { fail++; }
       tick();
@@ -10947,7 +11044,7 @@ function storyGenAll(){
 /* ── 미리보기 ── */
 function stPages(all){
   const p = stP();
-  const pages = [{ type:'cover', title:p.title, src:p.charRef }];
+  const pages = [{ type:'cover', idx:-1, no:0, tag:'표지', title:p.title, text:p.title.trim(), src:p.cover.image, refSrc:p.charRef, ts:stTs(p.cover) }];
   p.scenes.forEach((sc, i) => {
     if (all || sc.script.trim() || sc.image) pages.push({ type:'scene', idx:i, no:i + 1, tag:stMeta(sc).tag, text:sc.script.trim(), src:sc.image, ts:stTs(sc) });
   });
@@ -10970,33 +11067,38 @@ function stPvRender(){
   const page = stEl('stPvPage');
   page.style.setProperty('--ar', A.css); page.style.setProperty('--arn', A.n);
   const ctl = stEl('stPvCtl');
-  if (pg.type === 'cover') {
-    page.innerHTML = `<div class="st-pv-img cover">${pg.src ? `<img src="${pg.src}" alt="">` : '🖼️ 캐릭터 레퍼런스'}</div><div class="st-pv-cover">${stEsc(pg.title || '제목 없음')}</div>`;
-    stEl('stPvLabel').textContent = '표지';
-    ctl.style.display = 'none';
-  } else {
-    page.innerHTML = `<div class="st-pv-img">${pg.src ? `<img src="${pg.src}" alt="">` : '🖼️ 아직 그려지지 않았어요'}</div><div class="st-ov st-pv-txt drag" id="stPvOv"></div>`;
-    stEl('stPvLabel').textContent = `장면 ${pg.no} · ${pg.tag}`;
-    ctl.style.display = '';
-    const sc = p.scenes[pg.idx], t = stTs(sc);
-    stEl('stPvText').value = sc.script;
-    stEl('stPvFont').value = t.font; stEl('stPvSize').value = t.size;
-    stEl('stPvColor').value = t.color; stEl('stPvStroke').value = t.stroke;
-    stEl('stPvSw').value = t.sw; stEl('stPvBold').checked = !!t.bold;
-    stPvOverlay();
-    stPvDragInit();
-  }
+  const isCover = pg.type === 'cover';
+  // 표지: 표지 그림(없으면 캐릭터 레퍼런스) 위에 작품 제목. 장면: 장면 그림 위에 대본. 둘 다 글자를 끌어서 편집
+  const media = pg.src ? `<img src="${pg.src}" alt="">`
+    : (isCover ? (pg.refSrc ? `<img src="${pg.refSrc}" alt="" style="object-fit:contain;width:80%;height:62%;margin-top:34%">` : '🖼️ 표지 그림을 만들어 보세요') : '🖼️ 아직 그려지지 않았어요');
+  page.innerHTML = `<div class="st-pv-img">${media}</div><div class="st-ov st-pv-txt drag" id="stPvOv"></div>`;
+  stEl('stPvLabel').textContent = isCover ? '📕 표지' : `장면 ${pg.no} · ${pg.tag}`;
+  stEl('stPvText').placeholder = isCover ? '작품 제목 (그림 위에 표시돼요)' : '이 장면의 글 (그림 위에 표시돼요)';
+  ctl.style.display = '';
+  const sc = isCover ? p.cover : p.scenes[pg.idx], t = stTs(sc);
+  stEl('stPvText').value = isCover ? p.title : sc.script;
+  stEl('stPvFont').value = t.font; stEl('stPvSize').value = t.size;
+  stEl('stPvColor').value = t.color; stEl('stPvStroke').value = t.stroke;
+  stEl('stPvSw').value = t.sw; stEl('stPvBold').checked = !!t.bold;
+  stPvOverlay();
+  stPvDragInit();
   stEl('stPvDots').innerHTML = pages.map((_, n) => `<i class="${n === stS.pv ? 'on' : ''}" onclick="stS.pv=${n};stPvRender()"></i>`).join('');
 }
 /* 미리보기 글자 편집 */
-function stPvScene(){ const i = stS.pv - 1; return i >= 0 ? stP().scenes[i] : null; }
+function stPvScene(){ const i = stS.pv - 1; return i >= 0 ? stP().scenes[i] : stP().cover; } // 0번 페이지 = 표지
 function stPvOverlay(){
   const sc = stPvScene(), ov = stEl('stPvOv'); if (!sc || !ov) return;
   ov.style.cssText = stOvCss(stTs(sc));
-  ov.textContent = sc.script.trim() || '글을 입력해 보세요';
-  ov.style.opacity = sc.script.trim() ? '1' : '.45';
+  const txt = (sc.k === 'cover' ? stP().title : sc.script).trim();
+  ov.textContent = txt || (sc.k === 'cover' ? '작품 제목을 입력해 보세요' : '글을 입력해 보세요');
+  ov.style.opacity = txt ? '1' : '.45';
 }
-function storyPvText(v){ const sc = stPvScene(); if (!sc) return; sc.script = v; stPvOverlay(); stSave(); }
+function storyPvText(v){
+  const sc = stPvScene(); if (!sc) return;
+  if (sc.k === 'cover') { stP().title = v; stEl('stTitle').value = v; stRenderCover(stP()); } // 표지 글자 = 작품 제목
+  else sc.script = v;
+  stPvOverlay(); stSave();
+}
 function storyPvStyle(k, v){
   const sc = stPvScene(); if (!sc) return;
   sc.ts = Object.assign({}, sc.ts, { [k]: v });
@@ -11004,7 +11106,8 @@ function storyPvStyle(k, v){
 }
 function storyPvResetPos(){
   const sc = stPvScene(); if (!sc) return;
-  sc.ts = Object.assign({}, sc.ts, { x:ST_TS_DEFAULT.x, y:ST_TS_DEFAULT.y });
+  const d = sc.k === 'cover' ? ST_TS_COVER : ST_TS_DEFAULT;
+  sc.ts = Object.assign({}, sc.ts, { x:d.x, y:d.y });
   stPvOverlay(); stSave();
 }
 function storyPvApplyAll(){
@@ -11054,7 +11157,7 @@ function stLoadImg(src){
 async function stExportPages(){
   const base = stPages(false);
   if (base.length < 2) { alert('내보낼 장면이 없어요. 대본이나 그림을 먼저 만들어 주세요.'); return null; }
-  await Promise.all(base.map(async pg => { pg.img = await stLoadImg(pg.src); }));
+  await Promise.all(base.map(async pg => { pg.img = await stLoadImg(pg.src); if (pg.type === 'cover') pg.refImg = await stLoadImg(pg.refSrc); }));
   await document.fonts.ready;
   await Promise.allSettled(["Black Han Sans", "Gowun Dodum", "Nanum Gothic", "Nanum Pen Script", "Permanent Marker"].flatMap(f => [document.fonts.load(`32px '${f}'`, '가나다ABC'), document.fonts.load(`800 32px '${f}'`, '가나다ABC')]));
   return base;
@@ -11087,27 +11190,20 @@ function stCover(ctx, im, x, y, w, h){
 function stDrawPage(ctx, W, H, pg){
   ctx.fillStyle = '#fffaf0'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (pg.type === 'cover') {
-    const bx = H * 0.1, bw = W - bx * 2, bh = H * 0.58;
-    if (pg.img) {
-      const s = Math.min(bw / pg.img.naturalWidth, bh / pg.img.naturalHeight);
-      const dw = pg.img.naturalWidth * s, dh = pg.img.naturalHeight * s;
-      ctx.drawImage(pg.img, (W - dw) / 2, H * 0.08 + (bh - dh) / 2, dw, dh);
-    }
-    let fs = Math.round(W * 0.075);
-    ctx.fillStyle = '#1a1a2e';
-    ctx.font = `${fs}px 'Black Han Sans','Nanum Gothic',sans-serif`;
-    const lines = stWrap(ctx, pg.title || '나의 그림책', W * 0.82);
-    const lh = fs * 1.3, y0 = H * 0.8 - (lines.length - 1) * lh / 2;
-    lines.forEach((l, i) => ctx.fillText(l, W / 2, y0 + i * lh));
-    return;
-  }
-  // 장면: 그림 전체 + 그 위에 테두리 글자 (미리보기 오버레이와 같은 비율)
+  // 그림 전체 + 그 위에 테두리 글자 (미리보기 오버레이와 같은 비율)
   if (pg.img) stCover(ctx, pg.img, 0, 0, W, H);
-  else { ctx.fillStyle = '#eadfc8'; ctx.fillRect(0, 0, W, H); }
+  else {
+    ctx.fillStyle = '#eadfc8'; ctx.fillRect(0, 0, W, H);
+    // 표지 그림이 아직 없으면 캐릭터 레퍼런스를 아래쪽에 크게 보여 줌
+    if (pg.type === 'cover' && pg.refImg) {
+      const bw = W * 0.8, bh = H * 0.62, s = Math.min(bw / pg.refImg.naturalWidth, bh / pg.refImg.naturalHeight);
+      const dw = pg.refImg.naturalWidth * s, dh = pg.refImg.naturalHeight * s;
+      ctx.drawImage(pg.refImg, (W - dw) / 2, H * 0.34 + (bh - dh) / 2, dw, dh);
+    }
+  }
   const text = (pg.text || '').trim();
   if (!text) return;
-  const t = pg.ts || ST_TS_DEFAULT;
+  const t = pg.ts || (pg.type === 'cover' ? ST_TS_COVER : ST_TS_DEFAULT);
   const fs = W * t.size / 100;
   ctx.font = `${t.bold ? '800 ' : ''}${fs}px '${t.font}','Nanum Gothic',sans-serif`;
   const lines = stWrap(ctx, text, W * 0.86);
@@ -11137,13 +11233,15 @@ function stSceneCanvas(pg, A){
 }
 function stCanvasBlob(c){ return new Promise(res => c.toBlob(res, 'image/png')); }
 async function storySaveScene(i){
-  if (i < 0) return;
-  const p = stP(), sc = p.scenes[i], A = stA(p);
-  if (!sc.image && !sc.script.trim()) { alert('저장할 그림이나 글이 없어요.'); return; }
+  const p = stP(), A = stA(p);
+  const isCover = i < 0, sc = isCover ? p.cover : p.scenes[i];
+  if (!sc.image && !(isCover ? p.title : sc.script).trim()) { alert('저장할 그림이나 글이 없어요.'); return; }
   await stExportFonts();
-  const pg = { type:'scene', no:i + 1, text:sc.script.trim(), ts:stTs(sc), img:await stLoadImg(sc.image) };
+  const pg = isCover
+    ? { type:'cover', text:p.title.trim(), ts:stTs(sc), img:await stLoadImg(sc.image), refImg:await stLoadImg(p.charRef) }
+    : { type:'scene', no:i + 1, text:sc.script.trim(), ts:stTs(sc), img:await stLoadImg(sc.image) };
   const blob = await stCanvasBlob(stSceneCanvas(pg, A));
-  saveImageUniversal(blob, `${stFileBase()}_장면${i + 1}.png`);
+  saveImageUniversal(blob, isCover ? `${stFileBase()}_표지.png` : `${stFileBase()}_장면${i + 1}.png`);
 }
 async function stExportFonts(){
   await document.fonts.ready;
@@ -11181,16 +11279,16 @@ async function storyExportImages(){
   try {
     const pages = (await stExportPages());
     if (!pages) return;
-    const scenes = pages.filter(pg => pg.type === 'scene');
+    const scenes = pages; // 표지(0번) + 장면
     const files = [];
     for (let n = 0; n < scenes.length; n++) {
-      stExpProg(true, `🖼️ 장면 이미지 만드는 중... (${n + 1}/${scenes.length})`, 5 + Math.round(n / scenes.length * 85));
-      files.push({ name:`${stFileBase()}_장면${String(scenes[n].no).padStart(2, '0')}.png`, blob:await stCanvasBlob(stSceneCanvas(scenes[n], A)) });
+      stExpProg(true, `🖼️ 이미지 만드는 중... (${n + 1}/${scenes.length})`, 5 + Math.round(n / scenes.length * 85));
+      files.push({ name:`${stFileBase()}_${scenes[n].type === 'cover' ? '00_표지' : '장면' + String(scenes[n].no).padStart(2, '0')}.png`, blob:await stCanvasBlob(stSceneCanvas(scenes[n], A)) });
       await new Promise(r => setTimeout(r, 0));
     }
     if (files.length === 1) saveImageUniversal(files[0].blob, files[0].name);
     else saveImageUniversal(await stZip(files), stFileBase() + '_장면이미지.zip');
-    stExpProg(true, `완료! ✅ 장면 이미지 ${files.length}장을 저장했어요`, 100);
+    stExpProg(true, `완료! ✅ 표지·장면 이미지 ${files.length}장을 저장했어요`, 100);
     setTimeout(() => stExpProg(false), 3000);
   } catch(e) { stExpProg(false); alert('이미지 내보내기 실패: ' + e.message); }
   finally { stS.exporting = false; }

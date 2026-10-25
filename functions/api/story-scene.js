@@ -121,6 +121,22 @@ RULES:
 - ${charRule}
 - If the request is ambiguous, make the smallest possible change.
 - Keep the image ${aspect.text}. No text, letters, captions or watermarks in the image. Safe for all ages.`;
+    } else if (b.kind === 'cover') {
+      const medium = b.style === 'cinema' ? 'cinematic movie-poster style key art (photographic, not an illustration)' : 'full-page illustration';
+      prompt = `Create the FRONT COVER ${medium} for a family-friendly story book${title ? ` titled "${title}"` : ''}.
+
+STYLE: ${styleText} Use exactly this same style on every page of the book.
+${styleRule}
+${charRule}
+${storyContext ? `\nSTORY (for mood, world and characters):\n${storyContext}\n` : ''}
+COVER BRIEF: "${script}"
+
+RULES:
+- Make the main character prominent, inviting and expressive, with the story's world and mood visible behind them.
+- Leave a calm, uncluttered area in the upper third of the image, because the book title will be added there later as separate text.
+- Orientation: ${aspect.text}.
+- Do NOT draw any text, letters, title, captions, logos or watermarks.
+- Safe for all ages: no violence, no sexual content, child-friendly.`;
     } else {
       const medium = b.style === 'cinema' ? 'full-frame cinematic movie still (photographic, not an illustration)' : 'full-page illustration';
       prompt = `Create ONE ${medium} for a family-friendly story book${title ? ` titled "${title}"` : ''}.
