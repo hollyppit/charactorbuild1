@@ -1495,6 +1495,36 @@ body.st-active .st-fab{display:block}
 .theme-light #dubSpSceneText{background:#fff !important;color:#1f1b2e !important;border-color:#b9a2d6 !important}
 .theme-light .modal{background:#fff;color:#1f1b2e}
 .theme-light .modal h2{color:#5b1a9a}
+
+/* ── 모바일/터치 보정 (스토리 만들기 · 그림책 더빙) ── */
+/* iOS는 16px 미만 입력칸에 포커스하면 화면이 확대되므로 터치 화면에서는 16px로 */
+@media (max-width:760px),(pointer:coarse){
+  .theme-light input:not([type=range]):not([type=color]):not([type=checkbox]):not([type=file]),.theme-light textarea,.theme-light select{font-size:16px !important}
+  /* 손가락으로 누르기 쉬운 크기 */
+  .theme-light .st-act button,.theme-light .st-chip,.theme-light .st-mini,.theme-light .st-sizes button,.theme-light .st-seg button,.theme-light .dub-scene-btn{min-height:40px}
+  .theme-light .st-act button{font-size:12.5px;padding:8px 11px}
+  .theme-light .st-tools .st-act button{font-size:12px;padding:8px 9px}
+  .theme-light .st-chip{padding:8px 11px;font-size:13px}
+  .theme-light .st-sizes button,.theme-light .st-sizes .st-select{padding:9px 11px}
+  .theme-light .st-mini{padding:9px 12px;font-size:12px}
+  .theme-light .st-pvc input[type=color]{width:44px;height:36px}
+  .theme-light .st-pvc input[type=checkbox]{width:22px;height:22px}
+  .theme-light .st-pvc input[type=range]{flex:1;width:auto;min-width:0;height:30px;margin-left:14px}
+  .theme-light .st-pvc-row{gap:10px 14px}
+  .theme-light .st-pvc-row label{flex:1 1 100%;justify-content:space-between;white-space:nowrap}
+  .theme-light .st-pvc-row label:has(input[type=color]),.theme-light .st-pvc-row label:has(input[type=checkbox]){flex:1 1 38%}
+  .theme-light .st-pvc .st-select{flex:1;margin-left:14px}
+  .st-fab{bottom:calc(14px + env(safe-area-inset-bottom));right:12px;padding:12px 14px}
+  .st-wrap{padding-bottom:110px}
+  .st-custom-row .st-input{width:110px}
+  .st-dur .st-input,.st-durbar .st-input{width:92px}
+}
+/* 좁은 화면 미리보기: 이전/다음 버튼을 그림 아래로 내려 그림을 최대한 크게 */
+@media (max-width:620px){
+  .st-pv-stage{flex-wrap:wrap;gap:10px}
+  .st-pv-page{order:1;width:min(calc(100vw - 28px),calc(52vh * var(--arn,1.3333)))}
+  .st-pv-nav{order:2;width:calc(50% - 8px);max-width:150px;height:46px;font-size:18px}
+}
 </style>
 
 <script>
@@ -2934,6 +2964,29 @@ body.st-active .st-fab{display:block}
    상수 & 설정
 ═══════════════════════════════════════ */
 /* ───── 이미지 저장 헬퍼 ───── */
+// iOS에서 파일을 바로 못 저장할 때: 탭 한 번으로 공유/저장하는 안내창
+function _showSaveDialog(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;color:#222;max-width:340px;width:100%;padding:20px;text-align:center;font-family:sans-serif;border:3px solid #a11cee';
+  const title = document.createElement('div'); title.textContent = '파일이 준비됐어요 ✅'; title.style.cssText = 'font-weight:700;font-size:16px;margin-bottom:6px';
+  const name = document.createElement('div'); name.textContent = filename; name.style.cssText = 'font-size:13px;color:#666;margin-bottom:14px;word-break:break-all';
+  const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `display:block;width:100%;padding:13px;margin-top:8px;font-size:15px;font-weight:700;border:2px solid #222;background:${bg};color:${fg};cursor:pointer`; return b; };
+  const save = mk('📥 저장 / 공유하기', '#fbea1a', '#000');
+  const close = mk('닫기', '#fff', '#222');
+  const done = () => { wrap.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); };
+  save.onclick = async () => {
+    try {
+      const file = new File([blob], filename, { type: blob.type });
+      if (navigator.canShare && navigator.canShare({ files:[file] })) { await navigator.share({ files:[file], title:filename }); done(); return; }
+    } catch(e) { if (e && e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  };
+  close.onclick = done;
+  box.append(title, name, save, close); wrap.append(box); document.body.appendChild(wrap);
+}
 async function saveImageUniversal(source, filename){
   let blob;
   try{
@@ -2955,7 +3008,7 @@ async function saveImageUniversal(source, filename){
       const a = document.createElement('a');
       a.href = url; a.download = filename;
       document.body.appendChild(a); a.click(); a.remove();
-      if(blob) setTimeout(()=>URL.revokeObjectURL(url), 1000);
+      if(blob) setTimeout(()=>URL.revokeObjectURL(url), 60000); // PDF·ZIP·영상처럼 큰 파일은 다운로드가 끝나기 전에 해제되지 않게 넉넉히
     }catch(e){ console.warn('a.download 실패', e); }
   }
 
@@ -2973,6 +3026,8 @@ async function saveImageUniversal(source, filename){
       if(e && e.name === 'AbortError') return false;
       console.warn('share 실패, 폴백 시도', e);
     }
+    // 이미지가 아닌 파일(PDF·ZIP·영상): 긴 작업 뒤에는 공유 시트가 막힐 수 있으니, 사용자가 직접 누르는 저장 버튼을 띄움
+    if(blob && !/^image\//.test(blob.type || '')){ _showSaveDialog(blob, filename); return true; }
     // iOS Safari 폴백: 새 창에 이미지 띄워서 길게 눌러 저장
     try{
       const w = window.open();
@@ -10415,15 +10470,21 @@ function stIdb(){
   });
 }
 let _stSaveTimer = null;
+async function stSaveNow(){
+  clearTimeout(_stSaveTimer); _stSaveTimer = null;
+  if (!stS.loaded) return; // 복원이 끝나기 전에 빈 상태로 덮어쓰지 않도록
+  try {
+    const db = await stIdb();
+    db.transaction('kv', 'readwrite').objectStore('kv').put({ cur:stS.cur, proj:stS.proj }, 'state');
+  } catch(e) { console.warn('스토리 저장 실패', e); }
+}
 function stSave(){
   clearTimeout(_stSaveTimer);
-  _stSaveTimer = setTimeout(async () => {
-    try {
-      const db = await stIdb();
-      db.transaction('kv', 'readwrite').objectStore('kv').put({ cur:stS.cur, proj:stS.proj }, 'state');
-    } catch(e) { console.warn('스토리 저장 실패', e); }
-  }, 600);
+  _stSaveTimer = setTimeout(stSaveNow, 1000); // 그림이 많으면 저장이 무거우니 입력이 멈춘 뒤에 한 번만
 }
+// 모바일에서 앱 전환·화면 잠금·탭 닫기 직전에 대기 중인 저장을 즉시 실행
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && _stSaveTimer) stSaveNow(); });
+window.addEventListener('pagehide', () => { if (_stSaveTimer) stSaveNow(); });
 async function stLoad(){
   stS.proj.short = stNewProj('short');
   stS.proj.long = stNewProj('long');
@@ -10454,7 +10515,7 @@ async function stLoad(){
 }
 
 async function initStoryPanel(){
-  if (!stS.loaded) await stLoad();
+  if (!stS.loaded) await (stS.loading || (stS.loading = stLoad())); // 탭을 빠르게 여러 번 눌러도 복원은 한 번만
   storyRenderAll();
 }
 function storySetMode(m){
@@ -10605,7 +10666,7 @@ function stSceneInner(i){
   const p = stP(), sc = p.scenes[i], st = stMeta(sc), A = stA(p);
   const hasScript = !!sc.script.trim();
   const img = sc.image
-    ? `<img src="${sc.image}" alt="장면 ${i+1}" onclick="storyOpenPreview(${i+1})">`
+    ? `<img src="${sc.image}" alt="장면 ${i+1}" loading="lazy" decoding="async" onclick="storyOpenPreview(${i+1})">`
     : '🖼️ 아직 그려지지 않았어요<br>대본을 쓰고 [장면 생성]을 눌러 보세요';
   const total = p.scenes.length;
   return `
@@ -10671,7 +10732,7 @@ function storyScript(i, v){ stP().scenes[i].script = v; stSave(); stRenderDurTot
 function stCoverInner(){
   const p = stP(), c = p.cover, A = stA(p), t = p.title.trim();
   const media = c.image
-    ? `<img src="${c.image}" alt="표지" onclick="storyOpenPreview(0)">`
+    ? `<img src="${c.image}" alt="표지" loading="lazy" decoding="async" onclick="storyOpenPreview(0)">`
     : (p.charRef ? `<img src="${p.charRef}" alt="" style="object-fit:contain;width:80%;height:62%;position:absolute;left:10%;top:34%;cursor:default">` : '')
       + `<div style="position:relative;z-index:0">📕 아직 표지 그림이 없어요<br>[표지 생성]을 눌러 보세요</div>`;
   return `
@@ -11154,10 +11215,15 @@ function stLoadImg(src){
     const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src;
   });
 }
+/* 페이지 그림은 그릴 때만 불러오고 바로 해제 — 장면이 많아도 모바일 메모리가 넘치지 않게 */
+async function stPrep(pg){
+  pg.img = await stLoadImg(pg.src);
+  if (pg.type === 'cover') pg.refImg = await stLoadImg(pg.refSrc);
+}
+function stRelease(pg){ pg.img = null; pg.refImg = null; }
 async function stExportPages(){
   const base = stPages(false);
   if (base.length < 2) { alert('내보낼 장면이 없어요. 대본이나 그림을 먼저 만들어 주세요.'); return null; }
-  await Promise.all(base.map(async pg => { pg.img = await stLoadImg(pg.src); if (pg.type === 'cover') pg.refImg = await stLoadImg(pg.refSrc); }));
   await document.fonts.ready;
   await Promise.allSettled(["Black Han Sans", "Gowun Dodum", "Nanum Gothic", "Nanum Pen Script", "Permanent Marker"].flatMap(f => [document.fonts.load(`32px '${f}'`, '가나다ABC'), document.fonts.load(`800 32px '${f}'`, '가나다ABC')]));
   return base;
@@ -11283,7 +11349,10 @@ async function storyExportImages(){
     const files = [];
     for (let n = 0; n < scenes.length; n++) {
       stExpProg(true, `🖼️ 이미지 만드는 중... (${n + 1}/${scenes.length})`, 5 + Math.round(n / scenes.length * 85));
-      files.push({ name:`${stFileBase()}_${scenes[n].type === 'cover' ? '00_표지' : '장면' + String(scenes[n].no).padStart(2, '0')}.png`, blob:await stCanvasBlob(stSceneCanvas(scenes[n], A)) });
+      await stPrep(scenes[n]);
+      const blob = await stCanvasBlob(stSceneCanvas(scenes[n], A));
+      stRelease(scenes[n]);
+      files.push({ name:`${stFileBase()}_${scenes[n].type === 'cover' ? '00_표지' : '장면' + String(scenes[n].no).padStart(2, '0')}.png`, blob });
       await new Promise(r => setTimeout(r, 0));
     }
     if (files.length === 1) saveImageUniversal(files[0].blob, files[0].name);
@@ -11310,7 +11379,9 @@ async function storyExportPDF(){
     const ctx = c.getContext('2d');
     for (let i = 0; i < pages.length; i++) {
       stExpProg(true, `📄 PDF 만드는 중... (${i + 1}/${pages.length})`, 5 + Math.round(i / pages.length * 90));
+      await stPrep(pages[i]);
       stDrawPage(ctx, A.w, A.h, pages[i]);
+      stRelease(pages[i]);
       if (i > 0) pdf.addPage([mmW, mmH], orient);
       pdf.addImage(c.toDataURL('image/jpeg', .92), 'JPEG', 0, 0, mmW, mmH);
       await new Promise(r => setTimeout(r, 0));
@@ -11327,36 +11398,41 @@ async function storyExportVideo(){
   if (typeof MediaRecorder === 'undefined') { alert('이 브라우저는 영상 내보내기를 지원하지 않아요. 크롬 최신 버전을 이용해 주세요.'); return; }
   stS.exporting = true;
   const p = stP(), A = stA(p);
-  let timer = null, canvas = null;
+  let timer = null, canvas = null, rec = null, wakeLock = null;
   try {
     stExpProg(true, '🎞️ 영상 준비 중...', 3);
     const pages = await stExportPages();
     if (!pages) return;
     const W = A.vw, H = A.vh;
-    const frames = pages.map(pg => {
+    // 페이지는 보여 줄 차례에 한 장씩만 그림 (전부 미리 그려 두면 모바일에서 메모리 부족)
+    const pageCanvas = async pg => {
+      await stPrep(pg);
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       stDrawPage(c.getContext('2d'), W, H, pg);
+      stRelease(pg);
       return c;
-    });
+    };
     canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
     canvas.style.cssText = 'position:fixed;left:-9999px;top:-9999px;pointer-events:none;opacity:0;';
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    let cur = 0;
-    const draw = () => ctx.drawImage(frames[cur], 0, 0);
+    let curCanvas = await pageCanvas(pages[0]);
+    const draw = () => ctx.drawImage(curCanvas, 0, 0);
     draw();
+    // 영상 만드는 동안 화면이 꺼지면 녹화가 멈추므로 화면 켜짐 유지 요청 (지원하는 브라우저만)
+    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
     const stream = canvas.captureStream(30);
     const mimes = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
     const mime = mimes.find(m => MediaRecorder.isTypeSupported(m)) || '';
-    const rec = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond:3000000 } : { videoBitsPerSecond:3000000 });
+    rec = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond:3000000 } : { videoBitsPerSecond:3000000 });
     const chunks = [];
     rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
     timer = setInterval(draw, 1000 / 30);
     const t0 = Date.now();
     rec.start(200);
     for (let i = 0; i < pages.length; i++) {
-      cur = i;
-      stExpProg(true, `🎞️ 영상 만드는 중... (${i + 1}/${pages.length})`, 5 + Math.round(i / pages.length * 88));
+      if (i > 0) curCanvas = await pageCanvas(pages[i]);
+      stExpProg(true, `🎞️ 영상 만드는 중... (${i + 1}/${pages.length}) — 화면을 켜 두고 이 탭을 벗어나지 마세요`, 5 + Math.round(i / pages.length * 88));
       const len = stPageMs(p, pages[i]);
       await new Promise(r => setTimeout(r, len));
     }
@@ -11378,6 +11454,8 @@ async function storyExportVideo(){
   } catch(e) { stExpProg(false); alert('영상 내보내기 실패: ' + e.message); }
   finally {
     if (timer) clearInterval(timer);
+    try { if (rec && rec.state !== 'inactive') rec.stop(); } catch(e) {} // 오류로 중단됐을 때 녹화가 계속 돌지 않게
+    try { if (wakeLock) wakeLock.release(); } catch(e) {}
     if (canvas) canvas.remove();
     stS.exporting = false;
   }
