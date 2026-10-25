@@ -43,7 +43,7 @@ export async function onRequest(context) {
       '3:4': { gemini: '3:4', openai: '1024x1536', text: 'vertical portrait (3:4)' },
       '1:1': { gemini: '1:1', openai: '1024x1024', text: 'square (1:1)' },
     };
-    const aspect = aspectMap[b.aspect] || aspectMap['4:3'];
+    const aspect = b.kind === 'character' ? aspectMap['1:1'] : (aspectMap[b.aspect] || aspectMap['4:3']);
 
     const styleMap = {
       storybook: 'Warm children\'s picture-book illustration, soft watercolor and colored-pencil texture, gentle pastel palette, clean friendly shapes.',
@@ -61,15 +61,37 @@ export async function onRequest(context) {
       const m = d.match(/^data:([^;]+);base64,(.+)$/);
       return m ? { mime: m[1], data: m[2] } : null;
     };
-    const refImg = charRef ? split(charRef) : null;
+    const refImg = (charRef && b.kind !== 'character') ? split(charRef) : null;
     const baseImg = baseImage ? split(baseImage) : null;
 
     const charRule = refImg
       ? `CHARACTER CONSISTENCY (VERY IMPORTANT): The ${baseImg ? 'second' : 'first'} attached image is the main character reference sheet. The main character in this page MUST look exactly like it: same face, hair, eyes, skin tone, outfit, colors and body proportions. Do not redesign the character.`
       : 'Keep the main character design simple and consistent with the story context.';
 
+    const isCharacter = b.kind === 'character';
+
     let prompt;
-    if (baseImg && edit) {
+    if (isCharacter) {
+      // 캐릭터 레퍼런스: 장면 전체 일관성의 기준이 되는 한 장짜리 캐릭터 시트
+      const base = `Single main character reference image for a picture book${title ? ` titled "${title}"` : ''}.
+STYLE: ${styleText} Use exactly this style, since every page of the book will be drawn in it.`;
+      const rules = `- Show ONE character only, full body, centered, clear readable face, simple standing pose, plain light background (no scenery).
+- Distinctive, memorable design: clear hair, outfit, colors and accessories that can be redrawn consistently on every page.
+- Orientation: square (1:1). Do NOT draw any text, letters, captions, logos or watermarks. Safe for all ages.`;
+      if (baseImg && edit) {
+        prompt = `You are editing a character reference image. The attached image is the current character.
+USER EDIT REQUEST: "${edit}"
+RULES:
+- Change ONLY what the request asks for; keep everything else (face, proportions, art style, pose, background) identical.
+- If the request is ambiguous, make the smallest possible change.
+${rules}`;
+      } else {
+        prompt = `${base}
+CHARACTER DESCRIPTION: "${script}"
+${storyContext ? `STORY CONTEXT:\n${storyContext}\n` : ''}RULES:
+${rules}`;
+      }
+    } else if (baseImg && edit) {
       prompt = `You are editing one page of a picture book. The FIRST attached image is the current page illustration.
 USER EDIT REQUEST: "${edit}"
 

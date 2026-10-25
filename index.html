@@ -1937,11 +1937,26 @@ body.st-active .st-fab{display:block}
   <div class="st-head">
     <div class="st-ref" id="stRefBox" onclick="document.getElementById('stRefInput').click()" style="cursor:pointer"></div>
     <input type="file" id="stRefInput" accept="image/*" style="display:none" onchange="storyLoadRef(this)">
-    <div>
+    <div style="flex:1;min-width:0">
       <div class="st-ref-t">캐릭터 일관성 레퍼런스</div>
-      <div class="st-ref-s">주인공 그림을 올리면 모든 장면에서 같은 모습으로 그려요.</div>
+      <div class="st-ref-s">주인공 그림을 올리거나 AI로 만들면 모든 장면에서 같은 모습으로 그려요.</div>
       <button class="st-mini" onclick="document.getElementById('stRefInput').click()">🖼️ 이미지 올리기</button><button class="st-mini" id="stRefClear" onclick="storyClearRef()" style="display:none">🗑 지우기</button>
     </div>
+  </div>
+  <div class="st-field" style="margin-top:-4px">
+    <label for="stCharDesc">AI로 캐릭터 만들기 <span style="color:#999;font-weight:400">— 비워두면 기획 질문의 주인공 답을 사용해요</span></label>
+    <textarea class="st-ta" id="stCharDesc" rows="2" maxlength="400" placeholder="예) 파란 멜빵바지를 입은 겁쟁이 아기 토끼, 큰 눈, 한쪽 귀가 접혀 있음" oninput="storyField('charDesc',this.value)"></textarea>
+    <div class="st-act">
+      <button class="primary" id="stCharGen" onclick="storyCharGen()">✨ AI로 캐릭터 생성</button>
+    </div>
+    <div class="st-edit" id="stCharEditRow" style="display:none">
+      <input class="st-input" id="stCharEdit" placeholder="캐릭터 수정 요청 (예: 머리를 노란색으로, 모자를 씌워줘)" oninput="stP().charEdit=this.value">
+      <div class="st-act">
+        <button id="stCharEditBtn" onclick="storyCharEdit()">✏️ 수정 적용</button>
+        <button id="stCharUndo" onclick="storyCharUndo()" style="display:none">↩ 이전 캐릭터</button>
+      </div>
+    </div>
+    <div class="st-err" id="stCharErr"></div>
   </div>
 
   <div class="st-field">
@@ -10084,7 +10099,7 @@ const stS = { cur:'short', proj:{}, hints:{}, loaded:false, batch:false, cancel:
 
 function stNewProj(mode){
   return {
-    title:'', logline:'', charRef:'', aspect:'4:3', style:'storybook', answers:{},
+    title:'', logline:'', charRef:'', charDesc:'', charPrev:'', charEdit:'', charBusy:false, charErr:'', aspect:'4:3', style:'storybook', answers:{},
     scenes: ST_PLANS[mode].scenes.map(s => ({ k:s.k, script:'', prevScript:'', image:'', prevImage:'', edit:'', busy:false, err:'', ts:{} }))
   };
 }
@@ -10131,7 +10146,7 @@ async function stLoad(){
       ['short', 'long'].forEach(m => {
         const sp = saved.proj[m]; if (!sp) return;
         const np = stNewProj(m);
-        Object.assign(np, { title:sp.title||'', logline:sp.logline||'', charRef:sp.charRef||'', aspect:ST_ASPECT[sp.aspect]?sp.aspect:'4:3', style:sp.style||'storybook', answers:sp.answers||{} });
+        Object.assign(np, { title:sp.title||'', logline:sp.logline||'', charRef:sp.charRef||'', charDesc:sp.charDesc||'', charPrev:sp.charPrev||'', aspect:ST_ASPECT[sp.aspect]?sp.aspect:'4:3', style:sp.style||'storybook', answers:sp.answers||{} });
         np.scenes.forEach(sc => {
           const o = (sp.scenes || []).find(x => x.k === sc.k);
           if (o) Object.assign(sc, { script:o.script||'', prevScript:o.prevScript||'', image:o.image||'', prevImage:o.prevImage||'', ts:o.ts||{} });
@@ -10159,6 +10174,7 @@ function storyRenderAll(){
   stEl('stModeLong').classList.toggle('active', stS.cur === 'long');
   stEl('stTitle').value = p.title;
   stEl('stLogline').value = p.logline;
+  stEl('stCharDesc').value = p.charDesc;
   stEl('stStyle').value = p.style;
   document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === p.aspect));
   stRenderRef();
@@ -10167,8 +10183,14 @@ function storyRenderAll(){
 }
 function stRenderRef(){
   const p = stP();
-  stEl('stRefBox').innerHTML = p.charRef ? `<img src="${p.charRef}" alt="캐릭터 레퍼런스">` : '🧑‍🎨<br>클릭해서<br>업로드';
+  stEl('stRefBox').innerHTML = (p.charRef ? `<img src="${p.charRef}" alt="캐릭터 레퍼런스">` : '🧑‍🎨<br>클릭해서<br>업로드') + (p.charBusy ? '<div class="st-spin">그리는 중...</div>' : '');
   stEl('stRefClear').style.display = p.charRef ? '' : 'none';
+  stEl('stCharEditRow').style.display = p.charRef ? '' : 'none';
+  stEl('stCharEdit').value = p.charEdit;
+  stEl('stCharUndo').style.display = p.charPrev ? '' : 'none';
+  stEl('stCharGen').textContent = p.charRef ? '✨ AI로 새로 생성' : '✨ AI로 캐릭터 생성';
+  stEl('stCharGen').disabled = stEl('stCharEditBtn').disabled = p.charBusy;
+  stEl('stCharErr').textContent = p.charErr ? '⚠ ' + p.charErr : '';
 }
 function storyField(f, v){ stP()[f] = v; stSave(); }
 function storySetAspect(a){
@@ -10194,11 +10216,48 @@ function stShrink(src, max, q){
 function storyLoadRef(input){
   const f = input.files && input.files[0]; if (!f) return;
   const r = new FileReader();
-  r.onload = async () => { stP().charRef = await stShrink(r.result, 768, .9); stRenderRef(); stSave(); };
+  const p = stP();
+  r.onload = async () => { p.charPrev = p.charRef; p.charRef = await stShrink(r.result, 768, .9); p.charErr = ''; if (p === stP()) stRenderRef(); stSave(); };
   r.readAsDataURL(f);
   input.value = '';
 }
-function storyClearRef(){ stP().charRef = ''; stRenderRef(); stSave(); }
+function storyClearRef(){ const p = stP(); p.charRef = ''; p.charPrev = ''; p.charErr = ''; stRenderRef(); stSave(); }
+/* AI 캐릭터 레퍼런스 생성 / 수정 (장면 생성과 같은 /api/story-scene, kind:'character') */
+async function stCharCall(edit){
+  const p = stP();
+  const desc = (p.charDesc || '').trim() || (p.answers.hero || '').trim();
+  p.charBusy = true; p.charErr = ''; stRenderRef();
+  try {
+    const body = { kind:'character', script:desc, title:p.title, style:p.style, context:stContext(p, { key:'hero', clip:160, max:1000 }) };
+    if (edit) { body.edit = edit; body.baseImage = p.charRef; }
+    const d = await stApi('/api/story-scene', body);
+    const img = await stShrink(d.image, 768, .9);
+    if (p.charRef) p.charPrev = p.charRef;
+    p.charRef = img;
+    if (edit) p.charEdit = '';
+    stSave();
+  } catch(e) { p.charErr = e.message; }
+  p.charBusy = false;
+  if (p === stP()) stRenderRef();
+}
+function storyCharGen(){
+  const p = stP();
+  if (!(p.charDesc || '').trim() && !(p.answers.hero || '').trim()) { alert('캐릭터 설명을 적거나, 기획 질문의 "주인공" 답을 먼저 써 주세요.'); return; }
+  if (p.charRef && !confirm('지금 레퍼런스를 AI가 새로 만든 캐릭터로 바꿀까요?\n(바로 이전 캐릭터는 [이전 캐릭터]로 되돌릴 수 있어요)')) return;
+  stGate(() => { stCharCall(''); });
+}
+function storyCharEdit(){
+  const p = stP();
+  if (!p.charRef) return;
+  const edit = (p.charEdit || '').trim();
+  if (!edit) { alert('어떻게 고치고 싶은지 적어 주세요.'); return; }
+  stGate(() => { stCharCall(edit); });
+}
+function storyCharUndo(){
+  const p = stP();
+  const cur = p.charRef; p.charRef = p.charPrev; p.charPrev = cur;
+  stRenderRef(); stSave();
+}
 
 /* ── 본문 렌더 ── */
 function stSetupHtml(s){
