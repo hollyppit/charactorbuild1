@@ -1965,7 +1965,7 @@ body.st-active .st-fab{display:block}
   </div>
   <div class="st-field">
     <label for="stLogline">로그라인 <span style="color:#999;font-weight:400">— 전체 이야기를 한 문장으로</span></label>
-    <textarea class="st-ta" id="stLogline" rows="2" maxlength="300" placeholder="예) 겁쟁이 토끼가 사라진 달을 찾아 숲속 모험을 떠나지만, 달을 훔친 건 가장 친한 친구였다." oninput="storyField('logline',this.value)"></textarea>
+    <textarea class="st-ta" id="stLogline" rows="2" maxlength="300" placeholder="예) 겁쟁이 토끼가 사라진 달을 찾아 어두운 숲으로 떠나지만, 달을 숨긴 건 가장 외로운 친구였다." oninput="storyField('logline',this.value)"></textarea>
     <div class="st-act"><button onclick="storyHint('logline',0)">💡 로그라인 AI 제안</button></div>
     <div class="st-hints" id="stLoglineHints"></div>
   </div>
@@ -10089,6 +10089,37 @@ const ST_PLANS = {
     ]
   }
 };
+/* 답변 입력칸에 placeholder로 보여줄 예시 답 (같은 예시 이야기를 따라가게 구성) */
+const ST_EXAMPLES = {
+  idea:'겁쟁이 토끼가 사라진 달을 찾아 밤의 숲을 모험하는 이야기',
+  genre:'모험 + 판타지 (따뜻한 성장 이야기)',
+  hero:'파란 멜빵바지를 입은 아기 토끼 "토리". 겁이 많지만 친구를 위해서라면 용기를 낸다.',
+  world:'밤마다 달빛으로 길이 밝혀지는 반딧불이 숲. 달이 사라지자 숲이 온통 어두워졌다.',
+  want:'사라진 달을 찾아 숲을 다시 환하게 만들고 싶다.',
+  enemy:'달을 몰래 숨긴 외로운 올빼미. 친구가 없어서 달빛을 혼자 갖고 싶어 한다.',
+  logline:'겁쟁이 토끼가 사라진 달을 찾아 어두운 숲으로 떠나지만, 달을 숨긴 건 가장 외로운 친구였다.',
+  s_comic:'토리는 오늘도 해가 지면 이불 속에서 반딧불이 숲을 구경하며 당근 쿠키를 먹고 있었어요.',
+  s_trouble:'그런데 어느 밤, 하늘에서 달이 감쪽같이 사라졌어요! 숲이 새까맣게 깜깜해졌어요.',
+  s_dilemma:'모두 무서워 숨었지만 토리는 달을 찾고 싶어요. 하지만 어두운 숲은 너무 무서워요.',
+  s_suspense:'숲 깊은 곳에서 부엉부엉 소리가 나더니, 반딧불이 불빛마저 하나둘 꺼져 갔어요.',
+  s_climax:'커다란 나무 위에서 올빼미가 달을 꼭 껴안고 외쳤어요. "이건 내 거야! 아무도 못 줘!"',
+  s_resolve:'토리는 달을 빼앗는 대신 올빼미에게 쿠키를 건넸어요. "같이 달 구경할래?" 올빼미가 활짝 웃으며 달을 하늘로 올려 주었어요.',
+  l_prologue:'깜깜한 밤하늘에서 달이 "펑!" 하고 사라지는 순간, 숲의 모든 동물이 얼어붙었다.',
+  l_face:'토리는 매일 밤 무서워서 숲 밖에 나가지 못하는 자신이 싫다. 이번엔 정말 도망칠 수 없다.',
+  l_bait:'달빛이 사라진 뒤 친구들이 하나둘 아파 간다. 계속 이불 속에 숨을까, 수상한 편지를 따라갈까?',
+  l_proof:'토리는 어둠 속에서도 귀가 아주 밝다. 이 귀로 달의 노랫소리를 찾아야만 길을 열 수 있다.',
+  l_belief:'달을 되찾아 숲 모두가 밤에도 마음 놓고 웃는 세상을 만들겠다고 다짐한다.',
+  l_rise:'토리는 반딧불이, 두더지, 고슴도치와 팀을 이뤄 달의 노랫소리를 따라 숲 속 비밀 길을 하나씩 연다.',
+  l_fakewin:'팀은 달빛 조각이 숨겨진 연못을 찾아내 첫 조각을 되찾고 환호한다.',
+  l_careless:'호기심에 건드리면 안 되는 "잠자는 나무"를 흔들자 길이 뒤바뀌며 모두 뿔뿔이 흩어졌다!',
+  l_chaos:'이대로면 숲은 영원히 밤이 되고 동물들이 얼어 버린다. 팀 안에서도 "네 탓이야!" 하며 다툼이 생긴다.',
+  l_awake:'토리는 올빼미의 둥지에서 오래된 편지를 발견하고, 달을 숨긴 이유가 외로움이었음을 알게 된다.',
+  l_urgent:'달빛이 꺼지기 전 마지막 한 시간, 토리는 무너지는 나뭇가지 다리를 건너 올빼미에게 달려간다.',
+  l_climax:'올빼미가 달과 함께 하늘로 날아오르려 하자, 토리는 가장 무서워하던 높은 나무 꼭대기로 올라가기로 한다.',
+  l_twist:'처음에 토리가 무심코 건넨 당근 쿠키 한 조각이, 올빼미의 닫힌 마음을 여는 열쇠였다.',
+  l_relax:'숲에 달빛이 돌아오고, 토리는 이제 밤에도 친구들과 가장 먼저 숲길을 걷는 용감한 토끼가 되었다.',
+  l_epilogue:'올빼미는 이제 숲의 등대지기가 되었고, 하늘의 달은 새로운 편지 한 통을 토리에게 떨어뜨렸다.'
+};
 const ST_ASPECT = {
   '4:3': { css:'4/3', n:1.3333, w:1600, h:1200, vw:1280, vh:960 },
   '3:4': { css:'3/4', n:0.75,   w:1200, h:1600, vw:960,  vh:1280 },
@@ -10267,7 +10298,7 @@ function stSetupHtml(s){
     <div class="st-q"><span class="st-tag">${stEsc(s.tag)}</span><div class="st-qt">Q. ${stEsc(s.q)}</div>
       <div class="st-tip">${s.tip.map(t => '* ' + stEsc(t)).join('<br>')}</div></div>
     ${chips}
-    <textarea class="st-ta" id="stA_${s.k}" rows="2" placeholder="여기에 답을 적어 보세요" oninput="storyAnswer('${s.k}',this.value)">${stEsc(p.answers[s.k] || '')}</textarea>
+    <textarea class="st-ta" id="stA_${s.k}" rows="2" placeholder="예) ${stEsc(ST_EXAMPLES[s.k] || '여기에 답을 적어 보세요')}" oninput="storyAnswer('${s.k}',this.value)">${stEsc(p.answers[s.k] || '')}</textarea>
     <div class="st-act"><button onclick="storyHint('setup','${s.k}')">💡 AI 제안 받기</button></div>
     <div class="st-hints" id="stH_${s.k}">${stHintsHtml(s.k)}</div>
   </div>`;
@@ -10282,7 +10313,7 @@ function stSceneInner(i){
     <div class="st-q"><span class="st-tag">장면 ${i+1} · ${stEsc(st.tag)}</span><div class="st-qt">Q. ${stEsc(st.q)}</div>
       ${st.tip.length ? `<div class="st-tip">${st.tip.map(t => '* ' + stEsc(t)).join('<br>')}</div>` : ''}</div>
     <div class="st-row"><div class="st-no">${i+1}</div>
-      <textarea class="st-ta" id="stT_${i}" rows="3" placeholder="학생이 입력하는 대본 (비워두고 [AI로 작성]을 눌러도 돼요)" oninput="storyScript(${i},this.value)">${stEsc(sc.script)}</textarea></div>
+      <textarea class="st-ta" id="stT_${i}" rows="3" placeholder="예) ${stEsc(ST_EXAMPLES[st.k] || '')}" oninput="storyScript(${i},this.value)">${stEsc(sc.script)}</textarea></div>
     <div class="st-act">
       <button onclick="storyHint('scene',${i})">💡 힌트</button>
       <button onclick="storyPolishOne(${i})" ${sc.busy ? 'disabled' : ''}>✨ ${hasScript ? 'AI로 다듬기' : 'AI로 작성'}</button>
