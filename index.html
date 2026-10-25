@@ -1390,6 +1390,91 @@ body.st-active .st-fab{display:block}
 .st-pv-dots i{width:10px;height:10px;border-radius:50%;background:#555;cursor:pointer}
 .st-pv-dots i.on{background:var(--c-yellow)}
 @media(max-width:560px){.st-sizes{margin-left:0}.st-head{align-items:flex-start}}
+
+/* ══════════════════════════════
+   밝은 테마 (스토리 만들기 · 그림책 더빙) — 글쓰기가 편하도록 흰 배경 + 어두운 글자
+   변수를 덮어써서 기존 규칙이 그대로 밝게 보이게 하고, 하드코딩된 어두운 색만 따로 덮어씀
+══════════════════════════════ */
+.theme-light{--c-card:#ffffff;--c-white:#1f1b2e;--c-yellow:#d98e00;--muted:#6b6478;color:#1f1b2e}
+#panel-story.active,#panel-dub.active{background:#f6f1e7;min-height:78vh}
+#panel-story,#panel-dub{--shadow-purple:5px 5px 0px #d9c2f2;--shadow-yellow:5px 5px 0px #f1d98a}
+.theme-light .btn-pink,.theme-light .btn-blue,.theme-light .dub-play-all-btn,.theme-light .dub-toggle-btn.active,.theme-light .st-act .primary{color:#fff}
+.theme-light .btn-gray{background:#fff;color:#1f1b2e;border-color:#8d7aa8}
+.theme-light ::placeholder{color:#9a90a8;opacity:1}
+/* 스토리 만들기 */
+.theme-light .st-seg{background:#fff}
+.theme-light .st-seg button{color:#7b7190}
+.theme-light .st-seg button.active{color:#0a0a0a}
+.theme-light .st-head,.theme-light .st-card{background:#fff}
+.theme-light .st-ref{background:#faf6ff;color:#6b6478}
+.theme-light .st-ref-t,.theme-light .st-field label,.theme-light .st-sec{color:#5b1a9a}
+.theme-light .st-sec{text-shadow:none}
+.theme-light .st-ref-s,.theme-light .st-sizes span,.theme-light .st-tip,.theme-light .st-pvc .st-hintline{color:#6b6478}
+.theme-light .st-mini{background:#fff;color:#444;border-color:#b9a2d6}
+.theme-light .st-input,.theme-light .st-ta,.theme-light .st-select{background:#fff;color:#1f1b2e;border-color:#b9a2d6;font-weight:500}
+.theme-light .st-input:focus,.theme-light .st-ta:focus,.theme-light .st-select:focus{background:#fffdf3;border-color:#7a1fb8}
+.theme-light .st-toolbar{background:#efe7fa;border-color:#d5c6ea}
+.theme-light .st-sizes button{background:#fff;color:#444;border-color:#cbbbe0}
+.theme-light .st-sizes button.active{background:var(--c-yellow);color:#0a0a0a;border-color:#0a0a0a}
+.theme-light .st-prog{background:#fff3d6;color:#7a4a00;border-color:#e3b04b}
+.theme-light .st-prog-bar{background:#ddd}
+.theme-light .st-q{background:#fbf8ff;border-color:#2b2340}
+.theme-light .st-qt{color:#1f1b2e}
+.theme-light .st-no{border-color:#7a1fb8;color:#7a1fb8}
+.theme-light .st-act button{background:#fff;color:#222;border-color:#b9a2d6}
+.theme-light .st-act button:hover:not(:disabled){border-color:#7a1fb8;color:#7a1fb8}
+.theme-light .st-act .primary{background:var(--c-purple);border-color:#0a0a0a}
+.theme-light .st-act .primary:hover:not(:disabled){color:#fff;background:#8a14d0}
+.theme-light .st-hint{background:#f5ecff;color:#3d1a63;border-color:#a11cee}
+.theme-light .st-hint:hover{color:#000;background:#efe0ff}
+.theme-light .st-chip{background:#fff;color:#333}
+.theme-light .st-chip.on,.theme-light .st-chip:hover{background:var(--c-yellow);color:#0a0a0a}
+.theme-light .st-img{background:#f0e9f7;border-color:#cbbbe0;color:#8a809a}
+.theme-light .st-err{color:#c62837}
+.theme-light .st-export{background:#fff}
+.theme-light .st-pvc{background:#fff;color:#333}
+#storyPreviewModal.theme-light{background:#f0eae0}
+.theme-light.modal-overlay{background:rgba(60,48,80,.55)}
+.theme-light .st-pv-top{color:#3d1a63}
+.theme-light .st-pv-top button{background:#fff;color:#222;border-color:#b9a2d6}
+.theme-light .st-pv-dots i{background:#cfc4de}
+.theme-light .st-pv-dots i.on{background:var(--c-yellow)}
+/* 그림책 더빙 */
+.theme-light .dub-step-nav{background:#fff;border-bottom-color:#d5c6ea}
+.theme-light .dub-step-btn{color:#7b7190}
+.theme-light .dub-step-btn.active,.theme-light .dub-proj-tab.active{background:#f3e8ff;color:#5b1a9a;border-bottom-color:#a11cee}
+.theme-light .dub-proj-tab{color:#7b7190}
+.theme-light .dub-proj-tab:hover:not(.active){color:#333}
+.theme-light .dub-proj-tab-nav{border-bottom-color:#d5c6ea}
+.theme-light .dub-scene-card,.theme-light .dub-proj-card,.theme-light .dub-scene-edit-card,.theme-light .dub-scene-preview-card,.theme-light .dub-summary,.theme-light .dub-waveform{background:#fff;border-color:#d5c6ea}
+.theme-light .dub-proj-card:hover{background:#faf5ff;border-color:#b78be0}
+.theme-light .dub-scene-card.has-audio{border-color:var(--c-purple)}
+.theme-light .dub-scene-thumb,.theme-light .dub-scene-edit-thumb,.theme-light .dub-scene-preview-thumb,.theme-light #dubMediaPreview,.theme-light #dubChangeMediaPreview{background:#f0e9f7 !important;border-color:#cbbbe0 !important}
+.theme-light .dub-scene-thumb-empty,.theme-light .dub-scene-status.pending,.theme-light .dub-rec-hint,.theme-light .dub-scene-counter,.theme-light .dub-proj-meta,.theme-light .dub-scene-num,.theme-light .dub-summary-row span:first-child,.theme-light .dub-style-label,.theme-light .field-label,.theme-light .dub-scene-preview-num,.theme-light .dub-sp-hint{color:#6b6478}
+.theme-light .dub-scene-preview-text{color:#444}
+.theme-light .dub-scene-btn{background:#fff;border-color:#cbbbe0;color:#333}
+.theme-light .dub-scene-btn:hover{border-color:#7a1fb8;color:#7a1fb8}
+.theme-light .dub-scene-btn.danger{color:#d12b38;border-color:#f0b5ba}
+.theme-light .dub-scene-btn.danger:hover{background:#fde8ea;border-color:#d12b38;color:#b00020}
+.theme-light .dub-add-scene-btn,.theme-light .dub-new-proj-btn{border-color:#c9b8de;color:#6b5a80}
+.theme-light .dub-add-scene-btn:hover,.theme-light .dub-new-proj-btn:hover{border-color:#a11cee;color:#3b0a62;background:#f3e8ff}
+.theme-light .dub-nav-btn,.theme-light .dub-editor-back{background:#fff;color:#222}
+.theme-light .dub-nav-btn:hover:not(:disabled),.theme-light .dub-editor-back:hover{background:#f3e8ff;border-color:#a11cee;color:#5b1a9a}
+.theme-light .dub-dot,.theme-light .dub-player-dot{background:#cfc4de}
+.theme-light .dub-dot.active{background:var(--c-yellow)}
+.theme-light .dub-dot.done{background:#2DBD6E}
+.theme-light .dub-export-progress{background:#eee;border-color:#cbbbe0}
+.theme-light .dub-proj-title-input,.theme-light .dub-scene-name-input,.theme-light .dub-scene-text-input,.theme-light .field-input{background:#fff;color:#1f1b2e;border-color:#b9a2d6;font-weight:500}
+.theme-light .dub-proj-title-input:focus,.theme-light .dub-scene-name-input:focus,.theme-light .dub-scene-text-input:focus,.theme-light .field-input:focus{background:#fffdf3;border-color:#7a1fb8;color:#1f1b2e}
+.theme-light .dub-order-btn,.theme-light .dub-align-btn,.theme-light .dub-pos-btn,.theme-light .dub-toggle-btn,.theme-light .dub-style-chip{background:#fff;border-color:#cbbbe0;color:#555}
+.theme-light .dub-align-btn.active{background:#fff7de;color:#8a5a00}
+.theme-light .dub-style-chip.has-style{background:#fff7de;border-color:#e3b04b;color:#8a5a00}
+.theme-light .dub-script-box{background:#fff}
+.theme-light .dub-sp-wrap{border-color:#cbbbe0}
+.theme-light .dub-color-swatch{border-color:#cbbbe0}
+.theme-light #dubSpSceneText{background:#fff !important;color:#1f1b2e !important;border-color:#b9a2d6 !important}
+.theme-light .modal{background:#fff;color:#1f1b2e}
+.theme-light .modal h2{color:#5b1a9a}
 </style>
 
 <script>
@@ -1926,7 +2011,7 @@ body.st-active .st-fab{display:block}
 <!-- ══════════════════════════════
      스토리 만들기 패널
 ══════════════════════════════ -->
-<div class="mode-panel" id="panel-story">
+<div class="mode-panel theme-light" id="panel-story">
 <div class="st-wrap">
   <div class="st-seg">
     <button id="stModeShort" class="active" onclick="storySetMode('short')">📄 단편 만들기</button>
@@ -1944,7 +2029,7 @@ body.st-active .st-fab{display:block}
     </div>
   </div>
   <div class="st-field" style="margin-top:-4px">
-    <label for="stCharDesc">AI로 캐릭터 만들기 <span style="color:#999;font-weight:400">— 비워두면 기획 질문의 주인공 답을 사용해요</span></label>
+    <label for="stCharDesc">AI로 캐릭터 만들기 <span id="stCharDescNote" style="color:#999;font-weight:400"></span></label>
     <textarea class="st-ta" id="stCharDesc" rows="2" maxlength="400" placeholder="예) 파란 멜빵바지를 입은 겁쟁이 아기 토끼, 큰 눈, 한쪽 귀가 접혀 있음" oninput="storyField('charDesc',this.value)"></textarea>
     <div class="st-act">
       <button class="primary" id="stCharGen" onclick="storyCharGen()">✨ AI로 캐릭터 생성</button>
@@ -2004,7 +2089,7 @@ body.st-active .st-fab{display:block}
 
 <button class="st-fab" id="stFab" onclick="storyOpenPreview(0)">👁 미리보기</button>
 
-<div class="modal-overlay" id="storyPreviewModal">
+<div class="modal-overlay theme-light" id="storyPreviewModal">
   <div class="st-pv">
     <div class="st-pv-top"><span id="stPvLabel"></span><button onclick="closeModal('storyPreviewModal')">✕</button></div>
     <div class="st-pv-stage">
@@ -2092,7 +2177,7 @@ body.st-active .st-fab{display:block}
 <!-- ══════════════════════════════
      그림책 더빙 패널
 ══════════════════════════════ -->
-<div class="mode-panel" id="panel-dub">
+<div class="mode-panel theme-light" id="panel-dub">
 <div class="dub-wrap">
 
   <!-- 단계 탭 -->
@@ -2246,7 +2331,7 @@ body.st-active .st-fab{display:block}
 </div>
 
 <!-- 더빙: 새 작품 추가 모달 -->
-<div class="modal-overlay" id="dubNewProjModal">
+<div class="modal-overlay theme-light" id="dubNewProjModal">
   <div class="modal" style="max-width:420px">
     <h2>📖 새 작품 만들기</h2>
     <div class="field-row">
@@ -2261,7 +2346,7 @@ body.st-active .st-fab{display:block}
 </div>
 
 <!-- 더빙: 장면 추가 모달 -->
-<div class="modal-overlay" id="dubAddModal">
+<div class="modal-overlay theme-light" id="dubAddModal">
   <div class="modal" style="max-width:520px">
     <h2>➕ 장면 추가</h2>
     <div class="field-row">
@@ -2287,7 +2372,7 @@ body.st-active .st-fab{display:block}
 </div>
 
 <!-- 더빙: 미디어 변경 모달 -->
-<div class="modal-overlay" id="dubChangeMediaModal">
+<div class="modal-overlay theme-light" id="dubChangeMediaModal">
   <div class="modal" style="max-width:420px">
     <h2>🖼️ 이미지/동영상 변경</h2>
     <input type="file" id="dubChangeMediaInput" accept="image/*,video/*" onchange="dubOnChangeMedia(event)">
@@ -2302,7 +2387,7 @@ body.st-active .st-fab{display:block}
 </div>
 
 <!-- 더빙: 대본 스타일 편집 모달 -->
-<div class="modal-overlay" id="dubTextStyleModal">
+<div class="modal-overlay theme-light" id="dubTextStyleModal">
   <div class="modal" style="max-width:580px;max-height:92vh;overflow-y:auto">
     <h2>🎨 대본 스타일 편집</h2>
 
@@ -10030,7 +10115,7 @@ const ST_LOGLINE = {
 };
 const ST_PLANS = {
   short: {
-    setup: ST_SETUP,
+    setup: [], // 단편은 기획 질문 없이 장면 만들기만 (로그라인 + 캐릭터 설명으로 바로 시작)
     scenes: [
       { k:'s_comic', tag:'코믹 릴리프', q:'주인공은-언제-어디서-일상을 보내고 있나요?',
         tip:['독자와의 라포(친근감)를 형성하는 첫인상 구간입니다.','사람들끼리 친해질 때 스몰토킹하거나 유머를 던지듯 이야기도 똑같습니다.'] },
@@ -10206,6 +10291,7 @@ function storyRenderAll(){
   stEl('stTitle').value = p.title;
   stEl('stLogline').value = p.logline;
   stEl('stCharDesc').value = p.charDesc;
+  stEl('stCharDescNote').textContent = stPlan().setup.length ? '— 비워두면 기획 질문의 주인공 답을 사용해요' : '— 모든 장면에 같은 모습으로 등장해요';
   stEl('stStyle').value = p.style;
   document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === p.aspect));
   stRenderRef();
@@ -10256,7 +10342,7 @@ function storyClearRef(){ const p = stP(); p.charRef = ''; p.charPrev = ''; p.ch
 /* AI 캐릭터 레퍼런스 생성 / 수정 (장면 생성과 같은 /api/story-scene, kind:'character') */
 async function stCharCall(edit){
   const p = stP();
-  const desc = (p.charDesc || '').trim() || (p.answers.hero || '').trim();
+  const desc = (p.charDesc || '').trim() || (stPlan().setup.length ? (p.answers.hero || '').trim() : '');
   p.charBusy = true; p.charErr = ''; stRenderRef();
   try {
     const body = { kind:'character', script:desc, title:p.title, style:p.style, context:stContext(p, { key:'hero', clip:160, max:1000 }) };
@@ -10273,7 +10359,8 @@ async function stCharCall(edit){
 }
 function storyCharGen(){
   const p = stP();
-  if (!(p.charDesc || '').trim() && !(p.answers.hero || '').trim()) { alert('캐릭터 설명을 적거나, 기획 질문의 "주인공" 답을 먼저 써 주세요.'); return; }
+  const heroAns = stPlan().setup.length ? (p.answers.hero || '').trim() : '';
+  if (!(p.charDesc || '').trim() && !heroAns) { alert(stPlan().setup.length ? '캐릭터 설명을 적거나, 기획 질문의 "주인공" 답을 먼저 써 주세요.' : '캐릭터 설명을 먼저 적어 주세요.'); return; }
   if (p.charRef && !confirm('지금 레퍼런스를 AI가 새로 만든 캐릭터로 바꿀까요?\n(바로 이전 캐릭터는 [이전 캐릭터]로 되돌릴 수 있어요)')) return;
   stGate(() => { stCharCall(''); });
 }
@@ -10335,7 +10422,7 @@ function stSceneInner(i){
 }
 function storyRenderBody(){
   const plan = stPlan();
-  let h = '<div class="st-sec">📋 기획 질문</div>' + plan.setup.map(stSetupHtml).join('');
+  let h = plan.setup.length ? '<div class="st-sec">📋 기획 질문</div>' + plan.setup.map(stSetupHtml).join('') : '';
   h += `<div class="st-sec">🎬 장면 만들기 · 대본 → 그림</div>`;
   h += plan.scenes.map((_, i) => `<div class="st-card" id="stSc${i}">${stSceneInner(i)}</div>`).join('');
   stEl('stBody').innerHTML = h;
