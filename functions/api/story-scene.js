@@ -51,24 +51,45 @@ export async function onRequest(context) {
       '3d': 'Polished 3D animated-film look, smooth surfaces, soft cinematic lighting, appealing rounded character design.',
       crayon: 'Hand-drawn crayon and oil-pastel doodle style, playful wobbly lines, bright saturated colors, paper texture.',
       flat: 'Modern flat vector illustration, bold simple shapes, limited harmonious color palette, minimal shading.',
+      webtoon: 'Korean webtoon / manhwa illustration, clean confident line art, soft digital coloring with gentle gradients, expressive characters.',
+      oil: 'Classic oil-painting look, visible brushstrokes, rich impasto texture, warm painterly lighting, canvas texture.',
+      papercut: 'Layered paper-cut collage craft style, flat colored paper shapes with soft cast shadows between layers, handmade texture.',
+      pencil: 'Hand-drawn pencil sketch with light watercolor tint, visible graphite hatching, soft off-white paper texture.',
+      cinema: 'Photorealistic live-action cinematic movie still, shot on a professional cinema camera with anamorphic lens, natural realistic skin and materials, filmic color grading, soft film grain, dramatic motivated lighting, shallow depth of field. It must look like a real photograph from a feature film, NOT an illustration, cartoon or 3D render.',
+      clay: 'Claymation / plasticine look, soft sculpted forms with fingerprint texture, cozy studio lighting, shallow depth of field.',
     };
-    const styleText = styleMap[b.style] || styleMap.storybook;
+    const isCharacter = b.kind === 'character';
+    const direction = sanitize(b.styleDirection, 250);
+    const presetText = styleMap[b.style] || (b.style === 'custom' ? '' : styleMap.storybook);
+    // 프리셋 + 사용자가 직접 쓴 비주얼 디렉션을 하나의 그림체 지시문으로
+    const styleText = [presetText, direction ? `ARTIST'S VISUAL DIRECTION (apply to every image): ${direction}.` : ''].filter(Boolean).join(' ')
+      || styleMap.storybook;
 
     const charRef = typeof b.charRef === 'string' && b.charRef.startsWith('data:') ? b.charRef : '';
     const baseImage = typeof b.baseImage === 'string' && b.baseImage.startsWith('data:') ? b.baseImage : '';
+    const styleRefIn = typeof b.styleRef === 'string' && b.styleRef.startsWith('data:') ? b.styleRef : '';
 
     const split = (d) => {
       const m = d.match(/^data:([^;]+);base64,(.+)$/);
       return m ? { mime: m[1], data: m[2] } : null;
     };
-    const refImg = (charRef && b.kind !== 'character') ? split(charRef) : null;
+    const refImg = (charRef && !isCharacter) ? split(charRef) : null;
     const baseImg = baseImage ? split(baseImage) : null;
+    const styleImg = (styleRefIn && !isCharacter && !(baseImg && edit)) ? split(styleRefIn) : null;
+
+    // 이미지 입력 순서: [편집 베이스] → [캐릭터 레퍼런스] → [같은 책의 완성된 페이지(그림체 기준)]
+    const inputs = [];
+    const ord = ['first', 'second', 'third'];
+    if (baseImg && edit) inputs.push(baseImg);
+    const refPos = refImg ? (inputs.push(refImg), ord[inputs.length - 1]) : '';
+    const stylePos = styleImg ? (inputs.push(styleImg), ord[inputs.length - 1]) : '';
 
     const charRule = refImg
-      ? `CHARACTER CONSISTENCY (VERY IMPORTANT): The ${baseImg ? 'second' : 'first'} attached image is the main character reference sheet. The main character in this page MUST look exactly like it: same face, hair, eyes, skin tone, outfit, colors and body proportions. Do not redesign the character.`
+      ? `CHARACTER CONSISTENCY (VERY IMPORTANT): The ${refPos} attached image is the main character reference sheet. The main character in this page MUST look exactly like it: same face, hair, eyes, skin tone, outfit, colors and body proportions. Do not redesign the character. Also match its rendering style (line quality, texture, palette).`
       : 'Keep the main character design simple and consistent with the story context.';
-
-    const isCharacter = b.kind === 'character';
+    const styleRule = styleImg
+      ? `STYLE CONSISTENCY (VERY IMPORTANT): The ${stylePos} attached image is an already-finished page of this same book. Match its rendering style EXACTLY — line quality, brush/texture, color palette, lighting, shading and level of detail — so both pages look drawn by the same artist. Do NOT copy its composition, characters' poses or content.`
+      : '';
 
     let prompt;
     if (isCharacter) {
@@ -101,9 +122,11 @@ RULES:
 - If the request is ambiguous, make the smallest possible change.
 - Keep the image ${aspect.text}. No text, letters, captions or watermarks in the image. Safe for all ages.`;
     } else {
-      prompt = `Create ONE full-page illustration for a children's picture book${title ? ` titled "${title}"` : ''}.
+      const medium = b.style === 'cinema' ? 'full-frame cinematic movie still (photographic, not an illustration)' : 'full-page illustration';
+      prompt = `Create ONE ${medium} for a family-friendly story book${title ? ` titled "${title}"` : ''}.
 
 STYLE: ${styleText} Use exactly this same style on every page of the book.
+${styleRule}
 ${charRule}
 ${storyContext ? `\nSTORY SO FAR (for continuity of setting and characters):\n${storyContext}\n` : ''}
 THIS PAGE (page ${Number(b.pageNo) || 1}${b.total ? ` of ${Number(b.total)}` : ''}) — illustrate this scene:
@@ -115,11 +138,6 @@ RULES:
 - Do NOT draw any text, letters, speech-bubble words, captions, logos or watermarks.
 - Safe for all ages: no violence, no sexual content, child-friendly.`;
     }
-
-    // 이미지 입력 순서: [편집 베이스] → [캐릭터 레퍼런스]
-    const inputs = [];
-    if (baseImg && edit) inputs.push(baseImg);
-    if (refImg) inputs.push(refImg);
 
     let lastError = '';
 

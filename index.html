@@ -1328,6 +1328,12 @@ body.easy-mode .t-save-btn{display:none}
 .st-sizes button{background:var(--c-card);color:#bbb;border:2px solid #444;padding:6px 9px;font-size:12px;cursor:pointer;font-family:var(--f-ui);font-weight:700}
 .st-sizes button.active{background:var(--c-yellow);color:var(--c-black);border-color:var(--c-black)}
 .st-sizes .st-select{width:auto;padding:6px 8px;font-size:12px}
+.st-custom{flex-direction:column;gap:8px;background:var(--c-card);border:2px solid var(--c-purple);padding:10px 12px}
+.st-custom-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#444}
+.st-custom-row label{display:flex;align-items:center;gap:6px}
+.st-custom-row .st-input{width:104px;padding:7px 9px}
+.st-custom-row .st-select{width:auto;padding:7px 9px}
+.st-custom .st-hintline{font-size:11px;color:#6b6478}
 .st-prog{display:none;background:#120009;border:2px solid var(--c-purple);padding:8px 12px;font-size:12px;color:var(--c-yellow);font-weight:700}
 .st-prog.show{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .st-prog-bar{flex:1;min-width:120px;height:8px;background:#333}
@@ -2028,6 +2034,25 @@ body.st-active .st-fab{display:block}
       <button class="st-mini" onclick="document.getElementById('stRefInput').click()">🖼️ 이미지 올리기</button><button class="st-mini" id="stRefClear" onclick="storyClearRef()" style="display:none">🗑 지우기</button>
     </div>
   </div>
+  <div class="st-card st-vd">
+    <div class="st-ref-t">🎨 비주얼 디렉션 <span style="font-size:12px;color:#6b6478;font-family:var(--f-ui);font-weight:400">— 캐릭터와 모든 장면에 같은 그림체로 적용돼요</span></div>
+    <div class="st-chips" id="stStyleChips">
+      <button class="st-chip" data-style="storybook" onclick="storySetStyle('storybook')">🖍️ 동화 수채화</button>
+      <button class="st-chip" data-style="anime" onclick="storySetStyle('anime')">✨ 애니메이션</button>
+      <button class="st-chip" data-style="webtoon" onclick="storySetStyle('webtoon')">📱 웹툰</button>
+      <button class="st-chip" data-style="cinema" onclick="storySetStyle('cinema')">🎬 실사 영화</button>
+      <button class="st-chip" data-style="3d" onclick="storySetStyle('3d')">🧸 3D 캐릭터</button>
+      <button class="st-chip" data-style="clay" onclick="storySetStyle('clay')">🏺 클레이</button>
+      <button class="st-chip" data-style="crayon" onclick="storySetStyle('crayon')">🖌️ 크레용 낙서</button>
+      <button class="st-chip" data-style="pencil" onclick="storySetStyle('pencil')">✏️ 연필 스케치</button>
+      <button class="st-chip" data-style="oil" onclick="storySetStyle('oil')">🖼️ 유화</button>
+      <button class="st-chip" data-style="papercut" onclick="storySetStyle('papercut')">✂️ 종이 공예</button>
+      <button class="st-chip" data-style="flat" onclick="storySetStyle('flat')">🔷 플랫 일러스트</button>
+      <button class="st-chip" data-style="custom" onclick="storySetStyle('custom')">✍️ 직접 입력만</button>
+    </div>
+    <textarea class="st-ta" id="stStyleText" rows="2" maxlength="250" placeholder="추가 디렉션 (선택) 예) 파스텔톤, 굵은 갈색 외곽선, 따뜻한 노을빛 조명, 몽글몽글한 느낌" oninput="storyField('styleText',this.value)"></textarea>
+    <div class="st-hintline" style="font-size:11px;color:#6b6478">그림체를 바꾸면 이미 그린 그림은 그대로예요. 바꾼 그림체로 맞추려면 [장면 다시 생성]을 눌러 주세요. 첫 장면을 그리면 그 장면이 다음 장면들의 그림체 기준이 돼요.</div>
+  </div>
   <div class="st-field" style="margin-top:-4px">
     <label for="stCharDesc">AI로 캐릭터 만들기 <span id="stCharDescNote" style="color:#999;font-weight:400"></span></label>
     <textarea class="st-ta" id="stCharDesc" rows="2" maxlength="400" placeholder="예) 파란 멜빵바지를 입은 겁쟁이 아기 토끼, 큰 눈, 한쪽 귀가 접혀 있음" oninput="storyField('charDesc',this.value)"></textarea>
@@ -2064,14 +2089,29 @@ body.st-active .st-fab{display:block}
       <button data-asp="4:3" onclick="storySetAspect('4:3')">가로 4:3</button>
       <button data-asp="3:4" onclick="storySetAspect('3:4')">세로 3:4</button>
       <button data-asp="1:1" onclick="storySetAspect('1:1')">정사각</button>
-      <select class="st-select" id="stStyle" onchange="storyField('style',this.value)">
-        <option value="storybook">동화 수채화</option>
-        <option value="anime">애니메이션</option>
-        <option value="3d">3D 캐릭터</option>
-        <option value="crayon">크레용 낙서</option>
-        <option value="flat">플랫 일러스트</option>
+      <button data-asp="custom" onclick="storySetAspect('custom')">직접 설정</button>
+    </div>
+  </div>
+  <div class="st-custom" id="stCustomSize" style="display:none">
+    <div class="st-custom-row">
+      <label>가로 <input type="number" class="st-input" id="stCsW" min="1" step="any" inputmode="decimal" oninput="storyCustom('w',this.value)" onchange="storyCustomCommit()"></label>
+      <span>×</span>
+      <label>세로 <input type="number" class="st-input" id="stCsH" min="1" step="any" inputmode="decimal" oninput="storyCustom('h',this.value)" onchange="storyCustomCommit()"></label>
+      <select class="st-select" id="stCsUnit" onchange="storyCustomUnit(this.value)">
+        <option value="mm">mm</option>
+        <option value="px">px</option>
       </select>
     </div>
+    <div class="st-act">
+      <button onclick="storyCustomPreset(210,297,'mm')">A4 세로</button>
+      <button onclick="storyCustomPreset(297,210,'mm')">A4 가로</button>
+      <button onclick="storyCustomPreset(148,210,'mm')">A5 세로</button>
+      <button onclick="storyCustomPreset(210,210,'mm')">정사각 210mm</button>
+      <button onclick="storyCustomPreset(1920,1080,'px')">영상 1920×1080</button>
+      <button onclick="storyCustomPreset(1080,1920,'px')">세로영상 1080×1920</button>
+    </div>
+    <div class="st-hintline" id="stCsHint"></div>
+    <div class="st-hintline">mm는 인쇄 크기(150dpi 기준으로 이미지가 만들어져요), px는 이미지 크기예요. mm 30~600 / px 200~4000. AI 그림은 가장 가까운 비율로 그린 뒤 페이지에 꽉 차게 맞춰요.</div>
   </div>
   <div class="st-prog" id="stProg"><span id="stProgTxt"></span><div class="st-prog-bar"><i id="stProgBar"></i></div><button class="st-mini" id="stCancel" onclick="storyCancel()" style="margin:0">⏹ 중지</button></div>
 
@@ -10211,11 +10251,71 @@ const ST_ASPECT = {
   '1:1': { css:'1/1', n:1,      w:1400, h:1400, vw:1080, vh:1080 },
 };
 
+/* 그림책 사이즈: 프리셋(4:3·3:4·1:1) 또는 직접 설정(mm / px). 출력 해상도는 150dpi 기준, 긴 변 최대 4000px */
+const ST_SIZE_LIMIT = { mm:[30, 600], px:[200, 4000] };
+function stA(p){
+  if (p.aspect === 'custom' && p.size) {
+    const { w, h, unit } = p.size;
+    let pw = unit === 'mm' ? w / 25.4 * 150 : w, ph = unit === 'mm' ? h / 25.4 * 150 : h;
+    const s = Math.min(1, 4000 / Math.max(pw, ph));
+    pw = Math.max(1, Math.round(pw * s)); ph = Math.max(1, Math.round(ph * s));
+    const vs = 1280 / Math.max(pw, ph), ev = n => Math.max(2, Math.round(n / 2) * 2);
+    return { css:`${pw}/${ph}`, n:pw / ph, w:pw, h:ph, vw:ev(pw * vs), vh:ev(ph * vs) };
+  }
+  return ST_ASPECT[p.aspect] || ST_ASPECT['4:3'];
+}
+/* AI는 4:3 / 3:4 / 1:1 중 가장 가까운 비율로 그리고, 페이지에는 꽉 차게(cover) 맞춰 넣음 */
+function stAiAspect(p){
+  if (p.aspect !== 'custom') return p.aspect;
+  const r = stA(p).n;
+  return r > 1.15 ? '4:3' : r < 0.87 ? '3:4' : '1:1';
+}
+function stSizeHint(p){
+  const A = stA(p);
+  return `PDF ${(A.w / 150 * 25.4).toFixed(0)}×${(A.h / 150 * 25.4).toFixed(0)}mm · 이미지 ${A.w}×${A.h}px · 영상 ${A.vw}×${A.vh}px`;
+}
+function stRenderCustomSize(){
+  const p = stP(), on = p.aspect === 'custom';
+  stEl('stCustomSize').style.display = on ? 'flex' : 'none';
+  if (!on) return;
+  const s = p.size;
+  stEl('stCsW').value = s.w; stEl('stCsH').value = s.h; stEl('stCsUnit').value = s.unit;
+  stEl('stCsHint').textContent = stSizeHint(p);
+}
+function stApplySizeUI(){
+  const p = stP();
+  stP().scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = stA(p).css; });
+  stEl('stCsHint').textContent = stSizeHint(p);
+  stSave();
+}
+function storyCustom(k, v){
+  const p = stP(); if (p.aspect !== 'custom') return;
+  const s = p.size, [lo, hi] = ST_SIZE_LIMIT[s.unit];
+  const n = parseFloat(v);
+  if (!(n > 0)) return;
+  s[k] = Math.max(lo, Math.min(hi, n));
+  stApplySizeUI();
+}
+function storyCustomCommit(){ stRenderCustomSize(); } // 입력 끝나면 범위 안으로 보정된 값 표시
+function storyCustomUnit(u){
+  const p = stP(), s = p.size;
+  if (u === s.unit) return;
+  const conv = n => u === 'mm' ? n / 150 * 25.4 : n / 25.4 * 150;
+  const [lo, hi] = ST_SIZE_LIMIT[u], fix = n => Math.max(lo, Math.min(hi, u === 'mm' ? Math.round(n * 10) / 10 : Math.round(n)));
+  s.w = fix(conv(s.w)); s.h = fix(conv(s.h)); s.unit = u;
+  stRenderCustomSize(); stApplySizeUI();
+}
+function storyCustomPreset(w, h, unit){
+  const p = stP(); p.aspect = 'custom'; p.size = { w, h, unit };
+  document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === 'custom'));
+  stRenderCustomSize(); stApplySizeUI();
+}
+
 const stS = { cur:'short', proj:{}, hints:{}, loaded:false, batch:false, cancel:false, pv:0 };
 
 function stNewProj(mode){
   return {
-    title:'', logline:'', charRef:'', charDesc:'', charPrev:'', charEdit:'', charBusy:false, charErr:'', aspect:'4:3', style:'storybook', answers:{},
+    title:'', logline:'', styleText:'', charRef:'', charDesc:'', charPrev:'', charEdit:'', charBusy:false, charErr:'', aspect:'4:3', size:{ w:210, h:297, unit:'mm' }, style:'storybook', answers:{},
     scenes: ST_PLANS[mode].scenes.map(s => ({ k:s.k, script:'', prevScript:'', image:'', prevImage:'', edit:'', busy:false, err:'', ts:{} }))
   };
 }
@@ -10262,10 +10362,10 @@ async function stLoad(){
       ['short', 'long'].forEach(m => {
         const sp = saved.proj[m]; if (!sp) return;
         const np = stNewProj(m);
-        Object.assign(np, { title:sp.title||'', logline:sp.logline||'', charRef:sp.charRef||'', charDesc:sp.charDesc||'', charPrev:sp.charPrev||'', aspect:ST_ASPECT[sp.aspect]?sp.aspect:'4:3', style:sp.style||'storybook', answers:sp.answers||{} });
+        Object.assign(np, { title:sp.title||'', logline:sp.logline||'', charRef:sp.charRef||'', charDesc:sp.charDesc||'', charPrev:sp.charPrev||'', aspect:(ST_ASPECT[sp.aspect] || (sp.aspect === 'custom' && sp.size)) ? sp.aspect : '4:3', size:sp.size && ST_SIZE_LIMIT[sp.size.unit] ? sp.size : { w:210, h:297, unit:'mm' }, style:sp.style||'storybook', styleText:sp.styleText||'', answers:sp.answers||{} });
         np.scenes.forEach(sc => {
           const o = (sp.scenes || []).find(x => x.k === sc.k);
-          if (o) Object.assign(sc, { script:o.script||'', prevScript:o.prevScript||'', image:o.image||'', prevImage:o.prevImage||'', ts:o.ts||{} });
+          if (o) Object.assign(sc, { script:o.script||'', prevScript:o.prevScript||'', image:o.image||'', prevImage:o.prevImage||'', ts:o.ts||{}, sig:o.sig||'' });
         });
         stS.proj[m] = np;
       });
@@ -10292,8 +10392,10 @@ function storyRenderAll(){
   stEl('stLogline').value = p.logline;
   stEl('stCharDesc').value = p.charDesc;
   stEl('stCharDescNote').textContent = stPlan().setup.length ? '— 비워두면 기획 질문의 주인공 답을 사용해요' : '— 모든 장면에 같은 모습으로 등장해요';
-  stEl('stStyle').value = p.style;
+  stEl('stStyleText').value = p.styleText;
+  stRenderStyle();
   document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === p.aspect));
+  stRenderCustomSize();
   stRenderRef();
   stEl('stLoglineHints').innerHTML = stHintsHtml('logline');
   storyRenderBody();
@@ -10310,10 +10412,33 @@ function stRenderRef(){
   stEl('stCharErr').textContent = p.charErr ? '⚠ ' + p.charErr : '';
 }
 function storyField(f, v){ stP()[f] = v; stSave(); }
+function stRenderStyle(){
+  const s = stP().style;
+  document.querySelectorAll('#stStyleChips .st-chip').forEach(c => c.classList.toggle('on', c.dataset.style === s));
+}
+function stSig(p){ return (p.style || '') + '|' + (p.styleText || '').trim(); }
+function storySetStyle(s){
+  stP().style = s;
+  stRenderStyle(); stSave();
+  if (s === 'custom' && !(stP().styleText || '').trim()) stEl('stStyleText').focus();
+}
+/* 그림체 일관성: 이미 그려진 다른 장면 중 가장 가까운 페이지를 그림체 기준으로 함께 전달 */
+async function stStyleRef(p, i){
+  let best = -1;
+  for (let k = 1; k < p.scenes.length; k++) {
+    const ok = n => n >= 0 && n < p.scenes.length && p.scenes[n].image && p.scenes[n].sig === stSig(p); // 지금 그림체로 그려진 것만 기준으로
+    if (ok(i - k)) { best = i - k; break; }
+    if (ok(i + k)) { best = i + k; break; }
+  }
+  return best >= 0 ? await stShrink(p.scenes[best].image, 640, .8) : '';
+}
 function storySetAspect(a){
-  stP().aspect = a;
+  const p = stP();
+  p.aspect = a;
+  if (a === 'custom' && !p.size) p.size = { w:210, h:297, unit:'mm' };
   document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === a));
-  stP().scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = ST_ASPECT[a].css; });
+  stRenderCustomSize();
+  p.scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = stA(p).css; });
   stSave();
 }
 function stShrink(src, max, q){
@@ -10345,7 +10470,7 @@ async function stCharCall(edit){
   const desc = (p.charDesc || '').trim() || (stPlan().setup.length ? (p.answers.hero || '').trim() : '');
   p.charBusy = true; p.charErr = ''; stRenderRef();
   try {
-    const body = { kind:'character', script:desc, title:p.title, style:p.style, context:stContext(p, { key:'hero', clip:160, max:1000 }) };
+    const body = { kind:'character', script:desc, title:p.title, style:p.style, styleDirection:p.styleText, context:stContext(p, { key:'hero', clip:160, max:1000 }) };
     if (edit) { body.edit = edit; body.baseImage = p.charRef; }
     const d = await stApi('/api/story-scene', body);
     const img = await stShrink(d.image, 768, .9);
@@ -10391,7 +10516,7 @@ function stSetupHtml(s){
   </div>`;
 }
 function stSceneInner(i){
-  const p = stP(), st = stPlan().scenes[i], sc = p.scenes[i], A = ST_ASPECT[p.aspect];
+  const p = stP(), st = stPlan().scenes[i], sc = p.scenes[i], A = stA(p);
   const hasScript = !!sc.script.trim();
   const img = sc.image
     ? `<img src="${sc.image}" alt="장면 ${i+1}" onclick="storyOpenPreview(${i+1})">`
@@ -10615,13 +10740,15 @@ async function stGenScene(i, edit){
   sc.busy = true; sc.err = ''; stRenderScene(i, p);
   try {
     const body = {
-      script: sc.script, pageNo:i + 1, total:p.scenes.length, title:p.title, aspect:p.aspect, style:p.style,
+      script: sc.script, pageNo:i + 1, total:p.scenes.length, title:p.title, aspect:stAiAspect(p), style:p.style, styleDirection:p.styleText,
       context: stContext(p, { key:'', sceneIdx:i, lastN:2, clip:120, max:1400 }), charRef: p.charRef
     };
     if (edit) { body.edit = edit; body.baseImage = await stShrink(sc.image, 1024, .85); }
+    else { const sr = await stStyleRef(p, i); if (sr) body.styleRef = sr; }
     const d = await stApi('/api/story-scene', body);
     sc.prevImage = sc.image;
     sc.image = await stShrink(d.image, 1600, .9);
+    sc.sig = stSig(p); // 어떤 그림체로 그렸는지 기록 (그림체 기준 장면 선택용)
     if (edit) sc.edit = '';
     stSave();
   } catch(e) { sc.err = e.message; throw e; }
@@ -10655,6 +10782,12 @@ function storyGenAll(){
     const total = todo.length;
     const tick = () => stProg(true, `🎨 장면 생성 중... ${done + fail} / ${total}${fail ? ` (실패 ${fail})` : ''}`, Math.round((done + fail) / total * 100), true);
     tick();
+    // 현재 그림체로 그려진 장면이 아직 없으면 첫 장면을 먼저 혼자 그려서, 나머지가 그 그림을 그림체 기준으로 삼게 함
+    if (!p.scenes.some(s => s.image && s.sig === stSig(p))) {
+      const first = todo[next++];
+      try { await stGenScene(first); done++; } catch(e) { fail++; }
+      tick();
+    }
     const worker = async () => {
       while (next < todo.length && !stS.cancel) {
         const i = todo[next++];
@@ -10689,7 +10822,7 @@ function storyPvGo(d){
   stPvRender();
 }
 function stPvRender(){
-  const p = stP(), A = ST_ASPECT[p.aspect], pages = stPages(true);
+  const p = stP(), A = stA(p), pages = stPages(true);
   stS.pv = Math.max(0, Math.min(pages.length - 1, stS.pv));
   const pg = pages[stS.pv];
   const page = stEl('stPvPage');
@@ -10863,7 +10996,7 @@ function stSceneCanvas(pg, A){
 function stCanvasBlob(c){ return new Promise(res => c.toBlob(res, 'image/png')); }
 async function storySaveScene(i){
   if (i < 0) return;
-  const p = stP(), sc = p.scenes[i], A = ST_ASPECT[p.aspect];
+  const p = stP(), sc = p.scenes[i], A = stA(p);
   if (!sc.image && !sc.script.trim()) { alert('저장할 그림이나 글이 없어요.'); return; }
   await stExportFonts();
   const pg = { type:'scene', no:i + 1, text:sc.script.trim(), ts:stTs(sc), img:await stLoadImg(sc.image) };
@@ -10902,7 +11035,7 @@ async function stZip(files){
 async function storyExportImages(){
   if (stS.exporting) return;
   stS.exporting = true;
-  const p = stP(), A = ST_ASPECT[p.aspect];
+  const p = stP(), A = stA(p);
   try {
     const pages = (await stExportPages());
     if (!pages) return;
@@ -10924,7 +11057,7 @@ async function storyExportImages(){
 async function storyExportPDF(){
   if (stS.exporting) return;
   stS.exporting = true;
-  const p = stP(), A = ST_ASPECT[p.aspect];
+  const p = stP(), A = stA(p);
   try {
     stExpProg(true, '📄 PDF 준비 중...', 3);
     const pages = await stExportPages();
@@ -10953,7 +11086,7 @@ async function storyExportVideo(){
   if (stS.exporting) return;
   if (typeof MediaRecorder === 'undefined') { alert('이 브라우저는 영상 내보내기를 지원하지 않아요. 크롬 최신 버전을 이용해 주세요.'); return; }
   stS.exporting = true;
-  const p = stP(), A = ST_ASPECT[p.aspect];
+  const p = stP(), A = stA(p);
   let timer = null, canvas = null;
   try {
     stExpProg(true, '🎞️ 영상 준비 중...', 3);
