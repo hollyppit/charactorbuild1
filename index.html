@@ -2182,6 +2182,8 @@ body.st-active .st-fab{display:block}
 
   <div id="stBody"></div>
 
+  <div class="st-export" id="stDirect" style="margin-bottom:14px"></div>
+
   <div class="st-export">
     <div style="width:100%;text-align:center;font-family:var(--f-display-kr);color:var(--c-yellow);font-size:15px">📤 그림책 내보내기</div>
     <div class="st-durbar">
@@ -10416,6 +10418,7 @@ const stS = { cur:'short', proj:{}, hints:{}, loaded:false, batch:false, cancel:
 function stNewProj(mode){
   return {
     title:'', logline:'', styleText:'', durDefault:0, coverDur:2.5, charRef:'', charDesc:'', charPrev:'', charEdit:'', charBusy:false, charErr:'', aspect:'4:3', size:{ w:210, h:297, unit:'mm' }, style:'storybook', answers:{},
+    direct:{ plan:null, hist:[], narr:true, voice:'Sulafat', bgmOn:true, bgm:'auto' },
     cover: stNewScene('cover'),
     scenes: ST_PLANS[mode].scenes.map(s => stNewScene(s.k))
   };
@@ -10532,6 +10535,7 @@ function stRestoreProj(m, sp){
     const list = sp.scenes.filter(o => o && typeof o.k === 'string' && (known.has(o.k) || o.k.startsWith('x_'))).slice(0, ST_MAX_SCENES);
     if (list.length) np.scenes = list.map(o => Object.assign(stNewScene(o.k), { script:str(o.script), prevScript:str(o.prevScript), image:img(o.image), prevImage:img(o.prevImage), ts:tsOf(o.ts), sig:str(o.sig), dur:num(o.dur) }));
   }
+  np.direct = stRestoreDirect(sp.direct);
   return np;
 }
 async function stLoad(){
@@ -10575,6 +10579,7 @@ function storyRenderAll(){
   document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === p.aspect));
   stRenderCustomSize();
   stRenderRef();
+  stRenderDirect();
   stEl('stLoglineHints').innerHTML = stHintsHtml('logline');
   storyRenderBody();
 }
@@ -11247,9 +11252,9 @@ function storyGenAll(){
 /* ── 미리보기 ── */
 function stPages(all){
   const p = stP();
-  const pages = [{ type:'cover', idx:-1, no:0, tag:'표지', title:p.title, text:p.title.trim(), src:p.cover.image, refSrc:p.charRef, ts:stTs(p.cover) }];
+  const pages = [{ k:'cover', type:'cover', idx:-1, no:0, tag:'표지', title:p.title, text:p.title.trim(), src:p.cover.image, refSrc:p.charRef, ts:stTs(p.cover) }];
   p.scenes.forEach((sc, i) => {
-    if (all || sc.script.trim() || sc.image) pages.push({ type:'scene', idx:i, no:i + 1, tag:stMeta(sc).tag, text:sc.script.trim(), src:sc.image, ts:stTs(sc) });
+    if (all || sc.script.trim() || sc.image) pages.push({ k:sc.k, type:'scene', idx:i, no:i + 1, tag:stMeta(sc).tag, text:sc.script.trim(), src:sc.image, ts:stTs(sc) });
   });
   return pages;
 }
@@ -11617,6 +11622,485 @@ async function storyExportVideo(){
     try { if (wakeLock) wakeLock.release(); } catch(e) {}
     if (canvas) canvas.remove();
     stS.exporting = false;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   AI 자동 영상 편집 — AI 연출표(카메라·전환·강조·BGM) + 제미나이 나레이션 + 프레임 렌더링
+   ══════════════════════════════════════════════════════════ */
+const ST_DIR = {
+  cam:['zoomIn', 'zoomOut', 'panL', 'panR', 'panUp', 'panDown', 'still'],
+  trans:['fade', 'slide', 'zoom', 'none'],
+  emphFx:['pop', 'shake', 'none'],
+  bgm:['calm', 'happy', 'adventure', 'mystery', 'sad', 'epic', 'none']
+};
+const ST_DIR_LBL = {
+  cam:{ zoomIn:'🔍 다가가기', zoomOut:'🔎 멀어지기', panL:'⬅ 왼쪽으로', panR:'➡ 오른쪽으로', panUp:'⬆ 위로', panDown:'⬇ 아래로', still:'⏸ 고정' },
+  trans:{ fade:'페이드', slide:'밀어내기', zoom:'줌 전환', none:'바로 전환' },
+  bgm:{ calm:'잔잔한', happy:'신나는', adventure:'모험', mystery:'신비로운', sad:'슬픈', epic:'웅장한', none:'없음' }
+};
+const ST_VOICES = [['Sulafat', '따뜻함'], ['Kore', '또렷함'], ['Leda', '어린 느낌'], ['Aoede', '산뜻함'], ['Puck', '경쾌함'], ['Charon', '차분함'], ['Zephyr', '밝음']];
+const ST_TR_SEC = { fade:0.6, slide:0.5, zoom:0.6, none:0 };
+
+function stSanitizePlan(pl){
+  if (!pl || typeof pl !== 'object' || !Array.isArray(pl.pages)) return null;
+  const pick = (v, l, d) => l.includes(v) ? v : d;
+  const n = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  return {
+    bgm:pick(pl.bgm, ST_DIR.bgm, 'calm'),
+    note:typeof pl.note === 'string' ? pl.note.slice(0, 200) : '',
+    pages:pl.pages.filter(o => o && typeof o.k === 'string').slice(0, 60).map(o => ({
+      k:o.k, cam:pick(o.cam, ST_DIR.cam, 'still'), fx:n(o.fx, 0, 100, 50), fy:n(o.fy, 0, 100, 50),
+      trans:pick(o.trans, ST_DIR.trans, 'fade'),
+      emph:(Array.isArray(o.emph) ? o.emph : []).filter(w => typeof w === 'string' && w).map(w => w.slice(0, 20)).slice(0, 2),
+      emphFx:pick(o.emphFx, ST_DIR.emphFx, 'none'), pause:n(o.pause, 0, 2, 0)
+    }))
+  };
+}
+function stRestoreDirect(d){
+  const base = { plan:null, hist:[], narr:true, voice:'Sulafat', bgmOn:true, bgm:'auto' };
+  if (!d || typeof d !== 'object') return base;
+  base.plan = stSanitizePlan(d.plan);
+  base.hist = (Array.isArray(d.hist) ? d.hist : []).map(stSanitizePlan).filter(Boolean).slice(-9);
+  base.narr = d.narr !== false; base.bgmOn = d.bgmOn !== false;
+  if (ST_VOICES.some(v => v[0] === d.voice)) base.voice = d.voice;
+  if (d.bgm === 'auto' || ST_DIR.bgm.includes(d.bgm)) base.bgm = d.bgm;
+  return base;
+}
+function stDirOf(plan, k){
+  return (plan && plan.pages.find(o => o.k === k)) || { k, cam:'still', fx:50, fy:50, trans:'fade', emph:[], emphFx:'none', pause:0 };
+}
+function stDirBgm(d){
+  if (!d.bgmOn) return 'none';
+  if (d.bgm !== 'auto') return d.bgm;
+  return d.plan && d.plan.bgm !== 'none' ? d.plan.bgm : 'calm';
+}
+
+/* ── 화면(설정 · 연출표 · 수정 요청 · 버전) ── */
+function stRenderDirect(){
+  const el = stEl('stDirect'); if (!el) return;
+  const p = stP(), d = p.direct, pl = d.plan, busy = !!stS.dirBusy;
+  const keepFb = stEl('stDirFb') ? stEl('stDirFb').value : '';
+  let h = `<div style="width:100%;text-align:center;font-family:var(--f-display-kr);color:var(--c-yellow);font-size:15px">🤖 AI 자동 영상 편집</div>
+    <div class="st-hintline" style="width:100%;font-size:12px;color:#cfc6dd">AI가 장면마다 카메라 움직임·전환·강조 단어·배경음악을 정하고, 제미나이 음성이 대본을 읽어 줘요. 나레이션이 있으면 장면 시간이 읽는 길이에 맞춰 자동으로 정해져요.</div>
+    <div class="st-custom-row" style="width:100%">
+      <label><input type="checkbox" ${d.narr ? 'checked' : ''} onchange="storyDirOpt('narr',this.checked)"> 🎙 나레이션</label>
+      <select class="st-select" onchange="storyDirOpt('voice',this.value)" ${d.narr ? '' : 'disabled'}>${ST_VOICES.map(v => `<option value="${v[0]}" ${d.voice === v[0] ? 'selected' : ''}>${v[1]}</option>`).join('')}</select>
+      <label><input type="checkbox" ${d.bgmOn ? 'checked' : ''} onchange="storyDirOpt('bgmOn',this.checked)"> 🎵 배경음악</label>
+      <select class="st-select" onchange="storyDirOpt('bgm',this.value)" ${d.bgmOn ? '' : 'disabled'}><option value="auto" ${d.bgm === 'auto' ? 'selected' : ''}>AI가 고르기</option>${ST_DIR.bgm.filter(b => b !== 'none').map(b => `<option value="${b}" ${d.bgm === b ? 'selected' : ''}>${ST_DIR_LBL.bgm[b]}</option>`).join('')}</select>
+    </div>
+    <div class="st-act" style="width:100%;justify-content:center">
+      <button class="btn btn-blue" ${busy ? 'disabled' : ''} onclick="storyDirMake()">${busy ? '⏳ 연출 만드는 중...' : (pl ? '🔄 연출 다시 만들기' : '🤖 AI 연출 만들기')}</button>
+    </div>`;
+  if (pl) {
+    const pages = stPages(false);
+    h += `<div style="width:100%;font-size:12px;color:#cfc6dd"><b style="color:var(--c-yellow)">연출표 v${d.hist.length + 1}</b> · 🎵 ${ST_DIR_LBL.bgm[stDirBgm(d)]}${pl.note ? ' · ' + stEsc(pl.note) : ''}</div>
+      <div style="width:100%;max-height:200px;overflow:auto;font-size:12px;color:#ddd;line-height:1.7;border:1px dashed #555;padding:6px 10px">${pages.map(pg => {
+        const o = stDirOf(pl, pg.k);
+        return `<div>${pg.type === 'cover' ? '표지' : '장면 ' + pg.no} · ${ST_DIR_LBL.cam[o.cam]} · ${ST_DIR_LBL.trans[o.trans]}${o.emph.length ? ' · 강조 "' + o.emph.map(stEsc).join('", "') + '"' : ''}${o.pause > 0 ? ` · +${o.pause.toFixed(1)}초` : ''}</div>`;
+      }).join('')}</div>
+      <div class="st-custom-row" style="width:100%">
+        <input class="st-input" id="stDirFb" maxlength="200" style="flex:1;min-width:200px" placeholder="수정은 한 번에 하나씩 예) 3번 장면은 천천히 다가가게, 배경음악 더 신나게" onkeydown="if(event.key==='Enter')storyDirFeedback()">
+        <button class="st-mini" style="margin:0" ${busy ? 'disabled' : ''} onclick="storyDirFeedback()">✏️ 수정 요청</button>
+        ${d.hist.length ? `<button class="st-mini" style="margin:0" ${busy ? 'disabled' : ''} onclick="storyDirUndo()">↩ v${d.hist.length}로 되돌리기</button>` : ''}
+      </div>`;
+  }
+  h += `<div class="st-act" style="width:100%;justify-content:center"><button class="btn btn-pink" ${busy ? 'disabled' : ''} onclick="storyDirExport()">🎬 AI 자동 편집 영상 만들기</button></div>
+    <div class="st-hintline" style="width:100%;font-size:11px;color:#9b93a8">연출표가 없으면 영상을 만들 때 자동으로 먼저 만들어요. 영상은 화면에서 실시간으로 녹화되니, 만드는 동안 화면을 켜 두고 이 탭을 벗어나지 마세요.</div>`;
+  el.innerHTML = h;
+  const fb = stEl('stDirFb'); if (fb && keepFb) fb.value = keepFb;
+}
+function storyDirOpt(k, v){
+  const d = stP().direct;
+  d[k] = (k === 'narr' || k === 'bgmOn') ? !!v : v;
+  stSave(); stRenderDirect();
+}
+function storyDirMake(){ stGate(() => stDirMake('')); }
+function storyDirFeedback(){
+  const v = (stEl('stDirFb') ? stEl('stDirFb').value : '').trim();
+  if (!v) { alert('고치고 싶은 점을 적어 주세요. (예: 3번 장면은 천천히 다가가게)'); return; }
+  stGate(async () => { if (await stDirMake(v)) { const fb = stEl('stDirFb'); if (fb) fb.value = ''; } });
+}
+function storyDirUndo(){
+  const d = stP().direct;
+  if (!d.hist.length || stS.dirBusy) return;
+  d.plan = d.hist.pop();
+  stSave(); stRenderDirect();
+}
+/* 연출표 요청(화면 갱신 없음) — 새로 만들기 또는 수정 요청 */
+async function stDirRequest(feedback){
+  const p = stP(), d = p.direct;
+  const r = await stApi('/api/story-direct', {
+    title:p.title, logline:p.logline, bgm:d.bgmOn, feedback,
+    prev:feedback ? d.plan : undefined,
+    pages:stPages(false).map(pg => ({ k:pg.k, tag:pg.tag, text:pg.text, cover:pg.type === 'cover' }))
+  });
+  const pl = stSanitizePlan(r.plan);
+  if (!pl) throw new Error('연출표를 만들지 못했어요.');
+  if (d.plan) d.hist = d.hist.concat([d.plan]).slice(-9);
+  d.plan = pl;
+  stSave();
+}
+async function stDirMake(feedback){
+  if (stS.dirBusy || stS.exporting) return false;
+  if (stPages(false).length < 2) { alert('연출할 장면이 없어요. 대본이나 그림을 먼저 만들어 주세요.'); return false; }
+  stS.dirBusy = true; stRenderDirect();
+  try { await stDirRequest(feedback); return true; }
+  catch(e) { alert('AI 연출 오류: ' + e.message); return false; }
+  finally { stS.dirBusy = false; stRenderDirect(); }
+}
+
+/* ── 나레이션(제미나이 음성) ── */
+async function stTts(text, voice){
+  const cache = stS.tts || (stS.tts = new Map());
+  const key = voice + '|' + text;
+  if (cache.has(key)) return cache.get(key);
+  let err;
+  for (let a = 0; a < 4; a++) {
+    try {
+      const r = await stApi('/api/story-tts', { text, voice });
+      const bin = atob(r.pcm), n = bin.length >> 1, f = new Float32Array(n);
+      for (let i = 0; i < n; i++) { let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); if (v >= 32768) v -= 65536; f[i] = v / 32768; }
+      if (cache.size > 60) cache.clear();
+      const out = { data:f, rate:r.rate || 24000 };
+      cache.set(key, out);
+      return out;
+    } catch(e) {
+      err = e;
+      if (a < 3) await new Promise(res => setTimeout(res, /한도|429/.test(e.message) ? 8000 * (a + 1) : 2500)); // 음성 요청 한도에 걸리면 넉넉히 기다림
+    }
+  }
+  throw err;
+}
+
+/* ── 배경음악: 파일 없이 코드로 만든 단순한 반주(저작권 걱정 없음) ── */
+const ST_BGM_SPEC = {
+  calm:{ bpm:66, wave:'sine', arp:'q', vol:0.5, ch:[[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]] },
+  happy:{ bpm:112, wave:'triangle', arp:'e', vol:0.5, ch:[[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]] },
+  adventure:{ bpm:124, wave:'triangle', arp:'e', vol:0.55, ch:[[57, 60, 64], [53, 57, 60], [60, 64, 67], [55, 59, 62]] },
+  mystery:{ bpm:70, wave:'sine', arp:'q', vol:0.5, ch:[[57, 60, 64], [56, 59, 62], [57, 60, 64], [52, 56, 59]] },
+  sad:{ bpm:60, wave:'sine', arp:'q', vol:0.5, ch:[[57, 60, 64], [50, 53, 57], [53, 57, 60], [52, 56, 59]] },
+  epic:{ bpm:90, wave:'triangle', arp:'q', vol:0.6, ch:[[50, 53, 57], [58, 62, 65], [53, 57, 60], [48, 52, 55]] }
+};
+function stSynthBgm(oc, total, mood, duck){
+  const sp = ST_BGM_SPEC[mood]; if (!sp) return;
+  const mf = m => 440 * Math.pow(2, (m - 69) / 12);
+  const master = oc.createGain();
+  const lp = oc.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+  master.connect(lp); lp.connect(oc.destination);
+  // 처음 1초 페이드 인, 마지막 1.5초 페이드 아웃, 나레이션이 나오는 동안은 작게(더킹)
+  const hi = 0.17 * sp.vol, lo = 0.055 * sp.vol;
+  master.gain.setValueAtTime(0, 0);
+  master.gain.linearRampToValueAtTime(hi, 1);
+  duck.forEach(([a, b]) => {
+    master.gain.setValueAtTime(hi, Math.max(1, a - 0.25));
+    master.gain.linearRampToValueAtTime(lo, a);
+    master.gain.setValueAtTime(lo, b);
+    master.gain.linearRampToValueAtTime(hi, b + 0.5);
+  });
+  const end = Math.max(total - 1.5, 1.1);
+  master.gain.setValueAtTime(master.gain.value || hi, end);
+  const note = (m, t0, len, type, v) => {
+    if (t0 >= total) return;
+    const o = oc.createOscillator(), g = oc.createGain();
+    o.type = type; o.frequency.value = mf(m);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(v, t0 + Math.min(0.08, len / 3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+    o.connect(g); g.connect(master);
+    o.start(t0); o.stop(Math.min(total, t0 + len + 0.05));
+  };
+  const beat = 60 / sp.bpm, bar = beat * 4;
+  for (let t = 0, i = 0; t < total; t += bar, i++) {
+    const c = sp.ch[i % sp.ch.length];
+    c.forEach(m => note(m, t, bar * 0.98, sp.wave, 0.5)); // 화음(패드)
+    note(c[0] - 12, t, bar * 0.98, 'sine', 0.8);           // 낮은 음(베이스)
+    if (sp.arp) {
+      const step = sp.arp === 'e' ? beat / 2 : beat, cnt = Math.round(bar / step);
+      for (let j = 0; j < cnt; j++) note(c[j % 3] + 12, t + j * step, step * 0.9, 'triangle', 0.35);
+    }
+  }
+  // 아웃 램프 (위 setValueAtTime에서 현재값을 못 읽는 환경 대비해 명시적으로 한 번 더)
+  master.gain.linearRampToValueAtTime(0, total);
+}
+async function stDirMix(tl, mood){
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!OAC) return null;
+  const rate = 32000, total = tl.total;
+  const oc = new OAC(1, Math.ceil(total * rate), rate);
+  const duck = [];
+  tl.pages.forEach(L => {
+    if (!L.clip) return;
+    const b = oc.createBuffer(1, L.clip.data.length, L.clip.rate);
+    b.copyToChannel(L.clip.data, 0);
+    const s = oc.createBufferSource(); s.buffer = b;
+    const g = oc.createGain(); g.gain.value = 1.0;
+    s.connect(g); g.connect(oc.destination);
+    s.start(L.start + L.narrAt);
+    duck.push([L.start + L.narrAt, L.start + L.narrAt + L.narrDur]);
+  });
+  if (mood !== 'none') stSynthBgm(oc, total, mood, duck);
+  return oc.startRendering();
+}
+
+/* ── 타임라인(장면별 시작·길이·나레이션 위치) ── */
+function stDirTimeline(p, pages, plan, clips){
+  let t = 0;
+  const list = pages.map((pg, i) => {
+    const o = stDirOf(plan, pg.k), clip = clips[i] || null;
+    const trDur = i === 0 ? 0 : ST_TR_SEC[o.trans];
+    let dur, narrAt = 0, narrDur = 0;
+    if (clip) {
+      narrDur = clip.data.length / clip.rate;
+      narrAt = Math.max(0.6, trDur + 0.25);
+      const sc = pg.type === 'scene' ? p.scenes[pg.idx] : null;
+      const userMin = pg.type === 'cover' ? (p.coverDur > 0 ? p.coverDur : 0) : (sc && sc.dur > 0 ? sc.dur : (p.durDefault > 0 ? p.durDefault : 0));
+      dur = Math.max(2, userMin, narrAt + narrDur + 0.9);
+    } else dur = stPageMs(p, pg) / 1000;
+    dur += o.pause;
+    const L = { pg, o, clip, start:t, dur, trDur, narrAt, narrDur, textAt:i === 0 ? 0.3 : trDur + 0.1 };
+    t += dur;
+    return L;
+  });
+  return { pages:list, total:t };
+}
+
+/* ── 프레임 그리기 ── */
+function stDirLayout(ctx, W, H, pg, o){
+  const text = (pg.text || '').trim(); if (!text) return null;
+  const t = pg.ts || (pg.type === 'cover' ? ST_TS_COVER : ST_TS_DEFAULT);
+  const fs = W * t.size / 100;
+  const font = `${t.bold ? '800 ' : ''}${fs}px '${t.font}','Nanum Gothic',sans-serif`;
+  ctx.save(); ctx.font = font;
+  const lines = stWrap(ctx, text, W * 0.86), lh = fs * 1.4;
+  const y0 = H * t.y / 100 - (lines.length * lh) / 2 + lh / 2;
+  const words = o.emph.filter(w => w && text.includes(w));
+  const re = words.length ? new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')') : null;
+  const out = lines.map((l, i) => {
+    const segs = (re ? l.split(re) : [l]).filter(s => s !== '').map(s => {
+      const e = words.includes(s);
+      return { s, w:ctx.measureText(s).width, e, frac:e ? text.indexOf(s) / Math.max(1, text.length) : 0 };
+    });
+    return { y:y0 + i * lh, w:segs.reduce((a, s) => a + s.w, 0), segs };
+  });
+  ctx.restore();
+  return { lines:out, font, fs, cx:W * t.x / 100, color:t.color, stroke:t.stroke, lw:fs * t.sw / 100 };
+}
+function stDirText(ctx, lay, L, local){
+  if (!lay) return;
+  const a = Math.min(1, Math.max(0, (local - L.textAt) / 0.4));
+  if (a <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = a; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = lay.font;
+  ctx.lineJoin = 'round'; ctx.miterLimit = 2; ctx.lineWidth = lay.lw; ctx.strokeStyle = lay.stroke;
+  const rise = (1 - a) * lay.fs * 0.4;
+  lay.lines.forEach(ln => {
+    let x = lay.cx - ln.w / 2;
+    ln.segs.forEach(sg => {
+      let sc = 1, dx = 0, dy = 0, col = lay.color;
+      if (sg.e) {
+        col = '#ffd23f';
+        const at = L.narrDur ? L.narrAt + sg.frac * L.narrDur : 0.5 + sg.frac * Math.max(0, L.dur - 1.5);
+        const u = local - at;
+        if (L.o.emphFx === 'pop' && u >= 0 && u < 0.5) sc = 1 + 0.35 * Math.sin(Math.PI * u / 0.5);
+        if (L.o.emphFx === 'shake' && u >= 0 && u < 0.6) { const k = 1 - u / 0.6; dx = Math.sin(u * 60) * lay.fs * 0.06 * k; dy = Math.cos(u * 47) * lay.fs * 0.05 * k; }
+      }
+      ctx.save();
+      ctx.translate(x + sg.w / 2 + dx, ln.y + rise + dy); ctx.scale(sc, sc);
+      ctx.fillStyle = col;
+      if (lay.lw > 0) ctx.strokeText(sg.s, -sg.w / 2, 0);
+      ctx.fillText(sg.s, -sg.w / 2, 0);
+      ctx.restore();
+      x += sg.w;
+    });
+  });
+  ctx.restore();
+}
+/* 그림(카메라 움직임 적용) — 글자는 따로 그려서 흔들리지 않게 */
+function stDirScene(ctx, W, H, L, local){
+  const pg = L.pg, o = L.o;
+  ctx.fillStyle = '#fffaf0'; ctx.fillRect(0, 0, W, H);
+  const u = Math.min(1, Math.max(0, local / L.dur)), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+  let s = 1, cx = W * o.fx / 100, cy = H * o.fy / 100, tx = 0, ty = 0;
+  if (o.cam === 'zoomIn') s = 1 + 0.14 * e;
+  else if (o.cam === 'zoomOut') s = 1.14 - 0.14 * e;
+  else if (o.cam !== 'still') {
+    s = 1.12; cx = W / 2; cy = H / 2;
+    const k = 2 * e - 1;
+    if (o.cam === 'panL') tx = W * 0.05 * k;
+    else if (o.cam === 'panR') tx = -W * 0.05 * k;
+    else if (o.cam === 'panUp') ty = H * 0.05 * k;
+    else ty = -H * 0.05 * k;
+  }
+  ctx.save();
+  ctx.translate(cx + tx, cy + ty); ctx.scale(s, s); ctx.translate(-cx, -cy);
+  if (pg.img) stCover(ctx, pg.img, 0, 0, W, H);
+  else {
+    ctx.fillStyle = '#eadfc8'; ctx.fillRect(0, 0, W, H);
+    if (pg.type === 'cover' && pg.refImg) {
+      const bw = W * 0.8, bh = H * 0.62, k = Math.min(bw / pg.refImg.naturalWidth, bh / pg.refImg.naturalHeight);
+      const dw = pg.refImg.naturalWidth * k, dh = pg.refImg.naturalHeight * k;
+      ctx.drawImage(pg.refImg, (W - dw) / 2, H * 0.34 + (bh - dh) / 2, dw, dh);
+    }
+  }
+  ctx.restore();
+}
+
+/* ── 영상 만들기 ── */
+async function storyDirExport(){
+  stGate(stDirExportRun);
+}
+async function stDirExportRun(){
+  if (stS.exporting || stS.dirBusy) return;
+  if (typeof MediaRecorder === 'undefined') { alert('이 브라우저는 영상 내보내기를 지원하지 않아요. 크롬 최신 버전을 이용해 주세요.'); return; }
+  const p = stP(), d = p.direct;
+  // 소리를 내보내려면 사용자가 누른 직후에 오디오 장치를 열어 둬야 함(아이폰 등)
+  let ac = null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (AC) { try { ac = new AC(); if (ac.resume) ac.resume(); } catch(e) { ac = null; } }
+  stS.exporting = true; stRenderDirect();
+  let timer = null, canvas = null, rec = null, wakeLock = null, src = null;
+  try {
+    const pages = await stExportPages();
+    if (!pages) return;
+    if (!d.plan) { stExpProg(true, '🤖 AI가 영상 연출을 짜는 중...', 3); await stDirRequest(''); stRenderDirect(); }
+    const plan = d.plan;
+
+    // 1) 나레이션
+    const clips = new Array(pages.length).fill(null);
+    if (d.narr) {
+      const idxs = pages.map((pg, i) => i).filter(i => (pages[i].text || '').trim());
+      for (let n = 0; n < idxs.length; n++) {
+        const i = idxs[n];
+        stExpProg(true, `🎙 나레이션 만드는 중... (${n + 1}/${idxs.length}) — 음성 한도 때문에 잠시 기다릴 수 있어요`, 5 + Math.round(n / idxs.length * 30));
+        try { clips[i] = await stTts(pages[i].text.trim(), d.voice); }
+        catch(e) {
+          if (!confirm('나레이션을 만들지 못했어요.\n(' + e.message + ')\n\n나레이션 없이(글자 수에 맞춘 시간으로) 계속할까요?')) return;
+          clips.fill(null); break;
+        }
+      }
+    }
+
+    // 2) 타임라인 + 소리 믹스
+    const tl = stDirTimeline(p, pages, plan, clips);
+    const mood = stDirBgm(d), hasVoice = clips.some(Boolean);
+    let mixed = null;
+    if (ac && (hasVoice || mood !== 'none')) {
+      stExpProg(true, '🎵 소리를 섞는 중...', 38);
+      try { mixed = await stDirMix(tl, mood); } catch(e) { console.warn('소리 믹스 실패', e); mixed = null; }
+    }
+
+    // 3) 화면 녹화
+    const W = stA(p).vw, H = stA(p).vh;
+    canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+    canvas.style.cssText = 'position:fixed;left:-9999px;top:-9999px;pointer-events:none;opacity:0;';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const snap = document.createElement('canvas'); snap.width = W; snap.height = H;
+    const sctx = snap.getContext('2d');
+
+    const ready = [];
+    const prep = i => ready[i] || (ready[i] = (async () => {
+      const L = tl.pages[i];
+      await stPrep(L.pg);
+      L.lay = stDirLayout(ctx, W, H, L.pg, L.o);
+      L.rdy = true;
+    })());
+    await prep(0);
+    if (tl.pages.length > 1) prep(1);
+
+    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+    const stream = canvas.captureStream(30);
+    let dest = null;
+    if (mixed) {
+      try { dest = ac.createMediaStreamDestination(); stream.addTrack(dest.stream.getAudioTracks()[0]); } catch(e) { dest = null; }
+    }
+    const mimes = dest
+      ? ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+      : ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const mime = mimes.find(m => MediaRecorder.isTypeSupported(m)) || '';
+    rec = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond:3000000, audioBitsPerSecond:128000 } : { videoBitsPerSecond:3000000 });
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+    let cur = -1, lastProg = 0, T0 = 0;
+    const draw = t => {
+      let k = cur < 0 ? 0 : cur;
+      while (k + 1 < tl.pages.length && t >= tl.pages[k + 1].start) k++;
+      if (k !== cur) {
+        const L2 = tl.pages[k];
+        if (!L2.rdy) { prep(k); if (cur >= 0) return; }   // 다음 그림이 아직 안 왔으면 지금 화면을 유지
+        if (cur >= 0) { sctx.drawImage(canvas, 0, 0); stRelease(tl.pages[cur].pg); }
+        cur = k;
+        if (k + 1 < tl.pages.length) prep(k + 1);
+      }
+      const L = tl.pages[cur], local = t - L.start;
+      const tr = (cur > 0 && L.trDur > 0 && local < L.trDur) ? Math.min(1, local / L.trDur) : -1;
+      if (tr >= 0) {
+        const e = tr * tr * (3 - 2 * tr);
+        ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+        if (L.o.trans === 'slide') {
+          ctx.drawImage(snap, -W * e, 0);
+          ctx.save(); ctx.translate(W * (1 - e), 0); stDirScene(ctx, W, H, L, local); ctx.restore();
+        } else {
+          ctx.drawImage(snap, 0, 0);
+          ctx.save(); ctx.globalAlpha = e;
+          if (L.o.trans === 'zoom') { const z = 1.25 - 0.25 * e; ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-W / 2, -H / 2); }
+          stDirScene(ctx, W, H, L, local);
+          ctx.restore();
+        }
+      } else stDirScene(ctx, W, H, L, local);
+      stDirText(ctx, L.lay, L, local);
+      // 처음 페이드 인 / 끝 페이드 아웃
+      const fade = Math.max(0, 1 - t / 0.5, 1 - (tl.total - t) / 0.6);
+      if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade)})`; ctx.fillRect(0, 0, W, H); }
+    };
+    draw(0);
+
+    stExpProg(true, '🎞️ 영상 만드는 중... 화면을 켜 두고 이 탭을 벗어나지 마세요', 40);
+    rec.start(200);
+    if (mixed) {
+      src = ac.createBufferSource(); src.buffer = mixed;
+      src.connect(dest);
+      src.start();
+    }
+    T0 = performance.now();
+    const t0 = Date.now();
+    await new Promise(res => {
+      timer = setInterval(() => {
+        const t = (performance.now() - T0) / 1000;
+        if (t >= tl.total) { res(); return; }
+        draw(t);
+        if (performance.now() - lastProg > 500) {
+          lastProg = performance.now();
+          stExpProg(true, `🎞️ 영상 만드는 중... ${Math.floor(t)} / ${Math.ceil(tl.total)}초 — 화면을 켜 두고 이 탭을 벗어나지 마세요`, 40 + Math.round(t / tl.total * 58));
+        }
+      }, 1000 / 30);
+    });
+    clearInterval(timer); timer = null;
+    rec.requestData();
+    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => { rec.onstop = r; rec.stop(); });
+    await new Promise(r => setTimeout(r, 150));
+    const type = rec.mimeType || mime || 'video/webm';
+    const isMp4 = type.includes('mp4');
+    let blob = new Blob(chunks, { type });
+    if (!isMp4 && blob.size > 0 && typeof fixWebmDuration === 'function') {
+      blob = await new Promise(r => fixWebmDuration(blob, Date.now() - t0, fb => r(fb || blob)));
+    }
+    if (!blob.size) throw new Error('영상 데이터가 만들어지지 않았어요.');
+    saveImageUniversal(blob, stFileBase() + '_AI편집' + (isMp4 ? '.mp4' : '.webm'));
+    stExpProg(true, (isMp4 ? '완료! ✅ MP4를 저장했어요' : '완료! ✅ 이 브라우저는 MP4 대신 WebM으로 저장했어요') + (ac && !mixed && (hasVoice || mood !== 'none') ? ' (소리는 이 브라우저에서 넣지 못했어요)' : ''), 100);
+    setTimeout(() => stExpProg(false), 4000);
+  } catch(e) { stExpProg(false); alert('AI 자동 편집 영상 실패: ' + e.message); }
+  finally {
+    if (timer) clearInterval(timer);
+    try { if (rec && rec.state !== 'inactive') rec.stop(); } catch(e) {}
+    try { if (src) src.stop(); } catch(e) {}
+    try { if (ac) ac.close(); } catch(e) {}
+    try { if (wakeLock) wakeLock.release(); } catch(e) {}
+    if (canvas) canvas.remove();
+    stS.exporting = false; stRenderDirect();
   }
 }
 </script>
