@@ -528,6 +528,19 @@ body.admin .add-btn{display:flex}
 .dl-item:hover{background:#1a0010;border-color:var(--c-purple)}
 .dl-item.active{border-color:var(--c-yellow);background:#2d1500}
 /* 잠금 레이어: 클릭 불가, 회색 처리 */
+.sc-panel{display:none;position:fixed;right:0;top:120px;z-index:800;width:210px;background:var(--c-card);border:2px solid var(--c-purple);border-right:none;box-shadow:var(--shadow-purple);font-family:var(--f-ui)}
+@media (min-width:1100px){.sc-panel{display:block}}
+.sc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:8px 10px;border:none;background:#2d0020;color:var(--c-yellow);font-family:var(--f-display-kr);font-size:13px;cursor:pointer}
+.sc-head:hover{background:#3a0028}
+.sc-arrow{font-size:10px;transition:transform .15s}
+.sc-body{padding:6px 10px 10px;max-height:calc(100vh - 220px);overflow-y:auto}
+.sc-panel.collapsed{width:auto}
+.sc-panel.collapsed .sc-body{display:none}
+.sc-panel.collapsed .sc-arrow{transform:rotate(180deg)}
+.sc-group{margin:8px 0 3px;font-size:10px;font-weight:800;color:var(--c-purple);letter-spacing:.04em}
+.sc-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px dashed #3a0028;font-size:11px;color:#ccc}
+.sc-row em{font-style:normal;color:#999;text-align:right}
+.sc-row kbd{display:inline-block;min-width:18px;padding:1px 5px;border:1px solid #555;border-bottom-width:2px;background:#0d0008;color:var(--c-yellow);font-family:inherit;font-size:10px;font-weight:700;text-align:center}
 .dl-handle{flex:none;width:20px;align-self:stretch;display:flex;align-items:center;justify-content:center;color:#888;font-size:16px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 .dl-handle:hover{color:var(--c-yellow)}
 .dl-item.dl-dragging{opacity:.45}
@@ -1945,6 +1958,33 @@ body.st-active .st-fab{display:block}
       <div class="gesture-hint" id="gestureHint">💡 두 손가락으로 확대/이동 · 짧게 탭 = 되돌리기</div>
     </div>
    </div><!-- /draw-workspace -->
+
+    <!-- 단축키 안내 패널 (화면 오른쪽 고정, 접기/펴기) -->
+    <aside class="sc-panel" id="shortcutPanel" aria-label="단축키 안내">
+      <button class="sc-head" id="scToggle" onclick="toggleShortcutPanel()" aria-expanded="true">
+        <span>⌨️ 단축키</span><span class="sc-arrow" id="scArrow">▶</span>
+      </button>
+      <div class="sc-body" id="scBody">
+        <div class="sc-group">도구</div>
+        <div class="sc-row"><span><kbd>P</kbd></span><em>펜</em></div>
+        <div class="sc-row"><span><kbd>E</kbd></span><em>지우개</em></div>
+        <div class="sc-row"><span><kbd>[</kbd> <kbd>]</kbd></span><em>브러시 작게/크게</em></div>
+        <div class="sc-group">실행 취소</div>
+        <div class="sc-row"><span><kbd>Tab</kbd></span><em>되돌리기</em></div>
+        <div class="sc-row"><span><kbd>Ctrl</kbd>+<kbd>Z</kbd></span><em>되돌리기</em></div>
+        <div class="sc-row"><span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></span><em>다시 실행</em></div>
+        <div class="sc-row"><span><kbd>Delete</kbd></span><em>전체 초기화</em></div>
+        <div class="sc-group">화면</div>
+        <div class="sc-row"><span><kbd>+</kbd> <kbd>-</kbd></span><em>확대/축소</em></div>
+        <div class="sc-row"><span><kbd>Space</kbd>+드래그</span><em>화면 이동</em></div>
+        <div class="sc-group">저장</div>
+        <div class="sc-row"><span><kbd>Ctrl</kbd>+<kbd>S</kbd></span><em>중간 저장</em></div>
+        <div class="sc-row"><span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></span><em>새 저장</em></div>
+        <div class="sc-group">터치</div>
+        <div class="sc-row"><span>두 손가락</span><em>확대/이동</em></div>
+        <div class="sc-row"><span>두 손가락 탭</span><em>되돌리기</em></div>
+      </div>
+    </aside>
 
     <div class="btn-row">
       <button class="btn btn-gray"   onclick="clearDraw()">🗑️ 초기화</button>
@@ -7552,6 +7592,21 @@ function setPalColor(c,el){
   document.querySelectorAll('#panel-draw .pal-dot').forEach(d=>d.classList.remove('active'));
   el.classList.add('active');
 }
+// 단축키 안내 패널 접기/펴기 (상태는 이 브라우저에 기억)
+function toggleShortcutPanel(force) {
+  const p = document.getElementById('shortcutPanel');
+  if (!p) return;
+  const collapsed = typeof force === 'boolean' ? force : !p.classList.contains('collapsed');
+  p.classList.toggle('collapsed', collapsed);
+  const b = document.getElementById('scToggle');
+  if (b) b.setAttribute('aria-expanded', String(!collapsed));
+  try { localStorage.setItem('drawShortcutsCollapsed', collapsed ? '1' : '0'); } catch (_) {}
+}
+document.addEventListener('DOMContentLoaded', () => {
+  let c = false;
+  try { c = localStorage.getItem('drawShortcutsCollapsed') === '1'; } catch (_) {}
+  if (c) toggleShortcutPanel(true);
+});
 // Ctrl+Z / Cmd+Z — undo, Ctrl+Shift+Z — redo
 document.addEventListener('keydown', e=>{
   if(!(e.ctrlKey||e.metaKey) || (e.key!=='z' && e.key!=='Z')) return;
