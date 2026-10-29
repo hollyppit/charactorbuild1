@@ -528,6 +528,16 @@ body.admin .add-btn{display:flex}
 .dl-item:hover{background:#1a0010;border-color:var(--c-purple)}
 .dl-item.active{border-color:var(--c-yellow);background:#2d1500}
 /* 잠금 레이어: 클릭 불가, 회색 처리 */
+.dl-handle{flex:none;width:20px;align-self:stretch;display:flex;align-items:center;justify-content:center;color:#888;font-size:16px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.dl-handle:hover{color:var(--c-yellow)}
+.dl-item.dl-dragging{opacity:.45}
+.dl-item.dl-drop-above{box-shadow:0 -3px 0 0 var(--c-yellow)}
+.dl-item.dl-drop-below{box-shadow:0 3px 0 0 var(--c-yellow)}
+.dl-check{flex:none;width:20px;height:20px;accent-color:var(--c-yellow);cursor:pointer}
+.dl-item.dl-selected{border-color:var(--c-yellow);background:#2d1500}
+.dl-multi-bar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;padding:6px;margin-bottom:6px;border:2px dashed var(--c-purple);background:#1a0010;font-family:var(--f-ui);font-size:11px;color:#ccc}
+.dl-multi-bar .dl-add-btn{padding:5px 8px}
+.dl-add-btn.on{background:var(--c-yellow);color:#000;border-color:var(--c-yellow)}
 .dl-item.dl-locked{cursor:default;border-color:#2a2a2a;background:#080808;opacity:.75}
 .dl-item.dl-locked:hover{background:#080808;border-color:#2a2a2a}
 .dl-locked-badge{font-size:9px;color:#666;font-family:var(--f-ui);font-weight:700;letter-spacing:.03em;display:block;margin-top:2px}
@@ -1823,6 +1833,17 @@ body.st-active .st-fab{display:block}
     <!-- 툴바 -->
     <div class="draw-toolbar">
       <button class="tool-btn active" id="tool-pen"    onclick="setDrawTool('pen',this)">🖊️ 펜</button>
+      <span id="penBrushGroup" style="display:inline-flex;gap:2px;flex-wrap:wrap">
+        <button class="tool-btn active" data-brush="round"   onclick="setPenBrush('round',this)"   title="기본 펜" style="padding:6px 8px">🖊️ 기본</button>
+        <button class="tool-btn" data-brush="pencil"  onclick="setPenBrush('pencil',this)"  title="연필: 가늘고 거친 질감" style="padding:6px 8px">✏️ 연필</button>
+        <button class="tool-btn" data-brush="crayon"  onclick="setPenBrush('crayon',this)"  title="크레용: 덩어리진 거친 질감" style="padding:6px 8px">🖍️ 크레용</button>
+        <button class="tool-btn" data-brush="marker"  onclick="setPenBrush('marker',this)"  title="마커: 반투명, 겹쳐 그어도 한 번만 칠해짐" style="padding:6px 8px">🖌️ 마커</button>
+        <button class="tool-btn" data-brush="brush"   onclick="setPenBrush('brush',this)"   title="붓: 빨리 그으면 가늘고 천천히 그으면 굵어짐" style="padding:6px 8px">🎨 붓</button>
+        <button class="tool-btn" data-brush="neon"    onclick="setPenBrush('neon',this)"    title="네온: 빛나는 선" style="padding:6px 8px">🌟 네온</button>
+        <button class="tool-btn" data-brush="rainbow" onclick="setPenBrush('rainbow',this)" title="무지개: 그을수록 색이 변함" style="padding:6px 8px">🌈 무지개</button>
+        <button class="tool-btn" data-brush="star"    onclick="setPenBrush('star',this)"    title="별 도장: 선을 따라 별을 찍음" style="padding:6px 8px">⭐ 별</button>
+        <button class="tool-btn" data-brush="dotted"  onclick="setPenBrush('dotted',this)"  title="점선" style="padding:6px 8px">⚪ 점선</button>
+      </span>
       <button class="tool-btn"        id="tool-airbrush" onclick="setDrawTool('airbrush',this)" title="에어브러쉬 (부드럽게 번지는 스프레이, 오래 누르면 진해짐 · 굵기=범위)">💨 에어브러쉬</button>
       <button class="tool-btn"        id="tool-eraser" onclick="setDrawTool('eraser',this)">🧹 지우개</button>
       <button class="tool-btn"        id="tool-bubble" onclick="setDrawTool('bubble',this)" title="말풍선 텍스트 (캔버스를 탭=말풍선 위치, 드래그=꼬리 방향)">💬 말풍선</button>
@@ -1899,6 +1920,7 @@ body.st-active .st-fab{display:block}
       <div class="dl-header">
         <span class="dl-title">🧱 레이어</span>
         <div class="dl-add-btns">
+          <button class="dl-add-btn" id="dlMultiToggle" onclick="toggleDrawLayerMultiMode()">☑ 여러 개 선택</button>
           <button class="dl-add-btn" onclick="addBlankDrawLayer()">➕ 빈 레이어</button>
           <button class="dl-add-btn" onclick="triggerDrawLayerUpload()">📷 이미지 업로드</button>
           <button class="dl-add-btn" onclick="pasteImageFromClipboard('draw')">📋 붙여넣기</button>
@@ -4908,11 +4930,27 @@ function _renderDrawLayersList() {
     list.innerHTML = '<div class="dl-empty">레이어를 추가하세요</div>';
     return;
   }
+  // 사라진 레이어는 선택에서 제외
+  for (const sid of [...drawLayerSel]) if (!drawLayers.some(l => l.id === sid && !l.locked)) drawLayerSel.delete(sid);
+  const mtBtn = document.getElementById('dlMultiToggle');
+  if (mtBtn) mtBtn.classList.toggle('on', drawLayerMultiMode);
+  if (drawLayerMultiMode) {
+    const n = drawLayerSel.size, dis = n ? '' : 'disabled';
+    const bar = document.createElement('div');
+    bar.className = 'dl-multi-bar';
+    bar.innerHTML = `<span>${n}개 선택</span>
+      <button class="dl-add-btn" onclick="selectAllDrawLayers()">전체</button>
+      <button class="dl-add-btn" ${dis} onclick="moveSelectedDrawLayers(1)">▲ 위로</button>
+      <button class="dl-add-btn" ${dis} onclick="moveSelectedDrawLayers(-1)">▼ 아래로</button>
+      <button class="dl-add-btn" ${dis} style="color:#ff6b6b" onclick="removeSelectedDrawLayers()">🗑 선택 삭제</button>`;
+    list.appendChild(bar);
+  }
   // 위에 있는 레이어가 리스트 상단에 표시
   for (let i = drawLayers.length - 1; i >= 0; i--) {
     const layer = drawLayers[i];
     const isTop = i === drawLayers.length - 1;
     const isBottom = i === 0;
+    const canMergeDown = i > 0 && !drawLayers[i - 1].locked;
     const row = document.createElement('div');
     row.dataset.id = layer.id;
 
@@ -4934,11 +4972,27 @@ function _renderDrawLayersList() {
       continue;
     }
 
-    row.className = 'dl-item' + (layer.id === activeDrawLayerId ? ' active' : '');
+    const picked = drawLayerSel.has(layer.id);
+    row.className = 'dl-item' + (drawLayerMultiMode ? (picked ? ' dl-selected' : '') : (layer.id === activeDrawLayerId ? ' active' : ''));
     row.onclick = (e) => {
-      if (e.target.closest('.dl-actions') || e.target.tagName === 'INPUT') return;
+      if (e.target.closest('.dl-actions') || e.target.closest('.dl-handle') || (e.target.tagName === 'INPUT' && e.target.type === 'range')) return;
+      if (drawLayerMultiMode) { toggleDrawLayerSel(layer.id); return; }
       selectDrawLayer(layer.id);
     };
+
+    // 드래그 손잡이 (+ 다중 선택 모드일 때 체크박스)
+    if (drawLayerMultiMode) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.className = 'dl-check'; cb.checked = picked;
+      cb.onclick = (e) => { e.stopPropagation(); toggleDrawLayerSel(layer.id); };
+      row.appendChild(cb);
+    }
+    const handle = document.createElement('div');
+    handle.className = 'dl-handle';
+    handle.title = '끌어서 순서 변경';
+    handle.textContent = '⠿';
+    handle.onpointerdown = (e) => _dlDragStart(e, layer.id, row);
+    row.appendChild(handle);
 
     // 썸네일 (축소 렌더)
     const thumb = document.createElement('div');
@@ -4988,6 +5042,7 @@ function _renderDrawLayersList() {
       <button class="dl-act-btn" title="앞으로" ${isTop ? 'disabled' : ''} onclick="event.stopPropagation();moveDrawLayer('${layer.id}',1)">▲</button>
       <button class="dl-act-btn" title="뒤로" ${isBottom ? 'disabled' : ''} onclick="event.stopPropagation();moveDrawLayer('${layer.id}',-1)">▼</button>
       <button class="dl-act-btn ${layer.visible ? '' : 'off'}" title="${layer.visible ? '숨기기' : '보이기'}" onclick="event.stopPropagation();toggleDrawLayerVisible('${layer.id}')">${layer.visible ? '👁' : '🙈'}</button>
+      <button class="dl-act-btn" title="${canMergeDown ? '아래 레이어와 합치기' : '아래에 합칠 레이어가 없어요'}" ${canMergeDown ? '' : 'disabled'} onclick="event.stopPropagation();mergeDrawLayerDown('${layer.id}')">⤵</button>
       <button class="dl-act-btn" title="삭제" onclick="event.stopPropagation();removeDrawLayer('${layer.id}')">🗑</button>
     `;
     row.appendChild(actions);
@@ -5028,6 +5083,106 @@ function _renderDrawLayersList() {
       list.appendChild(tf);
     }
   }
+}
+
+/* ── 다중 선택 / 일괄 이동·삭제 / 드래그 순서 변경 ── */
+let drawLayerMultiMode = false;
+const drawLayerSel = new Set();
+
+function toggleDrawLayerMultiMode() {
+  drawLayerMultiMode = !drawLayerMultiMode;
+  drawLayerSel.clear();
+  _renderDrawLayersList();
+}
+function toggleDrawLayerSel(id) {
+  if (drawLayerSel.has(id)) drawLayerSel.delete(id); else drawLayerSel.add(id);
+  _renderDrawLayersList();
+}
+function selectAllDrawLayers() {
+  const all = drawLayers.filter(l => !l.locked);
+  if (drawLayerSel.size === all.length) drawLayerSel.clear();
+  else all.forEach(l => drawLayerSel.add(l.id));
+  _renderDrawLayersList();
+}
+function _drawLayersChanged() {
+  _rebuildDrawLayerStackDOM();
+  _renderDrawLayersList();
+  drawCtx = getActiveDrawCtx();
+  if (_autosaveLoaded) _autosaveDirty = true;
+}
+// 선택한 레이어들을 한 칸씩 위(dir=1)/아래(dir=-1)로 이동 (선택끼리의 상대 순서 유지)
+function moveSelectedDrawLayers(dir) {
+  if (!drawLayerSel.size) return;
+  const n = drawLayers.length;
+  const order = dir > 0 ? [...Array(n).keys()].reverse() : [...Array(n).keys()];
+  for (const i of order) {
+    const l = drawLayers[i];
+    if (!drawLayerSel.has(l.id)) continue;
+    const j = i + dir;
+    if (j < 0 || j >= n) continue;
+    const o = drawLayers[j];
+    if (o.locked || drawLayerSel.has(o.id)) continue;
+    drawLayers[i] = o; drawLayers[j] = l;
+  }
+  _drawLayersChanged();
+}
+function removeSelectedDrawLayers() {
+  const ids = [...drawLayerSel];
+  if (!ids.length) return;
+  const remain = drawLayers.filter(l => !l.locked && !drawLayerSel.has(l.id));
+  if (!remain.length) { alert('레이어는 최소 1개 이상이어야 해요.'); return; }
+  if (!confirm(`선택한 레이어 ${ids.length}개를 삭제할까요?`)) return;
+  if (selection && drawLayerSel.has(selection.layerId)) cancelSelection();
+  drawLayers = drawLayers.filter(l => !drawLayerSel.has(l.id));
+  drawLayerSel.clear();
+  if (!drawLayers.some(l => l.id === activeDrawLayerId)) activeDrawLayerId = remain[remain.length - 1].id;
+  _drawLayersChanged();
+}
+// movingIds 를 targetId 위(above=true)/아래에 한 덩어리로 옮김
+function reorderDrawLayers(movingIds, targetId, above) {
+  const set = new Set(movingIds);
+  if (set.has(targetId)) return;
+  const moving = drawLayers.filter(l => set.has(l.id) && !l.locked);
+  const rest = drawLayers.filter(l => !moving.includes(l));
+  const t = rest.findIndex(l => l.id === targetId);
+  if (!moving.length || t < 0) return;
+  let at = above ? t + 1 : t;
+  if (rest[0] && rest[0].locked) at = Math.max(at, 1);
+  rest.splice(at, 0, ...moving);
+  drawLayers = rest;
+  _drawLayersChanged();
+}
+let _dlDrag = null;
+function _dlDragStart(e, id, row) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  // 다중 선택 모드에서 선택된 항목을 끌면 선택 전체를 함께 이동
+  const ids = (drawLayerMultiMode && drawLayerSel.has(id)) ? [...drawLayerSel] : [id];
+  _dlDrag = { ids, target: null, above: true };
+  ids.forEach(i => { const r = document.querySelector(`#drawLayersList .dl-item[data-id="${i}"]`); if (r) r.classList.add('dl-dragging'); });
+  const move = (ev) => {
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const r = el && el.closest ? el.closest('#drawLayersList .dl-item') : null;
+    document.querySelectorAll('#drawLayersList .dl-drop-above,#drawLayersList .dl-drop-below')
+      .forEach(x => x.classList.remove('dl-drop-above', 'dl-drop-below'));
+    _dlDrag.target = null;
+    if (!r || r.classList.contains('dl-locked') || ids.includes(r.dataset.id)) return;
+    const b = r.getBoundingClientRect();
+    _dlDrag.above = ev.clientY < b.top + b.height / 2;
+    _dlDrag.target = r.dataset.id;
+    r.classList.add(_dlDrag.above ? 'dl-drop-above' : 'dl-drop-below');
+  };
+  const end = (ev) => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', end);
+    const d = _dlDrag; _dlDrag = null;
+    if (d && d.target && ev.type === 'pointerup') reorderDrawLayers(d.ids, d.target, d.above);
+    else _renderDrawLayersList();
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
 }
 
 function selectDrawLayer(id) {
@@ -5159,6 +5314,41 @@ function moveDrawLayer(id, dir) {
   [drawLayers[i], drawLayers[j]] = [drawLayers[j], drawLayers[i]];
   _rebuildDrawLayerStackDOM();
   _renderDrawLayersList();
+}
+
+// 레이어 합치기: 선택한 레이어를 바로 아래 레이어에 합침 (투명도·숨김 상태 반영, 합친 뒤 아래 레이어는 그리기 레이어가 됨)
+function mergeDrawLayerDown(id) {
+  const i = drawLayers.findIndex(l => l.id === id);
+  if (i <= 0) return;
+  const upper = drawLayers[i], lower = drawLayers[i - 1];
+  if (upper.locked || lower.locked) { alert('고정 배경과는 합칠 수 없어요.'); return; }
+  if (!confirm(`'${upper.name}' 레이어를 '${lower.name}' 레이어에 합칠까요?\n합친 뒤에는 이 레이어를 되살릴 수 없어요.`)) return;
+  if (selection) cancelSelection();
+  if (lower.kind === 'draw') {
+    lower.history.push(_snapTag(lower));
+    if (lower.history.length > MAX_HIST) lower.history.shift();
+  } else {
+    lower.history = [];
+  }
+  lower.redoStack = [];
+  drawFlipRedo = [];
+  if (upper.visible) {
+    const ctx = lower.canvas.getContext('2d');
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = upper.opacity;
+    try { ctx.drawImage(upper.canvas, 0, 0); } catch (e) {}
+    ctx.restore();
+  }
+  lower.kind = 'draw';
+  lower._imageEl = null;
+  lower.scale = 1; lower.rotate = 0; lower.offsetX = 0; lower.offsetY = 0;
+  drawLayers.splice(i, 1);
+  activeDrawLayerId = lower.id;
+  _rebuildDrawLayerStackDOM();
+  _renderDrawLayersList();
+  drawCtx = getActiveDrawCtx();
+  if (_autosaveLoaded) _autosaveDirty = true;
 }
 
 function toggleDrawLayerVisible(id) {
@@ -5967,6 +6157,167 @@ function _showSelectionBar() {
   bar.style.display = 'flex';
 }
 
+/* ═══════════════════════════════════════
+   🖌️ 펜 브러시 종류 (펜 도구 선택 시): 기본·연필·크레용·마커·붓·네온·무지개·별 도장·점선
+   굵기·필압·좌우/상하 대칭 그리기를 그대로 사용
+═══════════════════════════════════════ */
+let penBrush = 'round';
+try { const s = localStorage.getItem('penBrush'); if (s) penBrush = s; } catch (_) {}
+let _pbState = null;
+
+function setPenBrush(id, btn) {
+  penBrush = id;
+  try { localStorage.setItem('penBrush', id); } catch (_) {}
+  document.querySelectorAll('#penBrushGroup .tool-btn').forEach(b => b.classList.toggle('active', b === btn));
+}
+function _initPenBrushUI() {
+  const g = document.getElementById('penBrushGroup');
+  if (!g) return;
+  g.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.brush === penBrush));
+  if (!g.querySelector('.active')) { penBrush = 'round'; const f = g.querySelector('.tool-btn'); if (f) f.classList.add('active'); }
+}
+document.addEventListener('DOMContentLoaded', _initPenBrushUI);
+
+// from→to 선분을 spacing 간격으로 걸으며 fn(x,y) 호출 (남은 거리는 st.acc 로 이월)
+function _pbWalk(st, from, to, spacing, fn) {
+  const dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy);
+  if (d === 0) return;
+  let at = spacing - st.acc;
+  while (at <= d) { const t = at / d; fn(from.x + dx * t, from.y + dy * t); at += spacing; }
+  st.acc = d - (at - spacing);
+}
+function _pbSpacing(type, w) {
+  switch (type) {
+    case 'pencil': return Math.max(0.8, w * 0.12);
+    case 'crayon': return Math.max(1, w * 0.15);
+    case 'star':   return Math.max(8, w * 1.3);
+    case 'dotted': return Math.max(4, w * 2);
+  }
+  return 1;
+}
+function _pbStamp(ctx, st, x, y, w) {
+  const r = Math.max(0.5, w / 2);
+  ctx.fillStyle = st.color;
+  _symPoints(x, y, st.W, st.H).forEach(p => {
+    if (st.type === 'pencil') {
+      // 가늘고 거친 연필 선: 작은 점들을 흩뿌림
+      ctx.globalAlpha = 0.55;
+      const n = Math.max(2, Math.ceil(w * 0.5));
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r * 0.85;
+        ctx.fillRect(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, 1, 1);
+      }
+    } else if (st.type === 'crayon') {
+      // 크레용: 덩어리진 점 + 군데군데 비는 질감
+      ctx.globalAlpha = 0.85;
+      const n = Math.max(3, Math.ceil(w * 0.9));
+      for (let i = 0; i < n; i++) {
+        if (Math.random() < 0.3) continue;
+        const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r;
+        const s = 1 + Math.random() * 2;
+        ctx.fillRect(p.x + Math.cos(a) * d - s / 2, p.y + Math.sin(a) * d - s / 2, s, s);
+      }
+    } else if (st.type === 'star') {
+      ctx.globalAlpha = 1;
+      const rot = Math.random() * Math.PI, R = Math.max(4, r * 1.1), r2 = R * 0.45;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const rad = i % 2 ? r2 : R, a = rot + i * Math.PI / 5 - Math.PI / 2;
+        const px = p.x + Math.cos(a) * rad, py = p.y + Math.sin(a) * rad;
+        if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.closePath(); ctx.fill();
+    } else if (st.type === 'dotted') {
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  });
+  ctx.globalAlpha = 1;
+}
+// 마커: 시작 시 캔버스를 저장해 두고, 매번 되돌린 뒤 전체 획을 한 번에 반투명으로 그려 겹침 얼룩 방지
+function _pbRenderMarker(ctx, canvas, st) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(st.snap, 0, 0);
+  ctx.globalAlpha = 0.4;
+  ctx.strokeStyle = st.color; ctx.lineWidth = st.baseW * 1.4;
+  ctx.lineCap = 'square'; ctx.lineJoin = 'round';
+  const syms = st.pts.map(p => _symPoints(p.x, p.y, st.W, st.H));
+  for (let k = 0; k < syms[0].length; k++) {
+    ctx.beginPath();
+    ctx.moveTo(syms[0][k].x, syms[0][k].y);
+    if (syms.length === 1) ctx.lineTo(syms[0][k].x + 0.01, syms[0][k].y);
+    for (let i = 1; i < syms.length; i++) ctx.lineTo(syms[i][k].x, syms[i][k].y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function _penBrushDown(ctx, canvas, pos, w) {
+  const st = _pbState = {
+    type: penBrush, color: document.getElementById('colorPicker').value,
+    W: canvas.width, H: canvas.height, acc: 0, baseW: w, lastW: w,
+    t: performance.now(), dist: 0, pts: [pos], snap: null
+  };
+  if (st.type === 'marker') {
+    st.snap = document.createElement('canvas');
+    st.snap.width = canvas.width; st.snap.height = canvas.height;
+    st.snap.getContext('2d').drawImage(canvas, 0, 0);
+    _pbRenderMarker(ctx, canvas, st);
+    return;
+  }
+  if (st.type === 'pencil' || st.type === 'crayon' || st.type === 'star' || st.type === 'dotted') {
+    _pbStamp(ctx, st, pos.x, pos.y, w);
+    return;
+  }
+  // 붓/네온/무지개: 시작점에 점 하나
+  ctx.fillStyle = st.type === 'rainbow' ? 'hsl(0,90%,55%)' : st.color;
+  ctx.beginPath();
+  _symPoints(pos.x, pos.y, st.W, st.H).forEach(p => { ctx.moveTo(p.x + w / 2, p.y); ctx.arc(p.x, p.y, w / 2, 0, Math.PI * 2); });
+  ctx.fill();
+}
+function _penBrushMove(ctx, canvas, from, pos, w) {
+  const st = _pbState;
+  const seg = Math.hypot(pos.x - from.x, pos.y - from.y);
+  if (st.type === 'marker') {
+    st.pts.push(pos);
+    _pbRenderMarker(ctx, canvas, st);
+    return;
+  }
+  if (st.type === 'pencil' || st.type === 'crayon' || st.type === 'star' || st.type === 'dotted') {
+    _pbWalk(st, from, pos, _pbSpacing(st.type, w), (x, y) => _pbStamp(ctx, st, x, y, w));
+    return;
+  }
+  const A = _symPoints(from.x, from.y, st.W, st.H), B = _symPoints(pos.x, pos.y, st.W, st.H);
+  const line = (lw, style) => {
+    ctx.beginPath();
+    A.forEach((p, i) => { ctx.moveTo(p.x, p.y); ctx.lineTo(B[i].x, B[i].y); });
+    ctx.strokeStyle = style; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.stroke();
+  };
+  if (st.type === 'brush') {
+    // 붓: 빨리 그을수록 가늘어지고 천천히 그으면 굵어짐 (부드럽게 변화)
+    const now = performance.now(), dt = Math.max(1, now - st.t);
+    const speed = seg / dt;                                   // px/ms
+    const target = w * Math.max(0.3, Math.min(1.15, 1.15 - speed * 0.45));
+    st.lastW = st.lastW * 0.7 + target * 0.3;
+    st.t = now;
+    line(Math.max(0.8, st.lastW), st.color);
+  } else if (st.type === 'neon') {
+    const [R, G, B2] = _hexToRgb(st.color);
+    const core = 'rgb(' + Math.round(R + (255 - R) * 0.75) + ',' + Math.round(G + (255 - G) * 0.75) + ',' + Math.round(B2 + (255 - B2) * 0.75) + ')';
+    ctx.save();
+    ctx.shadowColor = st.color; ctx.shadowBlur = Math.max(4, w * 1.2);
+    line(Math.max(1, w * 0.6), st.color);
+    ctx.shadowBlur = 0;
+    line(Math.max(0.8, w * 0.25), core);
+    ctx.restore();
+  } else if (st.type === 'rainbow') {
+    st.dist += seg;
+    line(w, 'hsl(' + ((st.dist * 0.6) % 360) + ',90%,55%)');
+  }
+}
+
 /* ── 필압 계산 ── */
 function _currentBrushWidth(pressure) {
   if (!pressureEnabled) return brushSize;
@@ -6091,6 +6442,7 @@ function _drawLayerPointerDown(e) {
   if (drawTool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
   else ctx.globalCompositeOperation = 'source-over';
   const w = _currentBrushWidth(e.pressure);
+  if (drawTool === 'pen' && penBrush !== 'round') { _penBrushDown(ctx, layer.canvas, pos, w); return; }
   ctx.beginPath();
   _symPoints(pos.x, pos.y, layer.canvas.width, layer.canvas.height).forEach(p => {
     ctx.moveTo(p.x + w / 2, p.y);
@@ -6256,6 +6608,11 @@ function _drawLayerPointerMove(e) {
     lastX = pos.x; lastY = pos.y;
     return;
   }
+  if (drawTool === 'pen' && penBrush !== 'round' && _pbState) {
+    _penBrushMove(ctx, layer.canvas, { x: lastX, y: lastY }, pos, w);
+    lastX = pos.x; lastY = pos.y;
+    return;
+  }
   ctx.beginPath();
   const _W = layer.canvas.width, _H = layer.canvas.height;
   const _from = _symPoints(lastX, lastY, _W, _H), _to = _symPoints(pos.x, pos.y, _W, _H);
@@ -6311,6 +6668,7 @@ function _drawLayerPointerEnd(e) {
   }
   if (painting) {
     painting = false;
+    _pbState = null;
     _airbrushStop();
     _renderDrawLayersList();
   }
@@ -7165,10 +7523,12 @@ function setDrawTool(t,btn){
   }
   drawTool=t;
   _hideBrushCursor();
-  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup, #liqModeGroup, #dockSwitch') && b.id!=='btnViewFlip' && !b.classList.contains('tool-toggle')) b.classList.remove('active'); });
+  document.querySelectorAll('#panel-draw .tool-btn').forEach(b=>{ if(!b.closest('#selShapeGroup, #liqModeGroup, #penBrushGroup, #dockSwitch') && b.id!=='btnViewFlip' && !b.classList.contains('tool-toggle')) b.classList.remove('active'); });
   btn.classList.add('active');
   const sg=document.getElementById('selShapeGroup');
   if(sg) sg.style.display = t==='select' ? 'inline-flex' : 'none';
+  const pg=document.getElementById('penBrushGroup');
+  if(pg) pg.style.display = t==='pen' ? 'inline-flex' : 'none';
   const lg=document.getElementById('liqModeGroup');
   if(lg) lg.style.display = t==='liquify' ? 'inline-flex' : 'none';
 }
@@ -7403,20 +7763,21 @@ function redoDraw(){
   if (layer.history.length > MAX_HIST) layer.history.shift();
   _restoreSnapToLayer(layer, layer.redoStack.pop());
 }
+// 초기화: 모든 레이어를 지우고 기본 세팅(흰 배경 + 빈 레이어 1)으로 되돌림
 function clearDraw(){
-  const layer = getActiveDrawLayer();
-  if (!layer) return;
-  if (layer.kind !== 'draw') { alert('이미지 레이어는 초기화할 수 없어요. 삭제 버튼(🗑)을 사용하세요.'); return; }
-  saveDrawHistory();
-  const ctx = layer.canvas.getContext('2d');
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
-  // 가장 아래 레이어는 흰색 배경 유지
-  if (drawLayers[0] && drawLayers[0].id === layer.id) {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
-  }
+  if (!confirm('모든 레이어와 그림이 지워지고 처음 상태(흰 배경 + 빈 레이어)로 돌아갑니다.\n초기화할까요?')) return;
+  if (selection) cancelSelection();
+  drawLayers = [];
+  drawLayerCounter = 0;
+  activeDrawLayerId = '';
+  drawFlipParity = false;
+  drawFlipUndo = []; drawFlipRedo = [];
+  _createDrawLayer({ kind: 'draw', name: '흰 배경', _fillWhite: true, locked: true });
+  _createDrawLayer({ kind: 'draw', name: '레이어 1' });
+  _rebuildDrawLayerStackDOM();
   _renderDrawLayersList();
+  drawCtx = getActiveDrawCtx();
+  if (_autosaveLoaded) _autosaveDirty = true;
 }
 function flattenDrawCanvas(){
   const c = document.createElement('canvas');
