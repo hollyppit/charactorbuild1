@@ -1973,7 +1973,7 @@ body.st-active .st-fab{display:block}
         <div class="sc-row"><span><kbd>Tab</kbd></span><em>되돌리기</em></div>
         <div class="sc-row"><span><kbd>Ctrl</kbd>+<kbd>Z</kbd></span><em>되돌리기</em></div>
         <div class="sc-row"><span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></span><em>다시 실행</em></div>
-        <div class="sc-row"><span><kbd>Delete</kbd></span><em>전체 초기화</em></div>
+        <div class="sc-row"><span><kbd>Delete</kbd></span><em>선택 레이어 비우기</em></div>
         <div class="sc-group">화면</div>
         <div class="sc-row"><span><kbd>+</kbd> <kbd>-</kbd></span><em>확대/축소</em></div>
         <div class="sc-row"><span><kbd>Space</kbd>+드래그</span><em>화면 이동</em></div>
@@ -7638,7 +7638,7 @@ document.addEventListener('keydown', e=>{
   if(e.ctrlKey||e.metaKey||e.altKey) return;
 
   if(e.key==='Tab'){ e.preventDefault(); undoDraw(); return; }
-  if(e.key==='Delete'){ e.preventDefault(); clearDraw(); return; }
+  if(e.key==='Delete'){ e.preventDefault(); clearActiveDrawLayer(); return; }
   if(e.key==='p'||e.key==='P'){
     const btn=document.getElementById('tool-pen');
     if(btn){ e.preventDefault(); setDrawTool('pen',btn); }
@@ -7817,6 +7817,17 @@ function redoDraw(){
   layer.history.push(_snapTag(layer));
   if (layer.history.length > MAX_HIST) layer.history.shift();
   _restoreSnapToLayer(layer, layer.redoStack.pop());
+}
+// Delete 키: 활성 레이어만 비움 (되돌리기 가능)
+function clearActiveDrawLayer(){
+  const layer = getActiveDrawLayer();
+  if (!layer) return;
+  if (layer.kind !== 'draw') { alert('이미지 레이어는 초기화할 수 없어요. 삭제 버튼(🗑)을 사용하세요.'); return; }
+  saveDrawHistory();
+  const ctx = layer.canvas.getContext('2d');
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+  _renderDrawLayersList();
 }
 // 초기화: 모든 레이어를 지우고 기본 세팅(흰 배경 + 빈 레이어 1)으로 되돌림
 function clearDraw(){
