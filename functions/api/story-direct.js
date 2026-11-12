@@ -1,3 +1,4 @@
+import { corsHeaders as corsFor, guardAi } from './_lib/common.js';
 // 스토리 만들기 — AI 자동 영상 편집: 장면별 연출표(카메라·전환·강조·BGM) 생성/수정
 // 1순위 Gemini → 실패 시 OpenAI 폴백. 결과는 화면이 그대로 그릴 수 있는 JSON(허용값만)으로 정리해서 돌려줌
 const CAMS = ['zoomIn', 'zoomOut', 'panL', 'panR', 'panUp', 'panDown', 'still'];
@@ -6,13 +7,10 @@ const EMPH = ['pop', 'shake', 'none'];
 const BGMS = ['calm', 'happy', 'adventure', 'mystery', 'sad', 'epic', 'none'];
 
 export async function onRequest(context) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Content-Type': 'application/json',
-  };
+  const corsHeaders = { ...corsFor(context.request, context.env, 'POST,OPTIONS'), 'Content-Type': 'application/json' };
   if (context.request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const denied = await guardAi(context.request, context.env, corsHeaders);
+  if (denied) return denied;
 
   try {
     const body = await context.request.json();

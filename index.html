@@ -3125,10 +3125,31 @@ async function saveImageUniversal(source, filename){
 
 const SUPABASE_URL = 'https://vhhfaeyhlubvhezyagwd.supabase.co';
 const SUPABASE_STORAGE = `${SUPABASE_URL}/storage/v1/object/public/char-assets`;
-const ADMIN_PW    = 'admin1234';
 const STORAGE_KEY = 'charmaker_v4';
 
-let _aiAccessPw = '';          // DB에서 로드한 AI 접근 비밀번호 ('' = 제한 없음)
+// 관리자 인증은 서버(/api/admin-login)가 검증한다. 로그인 성공 시 비밀번호의 SHA-256 해시를 메모리에만
+// 보관하고, 같은 출처 /api/ 요청에 X-Admin-Hash 헤더로 자동 첨부한다. (새로고침하면 다시 로그인)
+// AI 접근 비밀번호도 서버가 검증하며, 확인된 값을 X-AI-Pw 헤더로 자동 첨부한다.
+window._adminHash = '';
+window._aiPwEntered = '';
+(function () {
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    try {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (url.startsWith('/api/')) {
+        init = Object.assign({}, init);
+        const h = new Headers(init.headers || {});
+        if (window._adminHash && !h.has('X-Admin-Hash')) h.set('X-Admin-Hash', window._adminHash);
+        if (window._aiPwEntered && !h.has('X-AI-Pw')) h.set('X-AI-Pw', window._aiPwEntered);
+        init.headers = h;
+      }
+    } catch (e) {}
+    return origFetch(input, init);
+  };
+})();
+
+let _aiAccessPw = '';          // AI 접근 비밀번호 설정 여부 표식 ('' = 제한 없음, 일반 사용자에겐 실제 값이 내려오지 않음)
 let _aiSessionVerified = false; // 세션 내 인증 완료 여부
 let _pendingAIMode = null;      // 비밀번호 확인 대기 중인 mode
 
@@ -8173,9 +8194,26 @@ function toggleAdminPrompt(){
   openModal('pwModal');
   setTimeout(()=>document.getElementById('pwInput').focus(),100);
 }
-function checkPw(){
-  if(document.getElementById('pwInput').value===ADMIN_PW){closeModal('pwModal');enterAdmin();}
-  else document.getElementById('pwErr').textContent='비밀번호가 틀렸습니다 🔒';
+async function checkPw(){
+  const errEl=document.getElementById('pwErr');
+  const pw=document.getElementById('pwInput').value;
+  if(!pw){errEl.textContent='비밀번호가 틀렸습니다 🔒';return;}
+  errEl.textContent='확인 중...';
+  try{
+    const hash=await sha256hex(pw);
+    const res=await fetch('/api/admin-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hash})});
+    if(res.ok){
+      window._adminHash=hash;
+      errEl.textContent='';
+      closeModal('pwModal');enterAdmin();
+    }else if(res.status===503){
+      errEl.textContent='관리자 기능이 아직 설정되지 않았어요.';
+    }else{
+      errEl.textContent='비밀번호가 틀렸습니다 🔒';
+    }
+  }catch(e){
+    errEl.textContent='서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.';
+  }
 }
 function enterAdmin(){
   isAdmin=true;
@@ -8186,6 +8224,7 @@ function enterAdmin(){
 }
 function exitAdmin(){
   isAdmin=false;
+  window._adminHash='';
   document.body.classList.remove('admin');
   document.getElementById('adminBtn').textContent='🔧 관리자';
   deselectLayer();
@@ -8194,11 +8233,20 @@ function exitAdmin(){
 }
 
 // ── AI 접근 비밀번호 입력 처리 ──
-function _submitAIPw() {
+async function _submitAIPw() {
   const entered = document.getElementById('aiPwInput').value;
   const errEl = document.getElementById('aiPwErr');
   if (!entered) { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
-  if (entered !== _aiAccessPw) { errEl.textContent = '비밀번호가 틀렸습니다 🔒'; return; }
+  errEl.textContent = '확인 중...';
+  try {
+    const res = await fetch('/api/ai-gate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pw: entered }),
+    });
+    if (!res.ok) { errEl.textContent = '비밀번호가 틀렸습니다 🔒'; return; }
+  } catch (e) { errEl.textContent = '서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.'; return; }
+  window._aiPwEntered = entered; // 이후 AI 요청에 X-AI-Pw 로 첨부됨 (서버가 매 요청마다 재검증)
+  errEl.textContent = '';
   closeModal('aiPwModal');
   if (_pendingAIMode) {
     const mode = _pendingAIMode;
@@ -8215,8 +8263,14 @@ function _cancelAIPw() {
 }
 
 // ── 관리자 AI 비밀번호 설정 ──
-function openAdminAiPwModal() {
+async function openAdminAiPwModal() {
   if (!isAdmin) return;
+  // 일반 사용자에겐 실제 값이 내려오지 않으므로, 관리자 헤더로 현재 값을 다시 조회
+  try {
+    const rows = await (await fetch('/api/items')).json();
+    const row = Array.isArray(rows) ? rows.find(r => r.category === '__app_settings' && r.id === 'ai_access_pw') : null;
+    _aiAccessPw = row ? (row.label || '') : '';
+  } catch (e) {}
   document.getElementById('adminAiPwNew').value = _aiAccessPw;
   document.getElementById('adminAiPwMsg').textContent = '';
   document.getElementById('adminAiPwCurrent').textContent = _aiAccessPw ? `"${_aiAccessPw}"` : '없음 (누구나 사용 가능)';
@@ -8403,7 +8457,6 @@ async function _execDrawSave(isNew) {
         id: session.id,
         user_name: session.name,
         password_hash: session.password_hash,
-        password_plain: session.pw,
         thumbnail, layers,
         canvas_w: drawCanvasBaseW,
         canvas_h: drawCanvasBaseH,
@@ -8458,7 +8511,7 @@ async function openDrawSavesList() {
         : '';
       const loadBtn = isAdmin
         ? `<button class="ds-btn ds-btn-load" onclick="loadDrawSave('${s.id}')">📂 불러오기</button>`
-        : `<button class="ds-btn ds-btn-load" onclick="confirmLoadDrawSave('${s.id}','${_escHtml(s.user_name)}','${s.password_hash}')">📂 불러오기</button>`;
+        : `<button class="ds-btn ds-btn-load" onclick="confirmLoadDrawSave('${s.id}','${_escHtml(s.user_name)}')">📂 불러오기</button>`;
       const delBtn = isAdmin
         ? `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',true)">🗑 삭제</button>`
         : `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',false)">🗑 삭제</button>`;
@@ -8488,7 +8541,7 @@ async function loadDrawSave(saveId, session = null) {
   listEl.innerHTML = '<div class="ds-empty">불러오는 중...</div>';
 
   try {
-    const res = await fetch(`${DRAWS_API}?id=${saveId}`);
+    const res = await fetch(`${DRAWS_API}?id=${saveId}`, session && session.password_hash ? { headers: { 'X-Save-Hash': session.password_hash } } : undefined);
     const save = await res.json();
     if (save.error) throw new Error(save.error);
 
@@ -8570,11 +8623,11 @@ async function loadDrawSave(saveId, session = null) {
 }
 
 // 삭제 확인 (관리자면 바로 / 일반이면 비밀번호 요청)
-// action: 'delete' | 'load', storedHash: DB의 password_hash (load 검증용)
+// action: 'delete' | 'load' (비밀번호 검증은 서버가 수행)
 let _dsAuthTarget = null;
 
-function confirmLoadDrawSave(saveId, userName, storedHash) {
-  _dsAuthTarget = { action: 'load', saveId, userName, storedHash };
+function confirmLoadDrawSave(saveId, userName) {
+  _dsAuthTarget = { action: 'load', saveId, userName };
   document.getElementById('dsAuthPw').value = '';
   document.getElementById('dsAuthErr').textContent = '';
   document.getElementById('dsAuthTitle').textContent = `🔑 "${userName}" 불러오기 — 비밀번호 확인`;
@@ -8602,13 +8655,19 @@ async function doDrawSaveAuth() {
   const errEl = document.getElementById('dsAuthErr');
   if (!pw) { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
 
-  const { action, saveId, byAdmin, storedHash } = _dsAuthTarget;
+  const { action, saveId, byAdmin } = _dsAuthTarget;
 
   if (action === 'load') {
     errEl.textContent = '확인 중...';
     const inputHash = await sha256hex(pw);
-    if (inputHash !== storedHash) {
-      errEl.textContent = '비밀번호가 맞지 않습니다.';
+    try {
+      const vr = await fetch(`${DRAWS_API}?id=${encodeURIComponent(saveId)}&verify=1`, { headers: { 'X-Save-Hash': inputHash } });
+      if (!vr.ok) {
+        errEl.textContent = '비밀번호가 맞지 않습니다.';
+        return;
+      }
+    } catch (e) {
+      errEl.textContent = '서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.';
       return;
     }
     closeModal('drawSaveAuthModal');
@@ -8626,11 +8685,8 @@ async function doDrawSaveAuth() {
 async function _execDeleteDrawSave(saveId, pw, byAdmin) {
   try {
     const body = { id: saveId };
-    if (byAdmin) {
-      body.admin_pw_hash = await sha256hex(ADMIN_PW);
-    } else {
-      body.password_hash = await sha256hex(pw);
-    }
+    // 관리자 삭제는 X-Admin-Hash 헤더(전역 fetch 래퍼가 첨부)로 서버가 판정
+    if (!byAdmin) body.password_hash = await sha256hex(pw);
 
     const res = await fetch(DRAWS_API, {
       method: 'DELETE',

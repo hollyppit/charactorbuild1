@@ -1,13 +1,11 @@
+import { corsHeaders as corsFor, guardAi } from './_lib/common.js';
 // 스토리 만들기 — 텍스트 AI (대본 다듬기 / 질문별 힌트)
 // 1순위 Gemini → 실패 시 OpenAI 폴백
 export async function onRequest(context) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Content-Type': 'application/json',
-  };
+  const corsHeaders = { ...corsFor(context.request, context.env, 'POST,OPTIONS'), 'Content-Type': 'application/json' };
   if (context.request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const denied = await guardAi(context.request, context.env, corsHeaders);
+  if (denied) return denied;
 
   try {
     const body = await context.request.json();

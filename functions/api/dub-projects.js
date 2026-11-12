@@ -1,29 +1,26 @@
+import { corsHeaders, jsonResponder, checkOrigin, checkSize, isAdmin, makeSb, supabaseKey } from './_lib/common.js';
+
 export async function onRequest(context) {
   const { request, env } = context;
   const SUPABASE_URL = env.SUPABASE_URL;
-  const SUPABASE_KEY = env.SUPABASE_ANON_KEY;
+  const SUPABASE_KEY = supabaseKey(env);
 
-  const cors = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+  const cors = corsHeaders(request, env, 'GET,POST,DELETE,OPTIONS');
   if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+  const json = jsonResponder(cors);
+  const badOrigin = checkOrigin(request, env, cors);
+  if (badOrigin) return badOrigin;
 
-  const json = (data, status = 200) =>
-    new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
-
+  const sbBase = makeSb(env);
   const sb = (path, opts = {}) =>
-    fetch(`${SUPABASE_URL}${path}`, {
-      ...opts,
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation',
-        ...opts.headers,
-      },
-    });
+    sbBase(path, { ...opts, headers: { Prefer: 'return=representation', ...opts.headers } });
+
+  // 쓰기(POST/DELETE)는 관리자 전용
+  if (request.method === 'POST' || request.method === 'DELETE') {
+    if (!isAdmin(request, env)) return json({ error: 'admin_required' }, 403);
+    const big = checkSize(request, 40 * 1024 * 1024, cors);
+    if (big) return big;
+  }
 
   // GET: 모든 작품 + 장면 목록
   if (request.method === 'GET') {

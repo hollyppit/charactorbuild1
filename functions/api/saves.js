@@ -1,35 +1,27 @@
+import { corsHeaders, jsonResponder, checkOrigin, checkSize, isAdmin, makeSb, supabaseKey, timingSafeEqual } from './_lib/common.js';
+
+const MAX_BODY = 80 * 1024 * 1024;
+
 export async function onRequest(context) {
   const { request, env } = context;
   const SUPABASE_URL = env.SUPABASE_URL;
-  const SUPABASE_KEY = env.SUPABASE_ANON_KEY;
-  // ADMIN_PW_HASH: Cloudflare 환경변수에 SHA-256('admin1234') 값을 등록해 두세요.
-  // 미등록 시 관리자 삭제 기능이 비활성화됩니다.
-  const ADMIN_PW_HASH = env.ADMIN_PW_HASH || '';
+  const SUPABASE_KEY = supabaseKey(env);
+  // 관리자 판정: X-Admin-Hash 헤더 == env.ADMIN_PW_HASH (미등록 시 관리자 기능 비활성화)
+  const admin = isAdmin(request, env);
 
-  const cors = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+  const cors = corsHeaders(request, env, 'GET,POST,PUT,DELETE,OPTIONS');
 
   if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
-  const json = (data, status = 200) =>
-    new Response(JSON.stringify(data), {
-      status,
-      headers: { ...cors, 'Content-Type': 'application/json' },
-    });
+  const json = jsonResponder(cors);
+  const badOrigin = checkOrigin(request, env, cors);
+  if (badOrigin) return badOrigin;
+  if (request.method !== 'GET') {
+    const big = checkSize(request, MAX_BODY, cors);
+    if (big) return big;
+  }
 
-  const sb = (path, opts = {}) =>
-    fetch(`${SUPABASE_URL}${path}`, {
-      ...opts,
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        ...opts.headers,
-      },
-    });
+  const sb = makeSb(env);
 
   // ── GET: 목록 또는 단건 조회 ─────────────────────────────
   if (request.method === 'GET') {
@@ -39,13 +31,20 @@ export async function onRequest(context) {
     if (id) {
       const res = await sb(`/rest/v1/draw_saves?id=eq.${encodeURIComponent(id)}&select=*`);
       const rows = await res.json();
-      if (!rows.length) return json({ error: 'not_found' }, 404);
-      return json(rows[0]);
+      if (!Array.isArray(rows) || !rows.length) return json({ error: 'not_found' }, 404);
+      // 단건 조회는 저장 비밀번호 해시(X-Save-Hash) 또는 관리자 필요
+      const ok = admin || timingSafeEqual(request.headers.get('X-Save-Hash'), rows[0].password_hash);
+      if (!ok) return json({ error: 'wrong_password' }, 403);
+      if (url.searchParams.get('verify') === '1') return json({ ok: true });
+      const { password_hash, password_plain, ...safe } = rows[0];
+      return json(admin ? { ...safe, password_plain } : safe);
     }
 
-    const res = await sb(
-      '/rest/v1/draw_saves?select=id,user_name,password_hash,password_plain,thumbnail_url,layer_count,canvas_w,canvas_h,created_at&order=created_at.desc'
-    );
+    // 목록: 비밀번호 관련 컬럼은 관리자에게만 노출
+    const cols = admin
+      ? 'id,user_name,password_plain,thumbnail_url,layer_count,canvas_w,canvas_h,created_at'
+      : 'id,user_name,thumbnail_url,layer_count,canvas_w,canvas_h,created_at';
+    const res = await sb(`/rest/v1/draw_saves?select=${cols}&order=created_at.desc`);
     return json(await res.json());
   }
 
@@ -54,7 +53,8 @@ export async function onRequest(context) {
     let body;
     try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
 
-    const { user_name, password_hash, password_plain, thumbnail, layers, canvas_w, canvas_h } = body;
+    // password_plain 은 더 이상 저장하지 않는다 (받아도 무시)
+    const { user_name, password_hash, thumbnail, layers, canvas_w, canvas_h } = body;
     if (!user_name || !password_hash || !Array.isArray(layers) || !layers.length)
       return json({ error: 'missing_fields' }, 400);
 
@@ -132,7 +132,7 @@ export async function onRequest(context) {
         id: saveId,
         user_name,
         password_hash,
-        password_plain: password_plain || '',
+        password_plain: '',
         thumbnail_url,
         layer_count: layers.length,
         layers_meta,
@@ -163,7 +163,7 @@ export async function onRequest(context) {
     const getRes = await sb(`/rest/v1/draw_saves?id=eq.${encodeURIComponent(id)}&select=id,password_hash,layers_meta`);
     const rows = await getRes.json();
     if (!rows.length) return json({ error: 'not_found' }, 404);
-    if (rows[0].password_hash !== password_hash) return json({ error: 'wrong_password' }, 403);
+    if (!timingSafeEqual(rows[0].password_hash, password_hash)) return json({ error: 'wrong_password' }, 403);
 
     // 매 저장마다 새 경로(v{version}/)에 업로드한다.
     //  - 덮어쓰기(upsert)는 Storage UPDATE 정책이 없으면 조용히 실패하고,
@@ -236,7 +236,7 @@ export async function onRequest(context) {
     let body;
     try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
 
-    const { id, password_hash, admin_pw_hash } = body;
+    const { id, password_hash } = body;
     if (!id) return json({ error: 'id_required' }, 400);
 
     // DB에서 레코드 조회
@@ -249,8 +249,8 @@ export async function onRequest(context) {
     const save = rows[0];
 
     // 권한 검증: 사용자 비밀번호 OR 관리자 비밀번호
-    const isAdminAuth = ADMIN_PW_HASH && admin_pw_hash && admin_pw_hash === ADMIN_PW_HASH;
-    const isUserAuth  = password_hash && password_hash === save.password_hash;
+    const isAdminAuth = admin;
+    const isUserAuth  = password_hash && timingSafeEqual(password_hash, save.password_hash);
 
     if (!isAdminAuth && !isUserAuth) return json({ error: 'wrong_password' }, 403);
 

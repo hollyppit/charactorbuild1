@@ -1,25 +1,9 @@
-export async function onRequest(context) {
-  const { request } = context;
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
-  };
-  if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-
-  const body = await request.json();
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': context.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-  return new Response(JSON.stringify(data), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+// 비활성화됨: 요청 본문을 그대로 Anthropic API에 전달하는 열린 프록시였고,
+// 현재 클라이언트(index.html)에서 호출하지 않는다. 비용 남용 방지를 위해 막아 둔다.
+// 필요해지면 인증·모델/토큰 제한·사용량 기록을 갖춘 전용 엔드포인트로 새로 만든다.
+export async function onRequest() {
+  return new Response(JSON.stringify({ error: 'endpoint_disabled' }), {
+    status: 410,
+    headers: { 'Content-Type': 'application/json' },
   });
 }

@@ -1,33 +1,30 @@
+import { corsHeaders, jsonResponder, checkOrigin, checkSize, isAdmin, makeSb } from './_lib/common.js';
+
 export async function onRequest(context) {
-  const SUPABASE_URL = context.env.SUPABASE_URL;
-  const SUPABASE_KEY = context.env.SUPABASE_ANON_KEY;
-  const { request } = context;
-  const method = request.method;
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
-  };
-  if (method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const { request, env } = context;
+  const cors = corsHeaders(request, env, 'GET,POST,OPTIONS');
+  const json = jsonResponder(cors);
+  if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_KEY,
-    'Authorization': `Bearer ${SUPABASE_KEY}`,
-    'Prefer': 'return=representation,resolution=merge-duplicates'
-  };
+  const bad = checkOrigin(request, env, cors);
+  if (bad) return bad;
+  const sb = makeSb(env);
 
-  if (method === 'GET') {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/char_positions`, { headers });
-    const data = await res.json();
-    return new Response(JSON.stringify(data), { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  if (request.method === 'GET') {
+    const res = await sb('/rest/v1/char_positions');
+    return json(await res.json(), res.status);
   }
-  if (method === 'POST') {
+  if (request.method === 'POST') {
+    if (!isAdmin(request, env)) return json({ error: 'admin_required' }, 403);
+    const big = checkSize(request, 64 * 1024, cors);
+    if (big) return big;
     const body = await request.json();
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/char_positions`, {
-      method: 'POST', headers, body: JSON.stringify(body)
+    const res = await sb('/rest/v1/char_positions', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation,resolution=merge-duplicates' },
+      body: JSON.stringify(body),
     });
-    const data = await res.json();
-    return new Response(JSON.stringify(data), { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return json(await res.json(), res.status);
   }
+  return json({ error: 'method_not_allowed' }, 405);
 }
