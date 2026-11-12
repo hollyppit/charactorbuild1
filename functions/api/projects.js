@@ -16,7 +16,7 @@ const TRASH_DAYS = 30;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIST_COLS = 'id,kind,title,child_id,thumb_asset,version,size_bytes,created_at,updated_at,deleted_at';
 
-export async function onRequest({ request, env }) {
+export async function onRequest({ request, env, waitUntil }) {
   const cors = corsHeaders(request, env, 'GET,POST,PUT,DELETE,OPTIONS');
   const json = jsonResponder(cors);
   if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -50,6 +50,30 @@ export async function onRequest({ request, env }) {
     const total = assets.reduce((s, x) => s + Number(x.bytes || 0), 0);
     await sb(`/rest/v1/projects?id=eq.${pid}&${own}`, { method: 'DELETE' }); // assets·versions 는 CASCADE
     if (total) await sb('/rest/v1/rpc/release_quota', { method: 'POST', body: JSON.stringify({ p_owner: user.id, p_bytes: total }) });
+  }
+
+  // 현재 데이터·보관된 버전·썸네일 어디에서도 참조되지 않는 파일(10분 이상 지난 것)을 지워 용량 누수를 막는다
+  async function gcAssets(pid) {
+    try {
+      const [pr, vr, ar] = await Promise.all([
+        sb(`/rest/v1/projects?id=eq.${pid}&${own}&select=data,thumb_asset`),
+        sb(`/rest/v1/project_versions?project_id=eq.${pid}&select=data`),
+        sb(`/rest/v1/project_assets?project_id=eq.${pid}&${own}&select=id,path,bytes,created_at`),
+      ]);
+      if (!pr.ok || !vr.ok || !ar.ok) return;
+      const proj = (await pr.json())[0]; if (!proj) return;
+      const refs = new Set();
+      const scan = o => { for (const m of JSON.stringify(o || {}).matchAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi)) refs.add(m[0].toLowerCase()); };
+      scan(proj.data); (await vr.json()).forEach(v => scan(v.data));
+      if (proj.thumb_asset) refs.add(String(proj.thumb_asset).toLowerCase());
+      const cutoff = Date.now() - 10 * 60 * 1000;
+      const orphans = (await ar.json()).filter(a => !refs.has(a.id.toLowerCase()) && new Date(a.created_at).getTime() < cutoff);
+      if (!orphans.length) return;
+      await removeObjects(env, orphans.map(a => a.path));
+      await sb(`/rest/v1/project_assets?id=in.(${orphans.map(a => a.id).join(',')})&${own}`, { method: 'DELETE' });
+      const total = orphans.reduce((n, a) => n + Number(a.bytes || 0), 0);
+      if (total) await sb('/rest/v1/rpc/release_quota', { method: 'POST', body: JSON.stringify({ p_owner: user.id, p_bytes: total }) });
+    } catch (_) { /* 정리 실패는 저장 결과에 영향 없음. 다음 저장 때 다시 시도 */ }
   }
 
   // ── 목록 / 열기 ────────────────────────────────────────
@@ -154,6 +178,7 @@ export async function onRequest({ request, env }) {
       const c = cur.ok ? (await cur.json())[0] : null;
       return json({ error: 'version_conflict', current_version: c && c.version, updated_at: c && c.updated_at }, 409);
     }
+    if (waitUntil) waitUntil(gcAssets(id)); else await gcAssets(id);
     return json({ ok: true, version: v });
   }
 

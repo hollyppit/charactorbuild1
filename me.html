@@ -102,6 +102,18 @@
     </div>
 
     <div class="card">
+      <h2>예전에 저장한 그림 가져오기</h2>
+      <p class="sub">로그인 없이 "저장 이름 + 비밀번호"로 저장해 둔 그림을 내 계정으로 옮길 수 있어요. 저장할 때 쓴 이름과 비밀번호가 필요해요. 가입만으로는 다른 사람의 그림을 가져올 수 없어요.</p>
+      <label for="lgName">저장 이름</label>
+      <input type="text" id="lgName" maxlength="60" autocomplete="off">
+      <label for="lgPw">저장 비밀번호</label>
+      <input type="password" id="lgPw" maxlength="100" autocomplete="off" style="width:100%;padding:12px;background:#0d0008;color:#fff;border:2px solid var(--purple);font-size:16px">
+      <div class="msg" id="lgMsg" role="status" aria-live="polite"></div>
+      <button class="btn btn-sub" id="btnLgFind" type="button">찾아보기</button>
+      <div id="lgList"></div>
+    </div>
+
+    <div class="card">
       <h2>계정</h2>
       <p class="sub">계정을 삭제하면 프로필이 영구히 삭제되며 되돌릴 수 없어요.</p>
       <button class="btn btn-danger" id="btnDelete" type="button">계정 삭제</button>
@@ -296,6 +308,95 @@
     finally { $('btnKidsCreate').disabled = false; }
   };
 
+  /* ── 예전 비회원 저장 가져오기 ── */
+  const LGERR = {
+    no_match: '저장 이름이나 비밀번호가 맞지 않아요.',
+    too_many_attempts: '시도가 너무 많아요. 15분 뒤에 다시 해 주세요.',
+    legacy_not_ready: '이 기능은 아직 준비되지 않았어요.',
+    already_claimed: '이미 다른 계정으로 옮겨진 그림이에요.',
+    already_claimed_by_you: '이미 내 계정으로 옮긴 그림이에요.',
+    claim_in_progress: '다른 곳에서 옮기는 중이에요. 잠시 뒤 다시 시도해 주세요.',
+    quota_exceeded: '저장 공간이 부족해요. 작업을 정리한 뒤 다시 시도해 주세요.'
+  };
+  const lgMsg = (t, c) => { $('lgMsg').textContent = t || ''; $('lgMsg').className = 'msg ' + (c || ''); };
+  async function sha256text(t) {
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+    return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  async function fetchBlob(url, type) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('download_failed');
+    const b = await r.blob();
+    return new Blob([b], { type });
+  }
+  async function claimOne(item, name, hash, rowEl) {
+    const setRow = t => { rowEl.querySelector('.lgstate').textContent = t; };
+    let projectId = null;
+    try {
+      setRow('옮기는 중... (이미지를 내 계정으로 복사해요)');
+      const st = await CloudSave.legacy('start', { save_id: item.id, user_name: name, password_hash: hash });
+      const save = st.save;
+      const project = await CloudSave.create('draw', (save.user_name || '그림') + ' (예전 저장)', {});
+      projectId = project.id;
+      const layers = [];
+      let n = 0;
+      for (const m of (save.layers_meta || [])) {
+        n++; setRow('옮기는 중... ' + n + '/' + save.layers_meta.length);
+        let asset = null;
+        if (m.url) asset = await CloudSave.uploadAsset(project.id, await fetchBlob(m.url, m.kind === 'draw' ? 'image/png' : 'image/jpeg'));
+        layers.push({ name: m.name, kind: m.kind === 'image' ? 'image' : 'draw', opacity: m.opacity ?? 1, visible: m.visible ?? true, locked: !!m.locked, asset });
+      }
+      let thumbAsset;
+      if (save.thumbnail_url) { try { thumbAsset = await CloudSave.uploadAsset(project.id, await fetchBlob(save.thumbnail_url, 'image/jpeg')); } catch (e) {} }
+      const cw = save.canvas_w || 210, ch = save.canvas_h || 297;
+      await CloudSave.save(project.id, project.version, { v: 1, canvas: { ratioW: cw, ratioH: ch, baseW: cw, baseH: ch }, layers }, { thumbAsset });
+      await CloudSave.legacy('finish', { claim_id: st.claim_id, project_id: project.id });
+      setRow('✅ 내 작업으로 옮겼어요');
+      const act = rowEl.querySelector('.lgact'); act.innerHTML = '';
+      const open = document.createElement('button'); open.className = 'chip on'; open.type = 'button'; open.textContent = '열기';
+      open.onclick = () => { location.href = '/?open=' + encodeURIComponent(project.id); };
+      const del = document.createElement('button'); del.className = 'chip'; del.type = 'button'; del.textContent = '원본 삭제';
+      del.onclick = async () => {
+        if (!confirm('예전 저장본(원본)을 삭제할까요? 옮겨진 내 작업은 그대로 남아요. 되돌릴 수 없어요.')) return;
+        try { await CloudSave.legacy('delete-original', { claim_id: st.claim_id }); del.remove(); setRow('✅ 옮겼고, 원본은 삭제했어요'); } catch (e) { status('삭제하지 못했어요', 'err'); }
+      };
+      act.append(open, del);
+      loadWorks();
+    } catch (e) {
+      if (projectId) { try { await CloudSave.trash(projectId); } catch (_) {} }   // 중간에 실패하면 미완성 작업은 휴지통으로
+      setRow('⚠ ' + (LGERR[e.message] || '옮기지 못했어요. 잠시 뒤 다시 시도해 주세요.'));
+    }
+  }
+  $('btnLgFind').onclick = async () => {
+    lgMsg(''); $('lgList').innerHTML = '';
+    const name = $('lgName').value.trim(), pw = $('lgPw').value;
+    if (!name || !pw) { lgMsg('저장 이름과 비밀번호를 입력해 주세요.', 'err'); return; }
+    $('btnLgFind').disabled = true; lgMsg('찾는 중...');
+    try {
+      const hash = await sha256text(pw);
+      const d = await CloudSave.legacy('lookup', { user_name: name, password_hash: hash });
+      lgMsg(d.items.length + '개를 찾았어요.', 'ok');
+      d.items.forEach(it => {
+        const row = document.createElement('div'); row.className = 'row2'; row.style.cssText = 'margin-top:10px;align-items:center';
+        const img = document.createElement('img'); img.className = 'avatar'; img.style.cssText = 'width:56px;height:56px;border-radius:0;flex:none'; img.alt = ''; img.src = it.thumbnail_url || DEFAULT_AVATAR;
+        const info = document.createElement('div'); info.style.flex = '1';
+        const t = document.createElement('div'); t.style.fontWeight = '700'; t.textContent = it.user_name + ' · ' + it.layer_count + '개 레이어';
+        const s = document.createElement('div'); s.className = 'hint lgstate';
+        const STATE = { available: new Date(it.created_at).toLocaleDateString('ko-KR') + ' 저장', claimed_by_me: '이미 내 계정으로 옮겼어요', claimed_by_other: '이미 다른 계정으로 옮겨진 그림이에요', in_progress: '다른 곳에서 옮기는 중이에요' };
+        s.textContent = STATE[it.state] || '';
+        info.append(t, s);
+        const act = document.createElement('div'); act.className = 'lgact'; act.style.cssText = 'display:flex;gap:6px;flex:none';
+        if (it.state === 'available') {
+          const b = document.createElement('button'); b.className = 'chip on'; b.type = 'button'; b.textContent = '가져오기';
+          b.onclick = () => { b.disabled = true; claimOne(it, name, hash, row); };
+          act.appendChild(b);
+        }
+        row.append(img, info, act); $('lgList').appendChild(row);
+      });
+    } catch (e) { lgMsg(LGERR[e.message] || '찾지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'err'); }
+    finally { $('btnLgFind').disabled = false; }
+  };
+
   /* ── 내 작업 / 휴지통 ── */
   const KIND = { draw: '✏️ 직접 그리기', story: '📖 스토리 만들기', character: '👗 캐릭터', storyboard: '🎬 스토리보드', dub: '📚 그림책 더빙' };
   let showTrash = false;
@@ -314,6 +415,7 @@
     const btns = document.createElement('div'); btns.style.cssText = 'display:flex;gap:6px;flex:none';
     const mk = (label, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip ' + (cls || ''); b.textContent = label; b.onclick = fn; return b; };
     if (!showTrash) {
+      if (p.kind === 'draw') btns.append(mk('열기', 'on', () => { location.href = '/?open=' + encodeURIComponent(p.id); }));
       btns.append(mk('삭제', '', async () => {
         if (!confirm('"' + (p.title || '제목 없음') + '"을 휴지통으로 옮길까요? 30일 안에는 복구할 수 있어요.')) return;
         try { await CloudSave.trash(p.id); loadWorks(); status('휴지통으로 옮겼어요', 'ok'); } catch (e) { status('삭제하지 못했어요', 'err'); }

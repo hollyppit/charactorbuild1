@@ -25,6 +25,9 @@
     create(kind, title, data, childId) {
       return BoldAuth.api('/api/projects', { method: 'POST', body: JSON.stringify({ kind, title, data: data || {}, child_id: childId || undefined }) });
     },
+    legacy(action, body) {
+      return BoldAuth.api('/api/legacy?action=' + action, { method: 'POST', body: JSON.stringify(body) });
+    },
     save(id, expectedVersion, data, extra) {
       extra = extra || {};
       const body = { expected_version: expectedVersion, data };
@@ -59,15 +62,20 @@
       let version = opts.version;
       let timer = null, running = false, pending = false, stopped = false;
       const debounce = opts.debounceMs || 2000;
+      const minInterval = opts.minIntervalMs || 0;   // 자동 저장 사이 최소 간격 (이미지 저장이 잦아 용량을 낭비하지 않게)
+      let lastRunAt = 0;
       const status = s => { if (opts.onStatus) opts.onStatus(s, STATUS_TEXT[s] || ''); };
 
       async function run() {
         if (stopped) return;
         if (running) { pending = true; return; }
-        running = true; status('saving');
+        running = true; status('saving'); lastRunAt = Date.now();
         try {
           if (!navigator.onLine) throw Object.assign(new Error('offline'), { offline: true });
-          const r = await api.save(opts.projectId, version, opts.getState(), {});
+          // getState 는 동기/비동기 모두 가능. {data, thumbAsset?} 또는 data 객체를 돌려준다
+          const st = await opts.getState();
+          const payload = st && st.data ? st : { data: st };
+          const r = await api.save(opts.projectId, version, payload.data, { thumbAsset: payload.thumbAsset });
           version = r.version; status('saved');
         } catch (e) {
           if (e.status === 409) { status('conflict'); if (opts.onConflict) opts.onConflict(e); }
@@ -78,7 +86,11 @@
           if (pending && !stopped) { pending = false; schedule(); }
         }
       }
-      function schedule() { clearTimeout(timer); timer = setTimeout(run, debounce); }
+      function schedule() {
+        clearTimeout(timer);
+        const wait = Math.max(debounce, minInterval - (Date.now() - lastRunAt));
+        timer = setTimeout(run, wait);
+      }
       function retryLater() { clearTimeout(timer); timer = setTimeout(run, 15000); }
 
       window.addEventListener('online', schedule);
