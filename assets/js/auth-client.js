@@ -55,6 +55,16 @@
       const { error } = await c.auth.signInWithOAuth({ provider, options });
       if (error) throw error;
     },
+    // 네이버 로그인: 서버(/api/auth/naver/callback)가 넘겨준 1회용 토큰으로 세션 생성
+    async verifyNaver(tokenHash) {
+      const c = await getClient();
+      const { error } = await c.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
+      if (error) throw error;
+    },
+    async publicConfig() {
+      const res = await fetch('/api/config');
+      return res.ok ? res.json() : {};
+    },
     async signOut() {
       const c = await getClient();
       await c.auth.signOut();

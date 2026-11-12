@@ -35,3 +35,4 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--yellow)}
 .empty{color:var(--muted);font-size:.9rem;padding:18px;text-align:center;border:2px dashed #3a2a3a}
 .row2{display:flex;gap:10px}.row2>*{flex:1}
 @media(max-width:420px){.row2{flex-direction:column}}
+.btn-naver{background:#03c75a;color:#fff}

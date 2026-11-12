@@ -8,5 +8,9 @@ export async function onRequest({ request, env }) {
   const bad = checkOrigin(request, env, cors);
   if (bad) return bad;
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return json({ error: 'not_configured' }, 503);
-  return json({ supabaseUrl: env.SUPABASE_URL, supabaseAnonKey: env.SUPABASE_ANON_KEY });
+  return json({
+    supabaseUrl: env.SUPABASE_URL,
+    supabaseAnonKey: env.SUPABASE_ANON_KEY,
+    naverEnabled: !!(env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET && env.SUPABASE_SERVICE_KEY),
+  });
 }
