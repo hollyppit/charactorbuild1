@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>마이페이지 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="/">볼드하다</a>
+    <button class="chip" id="btnLogout" type="button">로그아웃</button>
+  </div>
+
+  <div class="card" id="loading">불러오는 중...</div>
+
+  <div id="main" style="display:none">
+    <div class="card">
+      <h1>내 프로필</h1>
+      <p class="sub" id="acctInfo"></p>
+
+      <div class="avatar-row">
+        <img class="avatar" id="avatar" alt="프로필 이미지">
+        <div>
+          <button class="chip" id="btnAvatar" type="button">이미지 변경</button>
+          <button class="chip" id="btnAvatarDel" type="button">삭제</button>
+          <div class="hint">PNG·JPG·WEBP, 2MB 이하</div>
+          <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp" style="display:none">
+        </div>
+      </div>
+
+      <label for="nickname">닉네임 (2~20자, 한글·영문·숫자·_)</label>
+      <input type="text" id="nickname" maxlength="20" autocomplete="off">
+
+      <label for="bio">소개 (300자 이내)</label>
+      <textarea id="bio" maxlength="300"></textarea>
+
+      <label>관심 분야 (최대 10개)</label>
+      <div class="chips" id="interestChips"></div>
+      <input type="text" id="interestExtra" maxlength="20" placeholder="직접 추가 후 Enter" style="margin-top:10px">
+
+      <label for="visibility">프로필 공개 범위</label>
+      <select id="visibility">
+        <option value="private">비공개 — 나만 볼 수 있어요</option>
+        <option value="followers">팔로워 공개 (준비 중, 지금은 비공개와 같아요)</option>
+        <option value="public">전체 공개 — 누구나 볼 수 있어요</option>
+      </select>
+
+      <div class="msg" id="msg" role="status" aria-live="polite"></div>
+      <button class="btn btn-main" id="btnSave" type="button">저장하기</button>
+    </div>
+
+    <div class="card">
+      <h2>내 작업물</h2>
+      <div class="empty">로그인한 계정으로 작업을 저장하고 어느 기기에서든 이어서 하는 기능은 다음 단계에서 연결됩니다.<br>지금은 기존처럼 저장해 주세요.</div>
+    </div>
+
+    <div class="card">
+      <h2>계정</h2>
+      <p class="sub">계정을 삭제하면 프로필이 영구히 삭제되며 되돌릴 수 없어요.</p>
+      <button class="btn btn-danger" id="btnDelete" type="button">계정 삭제</button>
+    </div>
+  </div>
+</div>
+<div class="status" id="status" role="status" aria-live="polite"></div>
+
+<script src="/assets/js/auth-client.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const PRESETS = ['캐릭터', '일러스트', '스토리', '그림책', '영상', '더빙', '게임', '만화'];
+  const MAX_AVATAR = 2 * 1024 * 1024;
+  let profile = null, interests = [], dirty = false, userId = null;
+
+  let statusTimer;
+  function status(text, cls, keep) {
+    const el = $('status'); el.textContent = text; el.className = 'status show ' + (cls || '');
+    clearTimeout(statusTimer);
+    if (!keep) statusTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  }
+  const msg = (t, cls) => { $('msg').textContent = t || ''; $('msg').className = 'msg ' + (cls || ''); };
+  const ERR = {
+    invalid_nickname: '닉네임은 2~20자의 한글·영문·숫자·_ 만 쓸 수 있어요.',
+    nickname_taken: '이미 사용 중인 닉네임이에요.',
+    bio_too_long: '소개가 너무 길어요.',
+    invalid_interests: '관심 분야는 최대 10개, 20자 이내로 입력해 주세요.',
+    profiles_not_ready: '프로필 기능이 아직 준비되지 않았어요.',
+    login_required: '로그인이 필요해요.'
+  };
+  const DEFAULT_AVATAR = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="84" height="84"><rect width="84" height="84" fill="#2d0040"/><circle cx="42" cy="32" r="14" fill="#a11cee"/><rect x="16" y="52" width="52" height="30" rx="14" fill="#a11cee"/></svg>');
+
+  function renderChips() {
+    const all = [...new Set([...PRESETS, ...interests])];
+    $('interestChips').innerHTML = '';
+    all.forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chip' + (interests.includes(t) ? ' on' : ''); b.textContent = t;
+      b.onclick = () => {
+        if (interests.includes(t)) interests = interests.filter(x => x !== t);
+        else if (interests.length < 10) interests.push(t);
+        else { msg('관심 분야는 최대 10개예요.', 'err'); return; }
+        dirty = true; renderChips();
+      };
+      $('interestChips').appendChild(b);
+    });
+  }
+
+  function fill(p) {
+    profile = p; interests = p.interests || [];
+    $('nickname').value = p.nickname || '';
+    $('bio').value = p.bio || '';
+    $('visibility').value = p.visibility || 'private';
+    $('avatar').src = p.avatar_url || DEFAULT_AVATAR;
+    const prov = { google: '구글', kakao: '카카오' }[p.provider] || p.provider || '';
+    $('acctInfo').textContent = (prov ? prov + ' 계정' : '') + (p.email ? ' · ' + p.email : '');
+    renderChips();
+  }
+
+  async function save() {
+    msg('');
+    $('btnSave').disabled = true; status('저장 중...', '', true);
+    try {
+      const p = await BoldAuth.api('/api/me', { method: 'PATCH', body: JSON.stringify({
+        nickname: $('nickname').value.trim(), bio: $('bio').value.trim(),
+        interests: interests, visibility: $('visibility').value
+      }) });
+      profile = Object.assign(profile, p); dirty = false;
+      status('저장됨 ✓', 'ok'); msg('');
+    } catch (e) {
+      msg(ERR[e.message] || '저장하지 못했어요. 잠시 후 다시 시도해 주세요.', 'err'); status('저장 실패', 'err');
+    } finally { $('btnSave').disabled = false; }
+  }
+
+  async function uploadAvatar(file) {
+    if (['image/png', 'image/jpeg', 'image/webp'].indexOf(file.type) < 0) { msg('PNG, JPG, WEBP 이미지만 올릴 수 있어요.', 'err'); return; }
+    if (file.size > MAX_AVATAR) { msg('이미지는 2MB 이하만 올릴 수 있어요.', 'err'); return; }
+    status('이미지 올리는 중...', '', true);
+    try {
+      const c = await BoldAuth.client();
+      const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[file.type];
+      const path = userId + '/' + Date.now() + '.' + ext;
+      const up = await c.storage.from('avatars').upload(path, file, { contentType: file.type, upsert: false });
+      if (up.error) throw up.error;
+      const url = c.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+      const p = await BoldAuth.api('/api/me', { method: 'PATCH', body: JSON.stringify({ avatar_url: url }) });
+      fill(Object.assign(profile, p)); status('이미지가 바뀌었어요 ✓', 'ok');
+    } catch (e) { msg('이미지를 올리지 못했어요.', 'err'); status('업로드 실패', 'err'); }
+  }
+
+  $('btnSave').onclick = save;
+  ['nickname', 'bio', 'visibility'].forEach(id => $(id).addEventListener('input', () => { dirty = true; }));
+  $('interestExtra').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const t = e.target.value.trim();
+    if (!t) return;
+    if (interests.length >= 10) { msg('관심 분야는 최대 10개예요.', 'err'); return; }
+    if (interests.indexOf(t) < 0) interests.push(t);
+    e.target.value = ''; dirty = true; renderChips();
+  });
+  $('btnAvatar').onclick = () => $('avatarFile').click();
+  $('avatarFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) uploadAvatar(f); };
+  $('btnAvatarDel').onclick = async () => {
+    try { const p = await BoldAuth.api('/api/me', { method: 'PATCH', body: JSON.stringify({ avatar_url: null }) }); fill(Object.assign(profile, p)); status('삭제됨 ✓', 'ok'); }
+    catch (e) { status('삭제 실패', 'err'); }
+  };
+  $('btnLogout').onclick = async () => { await BoldAuth.signOut(); location.href = '/'; };
+  $('btnDelete').onclick = async () => {
+    if (prompt('계정을 삭제하려면 "삭제"라고 입력하세요. 되돌릴 수 없습니다.') !== '삭제') return;
+    status('삭제 중...', '', true);
+    try { await BoldAuth.api('/api/me', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }) }); await BoldAuth.signOut().catch(() => {}); location.href = '/'; }
+    catch (e) { status('삭제하지 못했어요', 'err'); }
+  };
+  window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+  (async () => {
+    try {
+      const s = await BoldAuth.session();
+      if (!s) { location.replace('/account.html?next=' + encodeURIComponent('/me.html')); return; }
+      userId = s.user.id;
+      fill(await BoldAuth.api('/api/me'));
+      $('loading').style.display = 'none'; $('main').style.display = 'block';
+    } catch (e) {
+      if (e.status === 401) { location.replace('/account.html?next=' + encodeURIComponent('/me.html')); return; }
+      $('loading').textContent = ERR[e.message] || '프로필을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+    }
+  })();
+})();
+</script>
+</body>
+</html>

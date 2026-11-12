@@ -4,7 +4,7 @@
 // - Supabase 호출 (서버 전용 SERVICE 키 우선, 없으면 ANON 키로 폴백)
 // - AI 접근 비밀번호(서버 검증), 요청 크기 제한
 
-const ALLOW_HEADERS = 'Content-Type, X-Admin-Hash, X-AI-Pw, X-Save-Hash';
+const ALLOW_HEADERS = 'Content-Type, Authorization, X-Admin-Hash, X-AI-Pw, X-Save-Hash';
 
 function originOk(origin, request, env) {
   if (!origin) return true; // 같은 출처 GET 등 Origin 헤더가 없는 요청

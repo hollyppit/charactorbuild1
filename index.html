@@ -1709,8 +1709,24 @@ body.st-active .st-fab{display:block}
     <h1>볼드하다</h1>
     <p>AI 매직 드로잉</p>
   </div>
-  <button class="admin-btn" id="adminBtn" onclick="toggleAdminPrompt()">ADMIN</button>
+  <div style="display:flex;align-self:stretch;height:100%">
+    <a class="admin-btn" id="loginLink" href="/account.html" style="display:flex;align-items:center;text-decoration:none">로그인</a>
+    <button class="admin-btn" id="adminBtn" onclick="toggleAdminPrompt()">ADMIN</button>
+  </div>
 </div>
+<script>
+// 로그인 상태 표시 (supabase 저장 세션이 있으면 "내 프로필"로 바꿈. 실제 검증은 마이페이지에서 서버가 수행)
+try {
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && /^sb-.+-auth-token$/.test(k)) {
+      var a = document.getElementById('loginLink');
+      a.textContent = '내 프로필'; a.href = '/me.html';
+      break;
+    }
+  }
+} catch (e) {}
+</script>
 
 <!-- 마퀴 테이프 -->
 <div class="mode-marquee" aria-hidden="true">
