@@ -51,6 +51,43 @@
       <button class="btn btn-main" id="btnSave" type="button">저장하기</button>
     </div>
 
+    <div class="card" id="kidsCard" style="display:none">
+      <h2>자녀 프로필</h2>
+      <p class="sub">만 14세 미만 자녀는 보호자 계정 안의 프로필로 이용해요. 자녀 프로필은 항상 비공개이며, 메시지·공개 게시·친구 기능은 쓸 수 없어요.</p>
+      <div id="kidsList"></div>
+      <div id="kidsRestore"></div>
+
+      <div id="kidsDeclare" style="display:none">
+        <label class="consent" for="declareChk"><input type="checkbox" id="declareChk"><span>저는 만 19세 이상이며, 자녀의 법정대리인(보호자)입니다.</span></label>
+        <button class="btn btn-sub" id="btnDeclare" type="button">보호자로 확인하기</button>
+      </div>
+
+      <div id="kidsAdd" style="display:none">
+        <button class="btn btn-main" id="btnKidsOpen" type="button">+ 자녀 프로필 추가</button>
+        <div id="kidsForm" style="display:none">
+          <label for="kNick">자녀 닉네임 (실명 대신 별명을 써 주세요, 2~12자)</label>
+          <input type="text" id="kNick" maxlength="12" autocomplete="off">
+          <label>아바타</label>
+          <div class="chips" id="kAvatars"></div>
+          <label for="kAge">연령대</label>
+          <select id="kAge"><option value="7-9">7~9세</option><option value="10-13">10~13세</option></select>
+          <label for="kPin">보호자 PIN 4자리 (아이 모드에서 나갈 때 필요해요)</label>
+          <input type="text" id="kPin" maxlength="4" inputmode="numeric" autocomplete="off">
+
+          <div class="hint" style="margin-top:16px">법정대리인 동의 (모두 필요해요)</div>
+          <label class="consent" for="c1"><input type="checkbox" id="c1"><span>[수집·이용] 닉네임, 아바타, 연령대, 자녀가 만든 작품을 서비스 제공 목적으로 수집·이용하는 데 동의합니다.</span></label>
+          <label class="consent" for="c2"><input type="checkbox" id="c2"><span>[AI 처리] 자녀가 만든 그림·글이 AI 기능 사용 시 외부 AI 서비스(구글, OpenAI 등)로 전송되어 처리될 수 있음에 동의합니다.</span></label>
+          <label class="consent" for="c3"><input type="checkbox" id="c3"><span>[보관] 프로필을 삭제하면 30일 뒤 작품과 함께 영구 삭제됨을 확인했습니다.</span></label>
+          <label class="consent" for="c4"><input type="checkbox" id="c4"><span>[권리] 보호자는 언제든 열람·수정·삭제·동의 철회를 요청할 수 있음을 확인했습니다.</span></label>
+          <div class="msg" id="kMsg" role="status" aria-live="polite"></div>
+          <div class="row2">
+            <button class="btn btn-main" id="btnKidsCreate" type="button">추가하기</button>
+            <button class="btn btn-sub" id="btnKidsCancel" type="button">취소</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h2>내 작업물</h2>
       <div class="empty">로그인한 계정으로 작업을 저장하고 어느 기기에서든 이어서 하는 기능은 다음 단계에서 연결됩니다.<br>지금은 기존처럼 저장해 주세요.</div>
@@ -174,13 +211,103 @@
   };
   window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
+  /* ── 자녀 프로필 (서버 기능 플래그가 꺼져 있으면 이 영역은 숨겨진 상태 유지) ── */
+  const AV = { fox: '🦊', cat: '🐱', bear: '🐻', rabbit: '🐰', robot: '🤖', star: '⭐', dino: '🦖', panda: '🐼' };
+  const CONSENT_KEYS = ['collect', 'ai_processing', 'retention', 'guardian_rights'];
+  const KERR = {
+    invalid_nickname: '닉네임은 2~12자의 한글·영문·숫자·_ 만 쓸 수 있어요.', nickname_taken: '이미 사용 중인 닉네임이에요.',
+    invalid_pin: 'PIN은 숫자 4자리예요.', consent_required: '동의 항목을 모두 확인해 주세요.',
+    child_limit: '자녀 프로필은 최대 5명까지 만들 수 있어요.', guardian_declaration_required: '먼저 보호자 확인이 필요해요.',
+    restore_expired: '복구 가능 기간이 지났어요.'
+  };
+  let kids = { consent_version: '', avatar: 'fox' };
+
+  function kidMode() { try { return JSON.parse(localStorage.getItem('bold_child') || 'null'); } catch (e) { return null; } }
+  function setKidMode(c) { try { if (c) localStorage.setItem('bold_child', JSON.stringify(c)); else localStorage.removeItem('bold_child'); } catch (e) {} }
+
+  function renderKids(d) {
+    kids.consent_version = d.consent_version;
+    $('kidsCard').style.display = 'block';
+    $('kidsDeclare').style.display = d.guardian_declared ? 'none' : 'block';
+    $('kidsAdd').style.display = d.guardian_declared ? 'block' : 'none';
+    const list = $('kidsList'); list.innerHTML = '';
+    d.children.forEach(c => {
+      const row = document.createElement('div'); row.className = 'row2'; row.style.marginBottom = '10px';
+      const info = document.createElement('div'); info.style.alignSelf = 'center';
+      info.textContent = (AV[c.avatar_key] || '🙂') + ' ' + c.nickname + ' · ' + c.age_group + '세';
+      const go = document.createElement('button'); go.className = 'btn btn-main'; go.type = 'button'; go.style.marginBottom = '0'; go.textContent = '아이 모드로 시작';
+      go.onclick = () => { setKidMode({ id: c.id, nickname: c.nickname, avatar_key: c.avatar_key }); location.href = '/'; };
+      const del = document.createElement('button'); del.className = 'btn btn-danger'; del.type = 'button'; del.style.marginBottom = '0'; del.textContent = '삭제';
+      del.onclick = async () => {
+        if (!confirm('"' + c.nickname + '" 프로필을 삭제할까요? 30일 안에는 복구할 수 있고, 이후 작품과 함께 영구 삭제돼요.')) return;
+        try { await BoldAuth.api('/api/children', { method: 'DELETE', body: JSON.stringify({ id: c.id }) }); const k = kidMode(); if (k && k.id === c.id) setKidMode(null); loadKids(); status('삭제됨 (30일 안에 복구 가능)', 'ok'); }
+        catch (e) { status('삭제하지 못했어요', 'err'); }
+      };
+      row.append(info, go, del); list.appendChild(row);
+    });
+    const rs = $('kidsRestore'); rs.innerHTML = '';
+    d.restorable.forEach(c => {
+      const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '↩ "' + c.nickname + '" 삭제 취소';
+      b.onclick = async () => { try { await BoldAuth.api('/api/children?action=restore', { method: 'POST', body: JSON.stringify({ id: c.id }) }); loadKids(); } catch (e) { status(KERR[e.message] || '복구하지 못했어요', 'err'); } };
+      rs.appendChild(b);
+    });
+  }
+  async function loadKids() {
+    try { renderKids(await BoldAuth.api('/api/children')); }
+    catch (e) { /* feature_disabled(404) 등 → 영역 숨김 */ $('kidsCard').style.display = 'none'; }
+  }
+  function renderAvatarPick() {
+    $('kAvatars').innerHTML = '';
+    Object.keys(AV).forEach(k => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (kids.avatar === k ? ' on' : ''); b.textContent = AV[k];
+      b.setAttribute('aria-label', k); b.onclick = () => { kids.avatar = k; renderAvatarPick(); };
+      $('kAvatars').appendChild(b);
+    });
+  }
+  const kmsg = (t, c) => { $('kMsg').textContent = t || ''; $('kMsg').className = 'msg ' + (c || ''); };
+  $('btnDeclare').onclick = async () => {
+    if (!$('declareChk').checked) { status('확인란에 체크해 주세요', 'err'); return; }
+    try { await BoldAuth.api('/api/children?action=declare', { method: 'POST', body: JSON.stringify({ adult: true }) }); loadKids(); }
+    catch (e) { status('확인하지 못했어요', 'err'); }
+  };
+  $('btnKidsOpen').onclick = () => { $('kidsForm').style.display = 'block'; $('btnKidsOpen').style.display = 'none'; renderAvatarPick(); };
+  $('btnKidsCancel').onclick = () => { $('kidsForm').style.display = 'none'; $('btnKidsOpen').style.display = 'flex'; kmsg(''); };
+  $('btnKidsCreate').onclick = async () => {
+    kmsg('');
+    const items = { collect: $('c1').checked, ai_processing: $('c2').checked, retention: $('c3').checked, guardian_rights: $('c4').checked };
+    if (!CONSENT_KEYS.every(k => items[k])) { kmsg(KERR.consent_required, 'err'); return; }
+    $('btnKidsCreate').disabled = true;
+    try {
+      await BoldAuth.api('/api/children', { method: 'POST', body: JSON.stringify({
+        nickname: $('kNick').value.trim(), avatar_key: kids.avatar, age_group: $('kAge').value, pin: $('kPin').value.trim(),
+        consent: { version: kids.consent_version, items: items } }) });
+      ['kNick', 'kPin'].forEach(id => $(id).value = ''); ['c1', 'c2', 'c3', 'c4'].forEach(id => $(id).checked = false);
+      $('btnKidsCancel').onclick(); loadKids(); status('자녀 프로필을 추가했어요 ✓', 'ok');
+    } catch (e) { kmsg(KERR[e.message] || '추가하지 못했어요. 잠시 후 다시 시도해 주세요.', 'err'); }
+    finally { $('btnKidsCreate').disabled = false; }
+  };
+
+  // 아이 모드에서 마이페이지에 들어오면 보호자 PIN 확인 (같은 기기에서 아이가 실수로 열지 않게 하는 편의 장치)
+  async function kidPinGate() {
+    const k = kidMode();
+    if (!k) return true;
+    const pin = prompt('보호자 PIN 4자리를 입력하세요.');
+    if (pin == null) { location.replace('/'); return false; }
+    try {
+      await BoldAuth.api('/api/children?action=verify-pin', { method: 'POST', body: JSON.stringify({ id: k.id, pin: pin.trim() }) });
+      setKidMode(null); return true;
+    } catch (e) { alert('PIN이 맞지 않아요.'); location.replace('/'); return false; }
+  }
+
   (async () => {
     try {
       const s = await BoldAuth.session();
       if (!s) { location.replace('/account.html?next=' + encodeURIComponent('/me.html')); return; }
       userId = s.user.id;
+      if (!(await kidPinGate())) return;
       fill(await BoldAuth.api('/api/me'));
       $('loading').style.display = 'none'; $('main').style.display = 'block';
+      loadKids();
     } catch (e) {
       if (e.status === 401) { location.replace('/account.html?next=' + encodeURIComponent('/me.html')); return; }
       $('loading').textContent = ERR[e.message] || '프로필을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';

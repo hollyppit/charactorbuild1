@@ -1726,6 +1726,24 @@ try {
     }
   }
 } catch (e) {}
+// 아이 모드(보호자 계정 아래 자녀 프로필): 상단에 표시줄을 보여주고 관리자·계정 메뉴를 숨김.
+// 나가기는 마이페이지에서 보호자 PIN 확인 후에만 가능 (같은 기기에서 실수로 나가지 않게 하는 편의 장치)
+try {
+  var kid = JSON.parse(localStorage.getItem('bold_child') || 'null');
+  if (kid && kid.id) {
+    var AV = { fox: '🦊', cat: '🐱', bear: '🐻', rabbit: '🐰', robot: '🤖', star: '⭐', dino: '🦖', panda: '🐼' };
+    var st = document.createElement('style');
+    st.textContent = '#adminBtn,#loginLink{display:none!important}#childBar{background:#fbea1a;color:#000;font:700 13px/1.2 sans-serif;padding:7px 12px;text-align:center}#childBar a{color:#000;margin-left:10px}';
+    document.head.appendChild(st);
+    var bar = document.createElement('div');
+    bar.id = 'childBar';
+    bar.appendChild(document.createTextNode((AV[kid.avatar_key] || '🙂') + ' ' + kid.nickname + ' 모드'));
+    var ex = document.createElement('a');
+    ex.href = '/me.html'; ex.textContent = '보호자 확인 후 나가기';
+    bar.appendChild(ex);
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+} catch (e) {}
 </script>
 
 <!-- 마퀴 테이프 -->
