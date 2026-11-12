@@ -2182,6 +2182,10 @@ try {
     <div class="st-act">
       <button onclick="storyBackup()">📦 작업 파일로 저장</button>
       <button onclick="document.getElementById('stRestoreInput').click()">📂 작업 파일 불러오기</button>
+      <!-- 로그인한 사용자에게만 보이는 계정 저장 (assets/js/story-cloud.js) -->
+      <button id="btnStCloudSave" style="display:none">☁ 계정에 저장</button>
+      <button id="btnStCloudOpen" style="display:none">☁ 내 작업 열기</button>
+      <span id="stCloudStatus" style="display:none;font-size:12px;align-self:center" role="status" aria-live="polite"></span>
       <button class="st-del" onclick="storyNewProject()">🗑 이 작품 새로 시작</button>
     </div>
   </div>
@@ -12628,5 +12632,6 @@ async function stDirExportRun(){
 <script src="/assets/js/auth-client.js"></script>
 <script src="/assets/js/cloud-save.js"></script>
 <script src="/assets/js/draw-cloud.js"></script>
+<script src="/assets/js/story-cloud.js"></script>
 </body>
 </html>

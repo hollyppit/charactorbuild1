@@ -2,6 +2,7 @@
 // 로그인한 사용자에게만 버튼을 보여 주며, 기존 비밀번호 저장·브라우저 자동 저장 코드는 건드리지 않는다.
 // index.html 의 전역 변수/함수(drawLayers, _createDrawLayer, initDrawCanvas 등)를 사용한다.
 (function () {
+  const QS = new URLSearchParams(location.search);   // 다른 스크립트가 주소를 바꾸기 전에 읽어 둠
   const $ = id => document.getElementById(id);
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const LAST_KEY = 'bold_cloud_draw_last';   // 새로고침 뒤 "이어서 저장" 안내용 (자동 연결은 하지 않음)
@@ -233,8 +234,8 @@
     guardClearDraw();
     watchEdits();
 
-    const openId = new URLSearchParams(location.search).get('open');
-    if (openId && UUID.test(openId)) {
+    const openId = QS.get('open');
+    if ((QS.get('kind') || 'draw') === 'draw' && openId && UUID.test(openId)) {
       history.replaceState(null, '', location.pathname);
       openProject(openId, { skipConfirm: true });
     }

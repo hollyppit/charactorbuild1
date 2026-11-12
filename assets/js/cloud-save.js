@@ -78,6 +78,7 @@
           const r = await api.save(opts.projectId, version, payload.data, { thumbAsset: payload.thumbAsset });
           version = r.version; status('saved');
         } catch (e) {
+          if (e && e.stopSync) { stopped = true; clearTimeout(timer); status('idle'); return; }   // 도구가 "이 연결은 끝났다"고 알린 경우
           if (e.status === 409) { status('conflict'); if (opts.onConflict) opts.onConflict(e); }
           else if (e.offline || (e.name === 'TypeError')) { status('offline'); retryLater(); }
           else { status('error'); retryLater(); }
