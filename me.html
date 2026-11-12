@@ -91,7 +91,14 @@
 
     <div class="card">
       <h2>내 작업물</h2>
-      <div class="empty">로그인한 계정으로 작업을 저장하고 어느 기기에서든 이어서 하는 기능은 다음 단계에서 연결됩니다.<br>지금은 기존처럼 저장해 주세요.</div>
+      <div class="row2" style="margin-bottom:12px">
+        <button class="chip on" id="tabWorks" type="button">내 작업</button>
+        <button class="chip" id="tabTrash" type="button">휴지통</button>
+      </div>
+      <div class="hint" id="quotaText" style="margin-bottom:6px"></div>
+      <div style="height:8px;background:#2d0040;margin-bottom:14px"><div id="quotaBar" style="height:100%;width:0;background:var(--yellow)"></div></div>
+      <div id="worksList"></div>
+      <p class="hint" id="worksNote">제작 도구에서 로그인한 계정으로 저장하는 기능은 도구별로 차례로 연결돼요. 지금은 기존처럼 저장해 주세요.</p>
     </div>
 
     <div class="card">
@@ -104,6 +111,7 @@
 <div class="status" id="status" role="status" aria-live="polite"></div>
 
 <script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/cloud-save.js"></script>
 <script>
 (function () {
   const $ = id => document.getElementById(id);
@@ -288,6 +296,60 @@
     finally { $('btnKidsCreate').disabled = false; }
   };
 
+  /* ── 내 작업 / 휴지통 ── */
+  const KIND = { draw: '✏️ 직접 그리기', story: '📖 스토리 만들기', character: '👗 캐릭터', storyboard: '🎬 스토리보드', dub: '📚 그림책 더빙' };
+  let showTrash = false;
+  const mb = n => (Number(n || 0) / 1048576).toFixed(1) + 'MB';
+  const WERR = { projects_not_ready: '작업 저장 기능이 아직 준비되지 않았어요.' };
+
+  function workRow(p) {
+    const row = document.createElement('div'); row.className = 'row2'; row.style.cssText = 'margin-bottom:10px;align-items:center';
+    const thumb = document.createElement('img'); thumb.className = 'avatar'; thumb.style.cssText = 'width:56px;height:56px;border-radius:0;flex:none';
+    thumb.alt = ''; thumb.src = p.thumb_url || DEFAULT_AVATAR;
+    const info = document.createElement('div'); info.style.flex = '1';
+    const t = document.createElement('div'); t.textContent = p.title || '(제목 없음)'; t.style.fontWeight = '700';
+    const m = document.createElement('div'); m.className = 'hint';
+    m.textContent = (KIND[p.kind] || p.kind) + ' · ' + new Date(p.updated_at).toLocaleDateString('ko-KR') + ' · ' + mb(p.size_bytes);
+    info.append(t, m);
+    const btns = document.createElement('div'); btns.style.cssText = 'display:flex;gap:6px;flex:none';
+    const mk = (label, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip ' + (cls || ''); b.textContent = label; b.onclick = fn; return b; };
+    if (!showTrash) {
+      btns.append(mk('삭제', '', async () => {
+        if (!confirm('"' + (p.title || '제목 없음') + '"을 휴지통으로 옮길까요? 30일 안에는 복구할 수 있어요.')) return;
+        try { await CloudSave.trash(p.id); loadWorks(); status('휴지통으로 옮겼어요', 'ok'); } catch (e) { status('삭제하지 못했어요', 'err'); }
+      }));
+    } else {
+      btns.append(mk('복구', '', async () => { try { await CloudSave.restore(p.id); loadWorks(); status('복구했어요 ✓', 'ok'); } catch (e) { status('복구하지 못했어요', 'err'); } }));
+      btns.append(mk('영구 삭제', '', async () => {
+        if (!confirm('"' + (p.title || '제목 없음') + '"을 영구 삭제할까요? 되돌릴 수 없어요.')) return;
+        try { await CloudSave.purge(p.id); loadWorks(); status('영구 삭제했어요', 'ok'); } catch (e) { status('삭제하지 못했어요', 'err'); }
+      }));
+    }
+    row.append(thumb, info, btns);
+    return row;
+  }
+  async function loadWorks() {
+    $('tabWorks').classList.toggle('on', !showTrash); $('tabTrash').classList.toggle('on', showTrash);
+    const box = $('worksList');
+    try {
+      const d = await CloudSave.list({ trashed: showTrash });
+      box.innerHTML = '';
+      const q = d.quota || { bytes_used: 0, limit_bytes: 524288000 };
+      $('quotaText').textContent = '저장 공간 ' + mb(q.bytes_used) + ' / ' + mb(q.limit_bytes) + ' 사용 중';
+      $('quotaBar').style.width = Math.min(100, (q.bytes_used / q.limit_bytes) * 100) + '%';
+      if (!d.projects.length) {
+        const e = document.createElement('div'); e.className = 'empty';
+        e.textContent = showTrash ? '휴지통이 비어 있어요. 지운 작업은 ' + d.trash_days + '일 동안 여기에 보관돼요.' : '아직 저장된 작업이 없어요.';
+        box.appendChild(e);
+      } else d.projects.forEach(p => box.appendChild(workRow(p)));
+    } catch (e) {
+      box.innerHTML = ''; $('quotaText').textContent = '';
+      const m = document.createElement('div'); m.className = 'empty'; m.textContent = WERR[e.message] || '작업 목록을 불러오지 못했어요.'; box.appendChild(m);
+    }
+  }
+  $('tabWorks').onclick = () => { showTrash = false; loadWorks(); };
+  $('tabTrash').onclick = () => { showTrash = true; loadWorks(); };
+
   // 아이 모드에서 마이페이지에 들어오면 보호자 PIN 확인 (같은 기기에서 아이가 실수로 열지 않게 하는 편의 장치)
   async function kidPinGate() {
     const k = kidMode();
@@ -309,6 +371,7 @@
       fill(await BoldAuth.api('/api/me'));
       $('loading').style.display = 'none'; $('main').style.display = 'block';
       loadKids();
+      loadWorks();
     } catch (e) {
       if (e.status === 401) { location.replace('/account.html?next=' + encodeURIComponent('/me.html')); return; }
       $('loading').textContent = ERR[e.message] || '프로필을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
