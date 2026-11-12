@@ -36,3 +36,14 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--yellow)}
 .row2{display:flex;gap:10px}.row2>*{flex:1}
 @media(max-width:420px){.row2{flex-direction:column}}
 .btn-naver{background:#03c75a;color:#fff}
+/* 처리방침·이용약관 문서 */
+.wrap.doc{max-width:760px;line-height:1.7}
+.doc h2{margin-top:28px;font-size:1.05rem}
+.doc p,.doc li{font-size:.92rem;color:#e8dfe9}
+.doc ul{padding-left:20px;margin:8px 0}
+.doc table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.85rem}
+.doc th,.doc td{border:1px solid #4a3350;padding:8px;vertical-align:top;text-align:left}
+.doc th{background:#2d0040}
+.doc .tbd{background:#fbea1a33;border-bottom:2px solid var(--yellow);padding:0 3px}
+.doc .draft{background:#3a2a00;border:2px solid var(--yellow);padding:12px 14px;margin-bottom:18px;font-size:.88rem}
+@media(max-width:560px){.doc table{display:block;overflow-x:auto}}
