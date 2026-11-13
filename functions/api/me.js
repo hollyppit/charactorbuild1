@@ -2,6 +2,7 @@
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb, supabaseKey } from './_lib/common.js';
 import { getUser } from './_lib/auth.js';
 import { removeObjects, POST_BUCKET } from './_lib/storage.js';
+import { purgeGroupStories } from './_lib/housekeeping.js';
 
 const NICK_RE = /^[0-9A-Za-z가-힣_]{2,20}$/;
 const VISIBILITY = ['public', 'followers', 'private'];
@@ -110,6 +111,20 @@ export async function onRequest({ request, env }) {
       const assetPaths = pa.ok ? (await pa.json()).map(x => x.path) : [];
       for (let i = 0; i < postPaths.length; i += 100) await removeObjects(env, postPaths.slice(i, i + 100), POST_BUCKET);
       for (let i = 0; i < assetPaths.length; i += 100) await removeObjects(env, assetPaths.slice(i, i + 100));
+    } catch (_) {}
+    // 그룹: 모둠장인 그룹은 함께 지워지므로 그 그룹 작품의 파일(다른 그룹원 것 포함)과 용량을 먼저 정리하고,
+    // 다른 그룹에 내가 올린 그림 파일도 지운다 (DB 행은 계정 삭제 때 CASCADE)
+    try {
+      const sbx = makeSb(env);
+      const gr = await sbx(`/rest/v1/groups?owner_id=eq.${encodeURIComponent(user.id)}&select=id`);
+      const gids = gr.ok ? (await gr.json()).map(x => x.id) : [];
+      if (gids.length) {
+        const sr = await sbx(`/rest/v1/group_stories?group_id=in.(${gids.join(',')})&select=id`);
+        await purgeGroupStories(env, sr.ok ? (await sr.json()).map(x => x.id) : []);
+      }
+      const ga = await sbx(`/rest/v1/group_story_assets?uploader_id=eq.${encodeURIComponent(user.id)}&select=path`);
+      const gPaths = ga.ok ? (await ga.json()).map(x => x.path) : [];
+      for (let i = 0; i < gPaths.length; i += 100) await removeObjects(env, gPaths.slice(i, i + 100));
     } catch (_) {}
     // 계정 삭제 (profiles 는 ON DELETE CASCADE)
     const d = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(user.id)}`, {
