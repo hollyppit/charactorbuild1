@@ -415,7 +415,7 @@
     const btns = document.createElement('div'); btns.style.cssText = 'display:flex;gap:6px;flex:none';
     const mk = (label, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip ' + (cls || ''); b.textContent = label; b.onclick = fn; return b; };
     if (!showTrash) {
-      if (p.kind === 'draw' || p.kind === 'story') btns.append(mk('열기', 'on', () => { location.href = '/?open=' + encodeURIComponent(p.id) + '&kind=' + p.kind; }));
+      if (KIND[p.kind]) btns.append(mk('열기', 'on', () => { location.href = '/?open=' + encodeURIComponent(p.id) + '&kind=' + p.kind; }));
       btns.append(mk('삭제', '', async () => {
         if (!confirm('"' + (p.title || '제목 없음') + '"을 휴지통으로 옮길까요? 30일 안에는 복구할 수 있어요.')) return;
         try { await CloudSave.trash(p.id); loadWorks(); status('휴지통으로 옮겼어요', 'ok'); } catch (e) { status('삭제하지 못했어요', 'err'); }
