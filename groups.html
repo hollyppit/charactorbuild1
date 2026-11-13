@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>내 그룹 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card" id="invCard" style="display:none">
+    <h2>📨 받은 초대</h2>
+    <div id="invList"></div>
+  </div>
+  <div class="card">
+    <h1>👥 내 그룹</h1>
+    <p class="sub">친구들과 함께 작품을 만드는 모둠이에요. 그룹은 그룹원만 볼 수 있어요. 한 그룹은 10명, 한 사람은 그룹 5개까지예요.</p>
+    <div id="list">불러오는 중...</div>
+  </div>
+  <div class="card">
+    <h2>새 그룹 만들기</h2>
+    <label for="gName">그룹 이름 (2~30자)</label>
+    <input type="text" id="gName" maxlength="30" placeholder="예: 우주 그림책 모둠">
+    <label for="gIntro">소개 (선택, 200자)</label>
+    <textarea id="gIntro" maxlength="200" placeholder="어떤 작품을 함께 만들까요?"></textarea>
+    <div class="msg" id="gMsg"></div>
+    <button class="btn btn-main" id="gCreate" type="button">그룹 만들기</button>
+  </div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script src="/assets/js/noti-toast.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id);
+  await U.header(root);
+  if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent('/groups')); return; }
+  const ROLE = { owner: '모둠장', editor: '만들기', viewer: '보기' };
+
+  async function load() {
+    try {
+      const d = await U.api('/api/groups');
+      const list = $('list'); list.innerHTML = '';
+      if (!d.groups.length) list.append(U.el('div', 'empty', '아직 들어간 그룹이 없어요. 아래에서 새로 만들거나, 친구의 초대를 기다려 보세요.'));
+      d.groups.forEach(g => {
+        const a = U.el('a', 'author'); a.href = '/group?id=' + encodeURIComponent(g.id); a.style.cssText = 'display:block;padding:10px 0;border-bottom:1px solid #3a2a3a;margin:0';
+        a.append(U.el('div', 'post-title', '👥 ' + g.name), U.el('div', 'hint', ROLE[g.my_role] + ' · ' + g.member_count + '명' + (g.intro ? ' · ' + g.intro : '')));
+        list.append(a);
+      });
+      const inv = $('invList'); inv.innerHTML = '';
+      $('invCard').style.display = d.invites.length ? '' : 'none';
+      d.invites.forEach(i => {
+        const row = U.el('div', 'row2'); row.style.cssText = 'align-items:center;margin-bottom:10px';
+        const t = U.el('div'); t.append(U.el('div', 'post-title', i.group_name), U.el('div', 'hint', i.inviter + '님이 "' + ROLE[i.role] + '" 역할로 초대했어요'));
+        const bx = U.el('div'); bx.style.cssText = 'display:flex;gap:6px;flex:none';
+        const yes = U.el('button', 'chip on', '수락'); yes.type = 'button';
+        const no = U.el('button', 'chip', '거절'); no.type = 'button';
+        const answer = async ok => {
+          try { const r = await U.api('/api/groups', { method: 'POST', body: JSON.stringify({ action: 'respond', invite_id: i.id, accept: ok }) }); if (ok) location.href = '/group?id=' + encodeURIComponent(r.group_id); else load(); }
+          catch (e) { alert(e.message); }
+        };
+        yes.onclick = () => answer(true); no.onclick = () => answer(false);
+        bx.append(yes, no); row.append(t, bx); inv.append(row);
+      });
+    } catch (e) {
+      if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);
+      $('list').textContent = '불러오지 못했어요.';
+    }
+  }
+
+  $('gCreate').onclick = async () => {
+    const name = $('gName').value.trim(), intro = $('gIntro').value.trim();
+    $('gMsg').className = 'msg'; $('gMsg').textContent = '';
+    if (name.length < 2) { $('gMsg').className = 'msg err'; $('gMsg').textContent = '그룹 이름은 2자 이상이에요.'; return; }
+    $('gCreate').disabled = true;
+    try { const r = await U.api('/api/groups', { method: 'POST', body: JSON.stringify({ action: 'create', name, intro }) }); location.href = '/group?id=' + encodeURIComponent(r.id); }
+    catch (e) { $('gMsg').className = 'msg err'; $('gMsg').textContent = e.message; $('gCreate').disabled = false; }
+  };
+  load();
+})();
+</script>
+</body>
+</html>

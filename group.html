@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>그룹 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card" id="head">불러오는 중...</div>
+  <div class="card" id="memCard" style="display:none">
+    <h2>그룹원</h2>
+    <div id="members"></div>
+    <div id="inviteBox" style="display:none">
+      <h2 style="margin-top:18px">친구 초대</h2>
+      <div class="row2">
+        <input type="text" id="invNick" maxlength="20" placeholder="친구 닉네임">
+        <select id="invRole"><option value="editor">만들기 (장면을 맡아 만들어요)</option><option value="viewer">보기 (보기만 해요)</option></select>
+      </div>
+      <div class="msg" id="invMsg"></div>
+      <button class="btn btn-main" id="invSend" type="button">초대 보내기</button>
+      <div id="pending"></div>
+    </div>
+  </div>
+  <div class="card" id="workCard" style="display:none">
+    <h2>함께 만드는 작품</h2>
+    <div class="empty">곧 준비돼요. 그룹 그림책을 만들고 장면을 나눠 맡는 기능이 다음에 생겨요.</div>
+  </div>
+  <div class="card" id="dangerCard" style="display:none"></div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script src="/assets/js/noti-toast.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id);
+  await U.header(root);
+  if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+  const id = new URLSearchParams(location.search).get('id') || '';
+  const ROLE = { owner: '👑 모둠장', editor: '✏️ 만들기', viewer: '👀 보기' };
+  const post = async (body, okMsg, reload = true) => {
+    try { const r = await U.api('/api/groups', { method: 'POST', body: JSON.stringify({ group_id: id, ...body }) }); if (okMsg) alert(okMsg); if (reload) load(); return r; }
+    catch (e) { alert(e.message); return null; }
+  };
+
+  function render(d) {
+    const owner = d.my_role === 'owner';
+    document.title = d.group.name + ' · 볼드하다';
+    const head = $('head'); head.innerHTML = '';
+    head.append(U.el('h1', '', '👥 ' + d.group.name));
+    head.append(U.el('p', 'sub', (d.group.intro ? d.group.intro + ' · ' : '') + '내 역할: ' + ROLE[d.my_role] + ' · ' + d.members.length + '명'));
+    if (owner) {
+      const ed = U.el('button', 'btn btn-sub', '이름·소개 고치기'); ed.type = 'button';
+      ed.onclick = async () => {
+        const n = prompt('그룹 이름 (2~30자)', d.group.name); if (n == null) return;
+        const t = prompt('소개 (200자까지)', d.group.intro || ''); if (t == null) return;
+        post({ action: 'update', name: n, intro: t });
+      };
+      head.append(ed);
+    }
+
+    $('memCard').style.display = '';
+    const box = $('members'); box.innerHTML = '';
+    d.members.forEach(m => {
+      const btns = [];
+      if (owner && !m.is_me) {
+        btns.push([m.role === 'viewer' ? '만들기로' : '보기로', () => post({ action: 'role', nickname: m.nickname, role: m.role === 'viewer' ? 'editor' : 'viewer' })]);
+        btns.push(['모둠장 넘기기', () => { if (confirm(m.nickname + '님에게 모둠장을 넘길까요? 나는 "만들기" 역할이 돼요.')) post({ action: 'role', nickname: m.nickname, role: 'owner' }, '모둠장을 넘겼어요.'); }]);
+        btns.push(['내보내기', () => { if (confirm(m.nickname + '님을 그룹에서 내보낼까요?')) post({ action: 'remove', nickname: m.nickname }); }]);
+      }
+      const row = U.userRow(m, btns);
+      row.querySelector('span').textContent = m.nickname + ' · ' + ROLE[m.role] + (m.is_me ? ' (나)' : '');
+      box.append(row);
+    });
+
+    $('inviteBox').style.display = owner ? '' : 'none';
+    const pend = $('pending'); pend.innerHTML = '';
+    if (owner && d.invites.length) {
+      pend.append(U.el('div', 'hint', '답을 기다리는 초대'));
+      d.invites.forEach(i => pend.append(U.userRow(i, [['초대 취소', () => post({ action: 'cancel_invite', invite_id: i.id })]])));
+    }
+    $('workCard').style.display = '';
+
+    const dz = $('dangerCard'); dz.innerHTML = ''; dz.style.display = '';
+    if (owner) {
+      const del = U.el('button', 'btn btn-danger', '그룹 지우기'); del.type = 'button';
+      del.onclick = async () => {
+        if (!confirm('"' + d.group.name + '" 그룹을 지울까요? 그룹원이 모두 빠지고 되돌릴 수 없어요.')) return;
+        if (await post({ action: 'delete' }, null, false)) location.href = '/groups';
+      };
+      dz.append(U.el('p', 'hint', '모둠장이 그룹을 나가려면 먼저 다른 그룹원에게 모둠장을 넘겨 주세요.'), del);
+    } else {
+      const lv = U.el('button', 'btn btn-danger', '그룹 나가기'); lv.type = 'button';
+      lv.onclick = async () => { if (confirm('그룹을 나갈까요?')) { if (await post({ action: 'leave' }, null, false)) location.href = '/groups'; } };
+      dz.append(lv);
+    }
+  }
+
+  async function load() {
+    try { render(await U.api('/api/groups?id=' + encodeURIComponent(id))); }
+    catch (e) {
+      if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);
+      $('head').textContent = e.status === 404 ? '그룹을 찾을 수 없어요. 그룹원만 볼 수 있어요.' : '불러오지 못했어요.';
+    }
+  }
+  $('invSend').onclick = async () => {
+    const n = $('invNick').value.trim(); if (!n) return;
+    $('invMsg').className = 'msg'; $('invMsg').textContent = '';
+    try { await U.api('/api/groups', { method: 'POST', body: JSON.stringify({ action: 'invite', group_id: id, nickname: n, role: $('invRole').value }) }); $('invNick').value = ''; $('invMsg').className = 'msg ok'; $('invMsg').textContent = n + '님에게 초대를 보냈어요.'; load(); }
+    catch (e) { $('invMsg').className = 'msg err'; $('invMsg').textContent = e.message; }
+  };
+  load();
+})();
+</script>
+</body>
+</html>
