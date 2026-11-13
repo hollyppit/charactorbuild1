@@ -139,6 +139,10 @@
       case 'group_invite': return who + '"' + ((n.data && n.data.group_name) || '그룹') + '" 그룹에 초대했어요.';
       case 'group_join': return who + '"' + ((n.data && n.data.group_name) || '그룹') + '" 그룹에 들어왔어요.';
       case 'group_role': return '"' + ((n.data && n.data.group_name) || '그룹') + '" 그룹에서 내 역할이 "' + ({ owner: '모둠장', editor: '만들기', viewer: '보기' }[n.data && n.data.role] || '') + '"(으)로 바뀌었어요.';
+      case 'gs_assigned': return who + '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '을(를) 맡겼어요.';
+      case 'gs_submitted': return who + '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '을(를) 제출했어요. 확인해 주세요.';
+      case 'gs_approved': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '이(가) 승인됐어요! 🎉';
+      case 'gs_returned': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '을(를) 다시 고쳐 달래요' + reason + '.';
       case 'group_removed': return '"' + ((n.data && n.data.group_name) || '그룹') + '" 그룹에서 나가게 되었어요.';
       case 'sanction': return '이용 제한을 받았어요: ' + (KIND_SANC[n.data && n.data.kind] || '') + reason + '. 마이페이지에서 확인해 주세요.';
       default: return '새 알림';
@@ -146,6 +150,7 @@
   }
   function notiLink(n) {
     if (n.type === 'follow' || n.type === 'follow_accept') return n.actor ? '/u?n=' + encodeURIComponent(n.actor.nickname) : null;
+    if (/^gs_/.test(n.type) && n.data && n.data.story_id) return '/group-story?id=' + encodeURIComponent(n.data.story_id);
     if (n.type === 'group_invite' || n.type === 'group_removed') return '/groups';
     if ((n.type === 'group_join' || n.type === 'group_role') && n.data && n.data.group_id) return '/group?id=' + encodeURIComponent(n.data.group_id);
     if (n.type === 'follow_request' || n.type === 'sanction') return '/me.html';

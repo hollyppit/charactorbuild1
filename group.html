@@ -24,8 +24,23 @@
     </div>
   </div>
   <div class="card" id="workCard" style="display:none">
-    <h2>함께 만드는 작품</h2>
-    <div class="empty">곧 준비돼요. 그룹 그림책을 만들고 장면을 나눠 맡는 기능이 다음에 생겨요.</div>
+    <h2>함께 만드는 그림책</h2>
+    <div id="works">불러오는 중...</div>
+    <div id="newWork" style="display:none">
+      <h2 style="margin-top:18px">새 그룹 그림책</h2>
+      <label for="nwTitle">제목</label>
+      <input type="text" id="nwTitle" maxlength="60" placeholder="예: 우주로 간 고양이">
+      <div class="row2">
+        <div><label for="nwMode">길이</label><select id="nwMode"><option value="short">단편</option><option value="long">장편</option></select></div>
+        <div><label for="nwCount">장면 수 (표지 빼고)</label><select id="nwCount"></select></div>
+      </div>
+      <div class="msg" id="nwMsg"></div>
+      <div class="row2">
+        <button class="btn btn-main" id="nwBlank" type="button">새로 시작</button>
+        <button class="btn btn-sub" id="nwImport" type="button">📥 내 "스토리 만들기"에서 가져오기</button>
+      </div>
+      <p class="hint">가져오기: 이 기기의 "스토리 만들기"에 있는 작품(제목·줄거리·캐릭터 그림·장면 글과 그림)을 그룹 그림책으로 복사해요. 원래 작품은 그대로 남아요.</p>
+    </div>
   </div>
   <div class="card" id="dangerCard" style="display:none"></div>
 </div>
@@ -81,6 +96,8 @@
       d.invites.forEach(i => pend.append(U.userRow(i, [['초대 취소', () => post({ action: 'cancel_invite', invite_id: i.id })]])));
     }
     $('workCard').style.display = '';
+    $('newWork').style.display = owner ? '' : 'none';
+    loadWorks();
 
     const dz = $('dangerCard'); dz.innerHTML = ''; dz.style.display = '';
     if (owner) {
@@ -96,6 +113,78 @@
       dz.append(lv);
     }
   }
+
+  // ── 그룹 그림책 ──
+  const STATUS = { open: '아직', editing: '고치는 중', draft: '임시 저장', submitted: '제출됨', approved: '완성', returned: '다시 요청' };
+  async function loadWorks() {
+    const box = $('works');
+    try {
+      const d = await U.api('/api/group-stories?group=' + encodeURIComponent(id));
+      box.innerHTML = '';
+      if (!d.stories.length) box.append(U.el('div', 'empty', '아직 그룹 그림책이 없어요.' + ($('newWork').style.display === 'none' ? ' 모둠장이 만들면 여기에 나와요.' : ' 아래에서 만들어 보세요.')));
+      d.stories.forEach(s => {
+        const a = U.el('a', 'author'); a.href = '/group-story?id=' + encodeURIComponent(s.id); a.style.cssText = 'display:block;padding:10px 0;border-bottom:1px solid #3a2a3a;margin:0';
+        const c = s.counts || {};
+        a.append(U.el('div', 'post-title', '📖 ' + s.title), U.el('div', 'hint', (s.mode === 'long' ? '장편' : '단편') + ' · 완성 ' + (c.approved || 0) + '/' + s.scene_count + (c.submitted ? ' · 제출 ' + c.submitted : '') + (s.mine ? ' · 내가 맡은 장면 ' + s.mine : '')));
+        box.append(a);
+      });
+    } catch (e) { box.textContent = e.status === 503 ? '그룹 그림책 기능을 준비 중이에요.' : '불러오지 못했어요.'; }
+  }
+  for (let n = 3; n <= 20; n++) { const o = document.createElement('option'); o.value = n; o.textContent = n + '장면'; $('nwCount').append(o); }
+  $('nwCount').value = 6;
+  const nwMsg = (t, cls) => { $('nwMsg').className = 'msg ' + (cls || ''); $('nwMsg').textContent = t; };
+  const gsApi = body => U.api('/api/group-stories', { method: 'POST', body: JSON.stringify(body) });
+
+  $('nwBlank').onclick = async () => {
+    const title = $('nwTitle').value.trim(); if (!title) return nwMsg('제목을 적어 주세요.', 'err');
+    const n = parseInt($('nwCount').value, 10);
+    const scenes = [{ k: 'cover', ord: 0, script: '' }].concat(Array.from({ length: n }, (_, i) => ({ k: 'x_' + (i + 1), ord: i + 1, script: '' })));
+    try { const r = await gsApi({ action: 'create', group_id: id, mode: $('nwMode').value, title, scenes }); location.href = '/group-story?id=' + encodeURIComponent(r.id); }
+    catch (e) { nwMsg(e.message, 'err'); }
+  };
+
+  // 이 기기의 스토리 만들기(IndexedDB bold_story)에서 가져오기
+  async function readLocalStory() {
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('bold_story', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    return new Promise(res => { const q = db.transaction('kv').objectStore('kv').get('state'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); });
+  }
+  async function sha256hex(blob) { const h = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  async function toJpeg(src) {
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    const s = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+    return new Promise(r => c.toBlob(r, 'image/jpeg', 0.88));
+  }
+  async function upload(storyId, dataUrl) {
+    const blob = await toJpeg(dataUrl);
+    const t = await gsApi({ action: 'asset', story_id: storyId, sha256: await sha256hex(blob), mime: 'image/jpeg', bytes: blob.size });
+    if (t.exists) return t.asset_id;
+    const c = await BoldAuth.client();
+    const up = await c.storage.from(t.bucket).uploadToSignedUrl(t.path, t.token, blob, { contentType: 'image/jpeg' });
+    if (up.error) throw new Error('그림을 올리지 못했어요.');
+    await gsApi({ action: 'asset_confirm', story_id: storyId, asset_id: t.asset_id });
+    return t.asset_id;
+  }
+  $('nwImport').onclick = async () => {
+    const mode = $('nwMode').value;
+    try {
+      const st = await readLocalStory();
+      const p = st && st.proj && st.proj[mode];
+      if (!p || !(p.scenes || []).some(s => s.script || s.image)) return nwMsg('이 기기의 "스토리 만들기"에 ' + (mode === 'long' ? '장편' : '단편') + ' 작품이 없어요. 길이를 바꾸거나 먼저 만들어 주세요.', 'err');
+      const title = $('nwTitle').value.trim() || p.title || '함께 만드는 그림책';
+      const aspect = ['4:3', '3:4', '1:1'].includes(p.aspect) ? p.aspect : '4:3';
+      const scenes = [{ k: 'cover', ord: 0, script: '' }].concat(p.scenes.slice(0, 40).map((s, i) => ({ k: s.k, ord: i + 1, script: s.script || '' })));
+      nwMsg('그룹 그림책을 만드는 중...');
+      const r = await gsApi({ action: 'create', group_id: id, mode, title, scenes, common: { logline: p.logline || '', charDesc: p.charDesc || '', style: p.style || 'storybook', styleText: p.styleText || '', aspect } });
+      const images = {}; let n = 0;
+      const todo = [['cover', p.cover && p.cover.image]].concat(p.scenes.slice(0, 40).map(s => [s.k, s.image])).filter(x => x[1]);
+      for (const [k, img] of todo) { nwMsg('그림 올리는 중... ' + (++n) + '/' + todo.length); images[k] = await upload(r.id, img); }
+      if (Object.keys(images).length) await gsApi({ action: 'import_images', story_id: r.id, images });
+      if (p.charRef) { nwMsg('캐릭터 그림 올리는 중...'); const cr = await upload(r.id, p.charRef); await gsApi({ action: 'update_common', story_id: r.id, common: { charRef: cr } }); }
+      location.href = '/group-story?id=' + encodeURIComponent(r.id);
+    } catch (e) { nwMsg('가져오지 못했어요: ' + e.message, 'err'); }
+  };
 
   async function load() {
     try { render(await U.api('/api/groups?id=' + encodeURIComponent(id))); }

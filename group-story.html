@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>함께 만드는 그림책 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+<style>
+  .sc{border-top:2px solid #3a2a3a;padding:14px 0}
+  .sc-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .badge{font-size:.75rem;padding:2px 8px;border:2px solid #555}
+  .b-open{color:#aaa}.b-editing{color:var(--yellow);border-color:var(--yellow)}.b-draft{color:#7cc4ff;border-color:#7cc4ff}
+  .b-submitted{color:#ffb347;border-color:#ffb347}.b-approved{color:var(--green);border-color:var(--green)}.b-returned{color:var(--red);border-color:var(--red)}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.pair{grid-template-columns:1fr}}
+  .pane{background:#0d0008;border:2px solid #2d0040;padding:8px}
+  .pane img{display:block;width:100%;height:auto;margin-bottom:6px;background:#2d0040}
+  .pane .t{white-space:pre-wrap;font-size:.9rem;line-height:1.5}
+  .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .editor{border:2px solid var(--yellow);padding:10px;margin-top:10px}
+  .tiny{font-size:.75rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card" id="head">불러오는 중...</div>
+  <div class="card" id="commonCard" style="display:none"></div>
+  <div class="card" id="scenesCard" style="display:none"><h2>장면</h2><div id="scenes"></div></div>
+  <div class="card" id="verCard" style="display:none"></div>
+  <div class="card" id="actCard" style="display:none"></div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script src="/assets/js/noti-toast.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id), el = U.el;
+  await U.header(root);
+  if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+  const id = new URLSearchParams(location.search).get('id') || '';
+  const STATUS = { open: '아직', editing: '고치는 중', draft: '임시 저장', submitted: '제출됨 · 확인 기다림', approved: '완성', returned: '다시 요청' };
+  const STYLES = [['storybook', '그림책'], ['anime', '애니메이션'], ['3d', '3D'], ['crayon', '크레용'], ['flat', '플랫'], ['webtoon', '웹툰'], ['oil', '유화'], ['papercut', '종이 오리기'], ['pencil', '연필'], ['cinema', '실사 영화'], ['clay', '클레이']];
+  const ACT = { create: '작품을 만들었어요', assign: '장면을 맡겼어요', lock: '고치기 시작했어요', unlock: '고치기를 마쳤어요', force_unlock: '잠금을 풀었어요',
+    submit: '제출했어요', approve: '승인했어요', return: '다시 요청했어요', settings: '공통 설정을 바꿨어요', restore: '예전 버전으로 되돌렸어요', delete: '작품을 지웠어요' };
+  let D = null, editing = null;   // editing = {k, script, image, image_url, timer, saving, hb}
+
+  const api = (body) => U.api('/api/group-stories', { method: 'POST', body: JSON.stringify({ story_id: id, ...body }) });
+  const sceneNo = s => D.scenes.filter(x => x.k !== 'cover').findIndex(x => x.k === s.k) + 1;
+  const label = s => s.k === 'cover' ? '표지' : '장면 ' + sceneNo(s);
+
+  // ── 파일 도우미 ──
+  async function sha256hex(blob) { const h = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  const loadImg = src => new Promise((res, rej) => { const i = new Image(); if (/^https?:/.test(src)) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => rej(new Error('그림을 읽지 못했어요.')); i.src = src; });
+  async function toJpeg(src, max = 1600, q = 0.88) {
+    const im = await loadImg(src); const s = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+    return new Promise(r => c.toBlob(r, 'image/jpeg', q));
+  }
+  const blobToDataUrl = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(b); });
+  async function urlToDataUrl(u, max) { if (!u) return ''; if (max) return blobToDataUrl(await toJpeg(u, max, 0.8)); return blobToDataUrl(await (await fetch(u)).blob()); }
+  async function uploadImage(src) {
+    const blob = await toJpeg(src);
+    const t = await api({ action: 'asset', sha256: await sha256hex(blob), mime: 'image/jpeg', bytes: blob.size });
+    if (t.exists) return t.asset_id;
+    const c = await BoldAuth.client();
+    const up = await c.storage.from(t.bucket).uploadToSignedUrl(t.path, t.token, blob, { contentType: 'image/jpeg' });
+    if (up.error) throw new Error('그림을 올리지 못했어요.');
+    await api({ action: 'asset_confirm', asset_id: t.asset_id });
+    return t.asset_id;
+  }
+  function pickFile() {
+    return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = () => res(i.files[0] ? URL.createObjectURL(i.files[0]) : null); i.click(); });
+  }
+
+  // ── 화면 그리기 ──
+  function render() {
+    const owner = D.my_role === 'owner', s = D.story;
+    document.title = s.title + ' · 볼드하다';
+    const head = $('head'); head.innerHTML = '';
+    const back = el('a', 'hint', '← ' + s.group_name); back.href = '/group?id=' + encodeURIComponent(s.group_id);
+    head.append(back, el('h1', '', '📖 ' + s.title), el('p', 'sub', (s.mode === 'long' ? '장편' : '단편') + ' · 내 역할: ' + ({ owner: '👑 모둠장', editor: '✏️ 만들기', viewer: '👀 보기' }[D.my_role]) + ' · 완성 ' + D.scenes.filter(x => x.status === 'approved').length + '/' + D.scenes.length));
+    const hb = el('div', 'row2');
+    const ex = el('button', 'btn btn-sub', '📥 스토리 만들기로 가져오기'); ex.type = 'button'; ex.onclick = exportToStory; hb.append(ex);
+    if (owner) { const del = el('button', 'btn btn-danger', '작품 지우기'); del.type = 'button'; del.onclick = async () => { if (!confirm('이 그룹 작품을 지울까요? 되돌릴 수 없어요.')) return; try { await api({ action: 'delete' }); location.href = '/group?id=' + encodeURIComponent(s.group_id); } catch (e) { alert(e.message); } }; hb.append(del); }
+    head.append(hb);
+
+    renderCommon(owner);
+    renderScenes(owner);
+    renderVersions(owner);
+    const ac = $('actCard'); ac.style.display = ''; ac.innerHTML = '';
+    ac.append(el('h2', '', '누가 무엇을 했나요'));
+    if (!D.activity.length) ac.append(el('div', 'hint', '아직 기록이 없어요.'));
+    D.activity.forEach(a => {
+      const sc = a.k ? D.scenes.find(x => x.k === a.k) : null;
+      ac.append(el('div', 'hint', new Date(a.created_at).toLocaleString('ko-KR') + ' · ' + a.by + ' · ' + (sc ? label(sc) + ' ' : '') + (ACT[a.action] || a.action) + (a.data && a.data.reason ? ' (' + a.data.reason + ')' : '')));
+    });
+  }
+
+  function renderCommon(owner) {
+    const c = D.story.common || {}, card = $('commonCard'); card.style.display = ''; card.innerHTML = '';
+    card.append(el('h2', '', '공통 설정' + (owner ? '' : ' (모둠장이 정해요)')));
+    if (c.charRef_url) { const im = el('img'); im.src = c.charRef_url; im.alt = '캐릭터'; im.style.cssText = 'width:140px;border:2px solid #000;float:right;margin-left:10px'; card.append(im); }
+    card.append(el('p', 'post-body', '줄거리: ' + (c.logline || '(없음)')), el('p', 'post-body', '캐릭터: ' + (c.charDesc || '(없음)')),
+      el('p', 'hint', '그림체: ' + ((STYLES.find(x => x[0] === c.style) || [, c.style || '그림책'])[1]) + ' · 비율: ' + (c.aspect || '4:3')));
+    if (!owner) return;
+    const btn = el('button', 'btn btn-sub', '공통 설정 고치기'); btn.type = 'button'; btn.style.clear = 'both';
+    btn.onclick = () => {
+      btn.remove();
+      const f = el('div'); f.style.clear = 'both';
+      const t = el('input'); t.type = 'text'; t.value = D.story.title; t.maxLength = 60;
+      const lg = el('textarea'); lg.value = c.logline || ''; lg.maxLength = 500;
+      const cd = el('textarea'); cd.value = c.charDesc || ''; cd.maxLength = 500;
+      const st = el('select'); STYLES.forEach(([v, n]) => { const o = el('option', '', n); o.value = v; st.append(o); }); st.value = c.style || 'storybook';
+      const asp = el('select'); ['4:3', '3:4', '1:1'].forEach(v => { const o = el('option', '', v); o.value = v; asp.append(o); }); asp.value = c.aspect || '4:3';
+      let charRef = c.charRef || null;
+      const cr = el('button', 'chip', '캐릭터 그림 올리기'); cr.type = 'button';
+      const msg = el('div', 'msg');
+      cr.onclick = async () => { const f2 = await pickFile(); if (!f2) return; msg.textContent = '올리는 중...'; try { charRef = await uploadImage(f2); msg.className = 'msg ok'; msg.textContent = '캐릭터 그림을 올렸어요. 저장을 눌러 주세요.'; } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; } };
+      const save = el('button', 'btn btn-main', '저장'); save.type = 'button';
+      save.onclick = async () => { try { await api({ action: 'update_common', title: t.value, common: { logline: lg.value, charDesc: cd.value, style: st.value, aspect: asp.value, charRef } }); load(); } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; } };
+      f.append(el('label', '', '제목'), t, el('label', '', '줄거리'), lg, el('label', '', '캐릭터 설명'), cd, el('label', '', '그림체'), st, el('label', '', '화면 비율'), asp, el('div', 'acts'), msg, save);
+      f.querySelector('.acts').append(cr);
+      card.append(f);
+    };
+    card.append(btn);
+  }
+
+  function pane(title, v) {
+    const p = el('div', 'pane'); p.append(el('div', 'tiny', title));
+    if (!v) { p.append(el('div', 'hint', '아직 없어요.')); return p; }
+    if (v.image_url) { const im = el('img'); im.src = v.image_url; im.alt = ''; im.loading = 'lazy'; p.append(im); }
+    p.append(el('div', 't', v.script || '(글 없음)'));
+    if (v.by) p.append(el('div', 'tiny', '만든 사람: ' + v.by));
+    return p;
+  }
+
+  function renderScenes(owner) {
+    $('scenesCard').style.display = '';
+    const box = $('scenes'); box.innerHTML = '';
+    const editors = D.members.filter(m => m.role !== 'viewer');
+    D.scenes.forEach(s => {
+      const card = el('div', 'sc');
+      const h = el('div', 'sc-head');
+      h.append(el('b', '', label(s)), el('span', 'badge b-' + s.status, STATUS[s.status] || s.status), el('span', 'hint', s.assignee ? '맡은 사람: ' + s.assignee + (s.is_mine ? ' (나)' : '') : '맡은 사람 없음'));
+      if (s.lock && !s.lock.mine) h.append(el('span', 'hint', '🔒 ' + s.lock.by + '님이 고치는 중'));
+      card.append(h);
+      if (s.return_reason && s.status === 'returned') card.append(el('div', 'msg err', '다시 요청: ' + s.return_reason));
+
+      const showDraft = s.draft && (s.status === 'submitted' || s.status === 'draft' || s.status === 'returned' || (s.lock && s.lock.mine));
+      if (showDraft) { const pr = el('div', 'pair'); pr.append(pane('완성본', s.final), pane(s.status === 'submitted' ? '제출본' : '고치는 중인 내용', s.draft)); card.append(pr); }
+      else card.append(pane('완성본', s.final));
+
+      const acts = el('div', 'acts');
+      const b = (t, fn, cls) => { const x = el('button', 'chip ' + (cls || ''), t); x.type = 'button'; x.onclick = fn; acts.append(x); };
+      const lockedByOther = s.lock && !s.lock.mine;
+      if (owner) {
+        const sel = el('select'); sel.style.cssText = 'width:auto;padding:4px';
+        const o0 = el('option', '', '맡을 사람 없음'); o0.value = ''; sel.append(o0);
+        editors.forEach(m => { const o = el('option', '', m.nickname); o.value = m.nickname; sel.append(o); });
+        sel.value = s.assignee || '';
+        sel.onchange = async () => { try { await api({ action: 'assign', k: s.k, nickname: sel.value || null }); load(); } catch (e) { alert(e.message); load(); } };
+        acts.append(sel);
+        if (s.status === 'submitted') {
+          b('✅ 승인', async () => { try { await api({ action: 'review', k: s.k, approve: true }); load(); } catch (e) { alert(e.message); } }, 'on');
+          b('↩ 다시 요청', async () => { const r = prompt('무엇을 고치면 좋을까요? (맡은 친구에게 보여요)'); if (!r) return; try { await api({ action: 'review', k: s.k, approve: false, reason: r }); load(); } catch (e) { alert(e.message); } });
+        }
+        if (lockedByOther) b('잠금 풀기', async () => { if (!confirm(s.lock.by + '님의 편집을 멈출까요? 고치던 내용은 임시본으로 남아요.')) return; try { await api({ action: 'unlock', k: s.k }); load(); } catch (e) { alert(e.message); } });
+      } else if (D.my_role === 'editor' && !s.assignee) {
+        b('🙋 이 장면 맡을게요', async () => { try { await api({ action: 'assign', k: s.k, nickname: D.me }); load(); } catch (e) { alert(e.message); } });
+      }
+      const canEdit = (s.is_mine || owner) && D.my_role !== 'viewer' && s.status !== 'submitted' && !lockedByOther;
+      if (canEdit && !(s.lock && s.lock.mine)) b(s.draft ? '✏️ 이어서 고치기' : '✏️ 편집 시작', () => startEdit(s));
+      if ((s.is_mine || owner) && (s.status === 'draft' || s.status === 'returned') && s.draft) b(owner ? '📤 완성본에 반영' : '📤 제출', () => submit(s), 'on');
+      card.append(acts);
+      if (s.lock && s.lock.mine) card.append(editorPanel(s, owner));
+      box.append(card);
+    });
+  }
+
+  // ── 편집 ──
+  async function startEdit(s) {
+    try { await api({ action: 'lock', k: s.k }); load(); }
+    catch (e) { alert(e.code === 'locked' && e.message ? e.message : e.message); }
+  }
+  async function submit(s) {
+    if (editing && editing.k === s.k) await flush();
+    try { const r = await api({ action: 'submit', k: s.k }); stopEditing(); alert(r.status === 'approved' ? '완성본에 반영했어요.' : '제출했어요. 모둠장이 확인하면 알려 줄게요.'); load(); }
+    catch (e) { alert(e.message); }
+  }
+  function stopEditing() { if (editing) { clearTimeout(editing.timer); clearInterval(editing.hb); } editing = null; }
+  async function flush() {
+    if (!editing) return;
+    clearTimeout(editing.timer); editing.timer = null;
+    editing.status && (editing.status.textContent = '저장 중...');
+    try { await api({ action: 'save', k: editing.k, script: editing.script, image: editing.image }); if (editing.status) editing.status.textContent = '저장됨 ✓'; }
+    catch (e) { if (editing.status) editing.status.textContent = e.message; if (e.code === 'lock_lost') { stopEditing(); load(); } }
+  }
+  function touch() { if (!editing) return; clearTimeout(editing.timer); editing.status.textContent = '…'; editing.timer = setTimeout(flush, 1500); }
+
+  function editorPanel(s, owner) {
+    const cur = s.draft || s.final || { script: '', image: null, image_url: null };
+    if (!editing || editing.k !== s.k) {
+      stopEditing();
+      editing = { k: s.k, script: cur.script || '', image: cur.image || null, image_url: cur.image_url || null, timer: null, status: null };
+      editing.hb = setInterval(() => { if (document.visibilityState === 'visible') api({ action: 'lock', k: s.k }).catch(() => {}); }, 180000);   // 3분마다 잠금 연장
+    }
+    const p = el('div', 'editor');
+    p.append(el('div', 'tiny', '✏️ 고치는 중 — 10분 동안 나만 고칠 수 있어요 (화면을 보고 있으면 저절로 연장돼요)'));
+    const ta = el('textarea'); ta.value = editing.script; ta.maxLength = 2000; ta.placeholder = s.k === 'cover' ? '표지에 담을 내용 (그림 설명)' : '이 장면의 글';
+    ta.oninput = () => { editing.script = ta.value; touch(); };
+    const im = el('img'); im.alt = ''; im.style.cssText = 'display:block;width:100%;max-width:520px;margin:8px 0;border:2px solid #000;background:#2d0040';
+    if (editing.image_url) im.src = editing.image_url; else im.style.display = 'none';
+    const st = el('div', 'tiny', '저장됨'); editing.status = st;
+    const acts = el('div', 'acts');
+    const b = (t, fn, cls) => { const x = el('button', 'chip ' + (cls || ''), t); x.type = 'button'; x.onclick = fn; acts.append(x); return x; };
+    const setImage = async src => { st.textContent = '그림 올리는 중...'; const aid = await uploadImage(src); editing.image = aid; editing.image_url = src; im.src = src; im.style.display = ''; await flush(); };
+    const ai = b('🎨 AI 그림 만들기', async () => {
+      if (!editing.script.trim()) { alert('먼저 장면 글을 적어 주세요.'); return; }
+      ai.disabled = true; st.textContent = 'AI가 그리는 중... (조금 걸려요)';
+      try {
+        const c = D.story.common || {};
+        const others = D.scenes.filter(x => x.k !== 'cover');
+        const i = others.findIndex(x => x.k === s.k);
+        const ctx = [c.logline ? '[로그라인] ' + c.logline : ''].concat(others.slice(Math.max(0, i - 2), Math.max(0, i)).map((x, j) => x.final && x.final.script ? '[장면' + (Math.max(0, i - 2) + j + 1) + '] ' + x.final.script.slice(0, 150) : '')).filter(Boolean).join('\n');
+        const body = s.k === 'cover'
+          ? { kind: 'cover', script: editing.script, pageNo: 0, title: D.story.title, aspect: c.aspect || '4:3', style: c.style || 'storybook', styleDirection: c.styleText || '', context: ctx }
+          : { script: editing.script, pageNo: i + 1, total: others.length, title: D.story.title, aspect: c.aspect || '4:3', style: c.style || 'storybook', styleDirection: c.styleText || '', context: ctx };
+        if (c.charRef_url) body.charRef = await urlToDataUrl(c.charRef_url, 1024);
+        const ref = others.slice().sort((a, b2) => Math.abs(others.indexOf(a) - i) - Math.abs(others.indexOf(b2) - i)).find(x => x.k !== s.k && x.final && x.final.image_url);
+        if (ref) body.styleRef = await urlToDataUrl(ref.final.image_url, 640);
+        const r = await U.api('/api/story-scene', { method: 'POST', body: JSON.stringify(body) });
+        await setImage(r.image);
+      } catch (e) { st.textContent = 'AI 그림을 만들지 못했어요: ' + e.message; }
+      ai.disabled = false;
+    }, 'on');
+    b('📁 그림 올리기', async () => { const f = await pickFile(); if (!f) return; try { await setImage(f); } catch (e) { st.textContent = e.message; } });
+    if (editing.image) b('그림 빼기', async () => { editing.image = null; editing.image_url = null; im.style.display = 'none'; await flush(); });
+    b(owner ? '📤 완성본에 반영' : '📤 제출', () => submit(s), 'on');
+    b('편집 끝내기', async () => { await flush(); try { await api({ action: 'unlock', k: s.k }); } catch (e) {} stopEditing(); load(); });
+    p.append(ta, im, acts, st);
+    return p;
+  }
+
+  function renderVersions(owner) {
+    const vc = $('verCard'); vc.style.display = ''; vc.innerHTML = '';
+    vc.append(el('h2', '', '버전 기록 (최근 20개)'));
+    D.versions.forEach(v => {
+      const row = el('div', 'row2'); row.style.cssText = 'align-items:center;margin-bottom:6px';
+      row.append(el('div', 'hint', v.n + '번 · ' + new Date(v.created_at).toLocaleString('ko-KR') + ' · ' + v.by + ' · ' + v.note));
+      const bx = el('div'); bx.style.cssText = 'display:flex;gap:6px;flex:none';
+      const see = el('button', 'chip', '보기'); see.type = 'button'; see.onclick = () => showVersion(v.n); bx.append(see);
+      if (owner) { const rs = el('button', 'chip', '되돌리기'); rs.type = 'button'; rs.onclick = async () => { if (!confirm(v.n + '번 버전으로 되돌릴까요? 지금 완성본도 버전으로 남아요.')) return; try { await api({ action: 'restore', n: v.n }); load(); } catch (e) { alert(e.message); } }; bx.append(rs); }
+      row.append(bx); vc.append(row);
+    });
+  }
+  async function showVersion(n) {
+    try {
+      const v = await U.api('/api/group-stories?id=' + encodeURIComponent(id) + '&version=' + n);
+      const ov = el('div', 'modal-ov'); const box = el('div', 'card modal-box'); box.style.maxWidth = '640px';
+      box.append(el('h2', '', n + '번 버전 · ' + (v.title || '')));
+      v.scenes.forEach((s, i) => box.append(pane(s.k === 'cover' ? '표지' : '장면 ' + i, { script: s.script, image_url: s.image_url })));
+      const c = el('button', 'btn btn-sub', '닫기'); c.type = 'button'; c.onclick = () => ov.remove(); box.append(c);
+      ov.onclick = e => { if (e.target === ov) ov.remove(); }; ov.append(box); document.body.append(ov);
+    } catch (e) { alert(e.message); }
+  }
+
+  // ── 스토리 만들기로 가져오기: 완성본을 내 브라우저의 스토리 저장소(IndexedDB)에 넣는다 ──
+  async function exportToStory() {
+    const mode = D.story.mode;
+    if (!confirm('완성본을 내 "스토리 만들기"의 ' + (mode === 'long' ? '장편' : '단편') + ' 작품으로 가져올까요?\n지금 그 작품은 이 내용으로 바뀌어요. (필요하면 먼저 작업 파일로 저장해 두세요)')) return;
+    try {
+      const c = D.story.common || {};
+      const cover = D.scenes.find(s => s.k === 'cover');
+      const proj = {
+        title: D.story.title, logline: c.logline || '', charDesc: c.charDesc || '', style: c.style || 'storybook', styleText: c.styleText || '', aspect: c.aspect || '4:3', answers: {},
+        charRef: c.charRef_url ? await urlToDataUrl(c.charRef_url) : '',
+        cover: { image: cover && cover.final && cover.final.image_url ? await urlToDataUrl(cover.final.image_url) : '', ts: {}, sig: '' },
+        scenes: [],
+      };
+      for (const s of D.scenes.filter(x => x.k !== 'cover')) {
+        proj.scenes.push({ k: s.k, script: (s.final && s.final.script) || '', image: s.final && s.final.image_url ? await urlToDataUrl(s.final.image_url) : '', ts: {}, sig: '' });
+      }
+      const db = await new Promise((res, rej) => { const r = indexedDB.open('bold_story', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+      const old = await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get('state'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); });
+      const state = old && old.proj ? old : { cur: mode, proj: {} };
+      state.proj[mode] = proj; state.cur = mode;
+      await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(state, 'state'); tx.oncomplete = res; tx.onerror = tx.onabort = () => rej(tx.error || new Error('저장 공간이 부족해요.')); });
+      if (confirm('가져왔어요! 제작 화면의 "📖 스토리 만들기"에서 볼 수 있어요. 지금 열까요?')) location.href = '/';
+    } catch (e) { alert('가져오지 못했어요: ' + e.message); }
+  }
+
+  async function load() {
+    try { D = await U.api('/api/group-stories?id=' + encodeURIComponent(id)); if (editing && !D.scenes.some(s => s.k === editing.k && s.lock && s.lock.mine)) stopEditing(); render(); }
+    catch (e) {
+      if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);
+      $('head').textContent = e.status === 404 ? '작품을 찾을 수 없어요. 그룹원만 볼 수 있어요.' : '불러오지 못했어요.';
+    }
+  }
+  // 고친 뒤 1.5초 안에 화면을 닫으면 마지막 글자가 저장되지 않을 수 있어 알려 준다
+  window.addEventListener('beforeunload', e => { if (editing && editing.timer) { flush(); e.preventDefault(); e.returnValue = ''; } });
+  setInterval(() => { if (document.visibilityState === 'visible' && !editing) load(); }, 60000);   // 다른 친구의 변화를 1분마다 반영 (편집 중에는 쉼)
+  load();
+})();
+</script>
+</body>
+</html>
