@@ -102,7 +102,7 @@
 
   // 🔔 알림 버튼 (읽지 않은 개수). 로그인했을 때만
   function bell() {
-    const a = el('a', 'chip', '🔔'); a.href = '/notifications'; a.style.textDecoration = 'none'; a.title = '알림';
+    const a = el('a', 'chip', '🔔'); a.id = 'bellLink'; a.href = '/notifications'; a.style.textDecoration = 'none'; a.title = '알림';
     api('/api/notifications?count=1').then(d => { if (d.unread) a.textContent = '🔔 ' + (d.unread >= 100 ? '99+' : d.unread); }).catch(() => {});
     return a;
   }
