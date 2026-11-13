@@ -82,6 +82,23 @@
     const ai = U.el('img'); ai.alt = ''; ai.src = U.avatar(p.owner.avatar_url);
     au.append(ai, U.el('span', '', p.owner.nickname + ' · ' + (U.KIND[p.kind] || '') + ' · ' + U.date(p.published_at || p.created_at) + (p.visibility === 'followers' ? ' · 👥 팔로워만' : '')));
     box.append(au);
+    // 그룹 작품: 함께 만든 사람 (이름을 뺀 사람은 나오지 않아요)
+    if (p.is_group) {
+      const cb = U.el('div', 'hint'); cb.style.cssText = 'margin:6px 0 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+      cb.append(U.el('span', '', '👥 함께 만든 사람:'));
+      (p.credits || []).forEach(c => {
+        const a = U.el('a', 'chip', c.nickname + (c.role === 'owner' ? ' 👑' : '')); a.href = '/u?n=' + encodeURIComponent(c.nickname); cb.append(a);
+      });
+      if (p.my_credit === 'contributor') {
+        const out = U.el('button', 'chip', '내 이름 빼기'); out.type = 'button';
+        out.onclick = async () => {
+          if (!confirm('이 게시물의 "함께 만든 사람"에서 내 닉네임을 뺄까요? 다시 넣을 수는 없어요. (그림은 그대로 남아요. 그림을 내리고 싶으면 신고하기나 문의를 이용해 주세요)')) return;
+          try { await U.api('/api/posts?action=uncredit', { method: 'POST', body: JSON.stringify({ id: p.id }) }); alert('내 이름을 뺐어요.'); location.reload(); } catch (e) { alert(e.message); }
+        };
+        cb.append(out);
+      }
+      box.append(cb);
+    }
     if (p.status_text && p.status !== 'published') box.append(U.el('p', 'msg err', '📌 ' + p.status_text));
     if (p.caption) box.append(U.el('p', 'post-body', p.caption));
     if (p.kind === 'dub') {

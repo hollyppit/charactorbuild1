@@ -37,7 +37,7 @@
     const img = el('img'); img.alt = p.title || ''; img.loading = 'lazy';
     if (p.cover && p.cover.url) img.src = p.cover.url; else img.className = 'noimg';
     const meta = el('div', 'post-meta');
-    meta.append(el('div', 'post-title', p.title || '(제목 없음)'));
+    meta.append(el('div', 'post-title', (p.is_group ? '👥 ' : '') + (p.title || '(제목 없음)')));
     meta.append(el('div', 'post-sub', (KIND[p.kind] || '') + (p.media_count > 1 ? ' · ' + p.media_count + '장' : '') + ' · ' + ((p.owner && p.owner.nickname) || '')));
     if (p.status_text) meta.append(el('div', 'post-status st-' + (p.status || ''), p.status_text));
     a.append(img, meta);
@@ -144,6 +144,10 @@
       case 'gs_approved': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '이(가) 승인됐어요! 🎉';
       case 'gs_returned': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '을(를) 다시 고쳐 달래요' + reason + '.';
       case 'group_removed': return '"' + ((n.data && n.data.group_name) || '그룹') + '" 그룹에서 나가게 되었어요.';
+      case 'gp_consent': return who + '"' + ((n.data && n.data.title) || '그림책') + '"을(를) 게시하자고 해요. 함께 만든 사람으로 동의해 줄래요?';
+      case 'gp_declined': return who + '"' + ((n.data && n.data.title) || '그림책') + '" 게시에 동의하지 않았어요. 이번 게시는 취소됐어요.';
+      case 'gp_ready': return '"' + ((n.data && n.data.title) || '그림책') + '" 게시에 모두 동의했어요! 작업 화면에서 게시할 수 있어요.';
+      case 'gp_published': return who + '함께 만든 "' + ((n.data && n.data.title) || '그림책') + '"을(를) 게시했어요. 🎉';
       case 'sanction': return '이용 제한을 받았어요: ' + (KIND_SANC[n.data && n.data.kind] || '') + reason + '. 마이페이지에서 확인해 주세요.';
       default: return '새 알림';
     }
@@ -151,6 +155,8 @@
   function notiLink(n) {
     if (n.type === 'follow' || n.type === 'follow_accept') return n.actor ? '/u?n=' + encodeURIComponent(n.actor.nickname) : null;
     if (/^gs_/.test(n.type) && n.data && n.data.story_id) return '/group-story?id=' + encodeURIComponent(n.data.story_id);
+    if (n.type === 'gp_consent' && n.data && n.data.request_id) return '/group-publish?id=' + encodeURIComponent(n.data.request_id);
+    if ((n.type === 'gp_declined' || n.type === 'gp_ready') && n.data && n.data.story_id) return '/group-story?id=' + encodeURIComponent(n.data.story_id);
     if (n.type === 'group_invite' || n.type === 'group_removed') return '/groups';
     if ((n.type === 'group_join' || n.type === 'group_role') && n.data && n.data.group_id) return '/group?id=' + encodeURIComponent(n.data.group_id);
     if (n.type === 'follow_request' || n.type === 'sanction') return '/me.html';

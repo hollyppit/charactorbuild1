@@ -9,6 +9,8 @@
 //    assign {k, nickname|null} / lock {k} / unlock {k} / save {k, script, image} / submit {k}
 //    review {k, approve, reason?} (모둠장) / restore {n} (모둠장) / delete (모둠장)
 //    asset {sha256, mime, bytes} → 업로드 토큰 / asset_confirm {asset_id}
+//  (4-C 게시) GET ?request=uuid 동의 화면 / propose {title, caption, visibility, comments_mode} · cancel_publish (모둠장)
+//    respond_publish {request_id, agree} (동의를 부탁받은 사람)
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { signUpload, objectInfo, removeObjects, signDownloads, BUCKET } from './_lib/storage.js';
 import { whoIs, disabledReply, rpc, UUID } from './_lib/social.js';
@@ -25,7 +27,33 @@ const ERR = {
   not_assignee: '이 장면을 맡은 사람만 고칠 수 있어요.', locked: '다른 친구가 고치는 중이에요.', lock_lost: '편집 시간이 끝났어요. "편집 시작"을 다시 눌러 주세요.',
   invalid_image: '그림 파일을 다시 올려 주세요.', nothing_to_submit: '제출할 내용이 없어요.', not_submitted: '제출된 장면이 아니에요.',
   reason_required: '다시 요청하는 이유를 적어 주세요.', quota_exceeded: '저장 공간이 부족해요. 마이페이지에서 정리해 주세요.',
+  nothing_to_publish: '완성된 장면이 없어요. 장면을 승인한 뒤 제안해 주세요.', expired: '7일이 지나 이번 게시 요청이 끝났어요.',
+  not_pending: '이미 끝난 게시 요청이에요.', not_ready: '아직 모두 동의하지 않았어요.',
 };
+
+// 쓰지 않는 그룹 그림 정리: 완성본·임시본·버전 기록·공통 캐릭터 그림 어디에도 없고 올린 지 하루가 지난 파일
+async function gcGroupAssets(env, storyId) {
+  const sb = makeSb(env);
+  const [ar, sr, cr, vr] = await Promise.all([
+    sb(`/rest/v1/group_story_assets?story_id=eq.${storyId}&select=id,path,bytes,uploader_id,created_at`),
+    sb(`/rest/v1/group_stories?id=eq.${storyId}&select=common`),
+    sb(`/rest/v1/group_story_scenes?story_id=eq.${storyId}&select=final,draft`),
+    sb(`/rest/v1/group_story_versions?story_id=eq.${storyId}&select=snapshot`),
+  ]);
+  if (!ar.ok || !sr.ok || !cr.ok || !vr.ok) return 0;
+  const used = new Set();
+  const scan = o => { for (const m of JSON.stringify(o || {}).matchAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi)) used.add(m[0].toLowerCase()); };
+  (await sr.json()).forEach(scan); (await cr.json()).forEach(scan); (await vr.json()).forEach(scan);
+  const cutoff = Date.now() - 86400000;
+  const orphans = (await ar.json()).filter(a => !used.has(a.id.toLowerCase()) && Date.parse(a.created_at) < cutoff);
+  if (!orphans.length) return 0;
+  await removeObjects(env, orphans.map(a => a.path), BUCKET);
+  await sb(`/rest/v1/group_story_assets?id=in.(${orphans.map(a => a.id).join(',')})`, { method: 'DELETE' });
+  const per = {};
+  orphans.forEach(a => { per[a.uploader_id] = (per[a.uploader_id] || 0) + Number(a.bytes || 0); });
+  for (const [owner, bytes] of Object.entries(per)) if (bytes > 0) await rpc(env, 'release_quota', { p_owner: owner, p_bytes: bytes });
+  return orphans.length;
+}
 
 export async function onRequest({ request, env }) {
   const cors = corsHeaders(request, env, 'GET,POST,OPTIONS');
@@ -67,6 +95,31 @@ export async function onRequest({ request, env }) {
   if (request.method === 'GET') {
     const url = new URL(request.url);
     const gid = url.searchParams.get('group'), id = url.searchParams.get('id');
+    // 게시 동의 화면: 동의 목록에 있는 사람(그룹을 나갔어도) 또는 제안자만
+    const rq = url.searchParams.get('request');
+    if (rq) {
+      if (!UUID.test(rq)) return fail('not_found', 404);
+      const r = await sb(`/rest/v1/group_publish_requests?id=eq.${rq}&select=*,story:group_stories(id,title,group_id,deleted_at,group:groups(name))`);
+      if (r.status === 404 || r.status === 400) return json({ error: 'group_stories_not_ready' }, 503);
+      const req = (r.ok ? await r.json() : [])[0];
+      if (!req || !req.story || req.story.deleted_at) return fail('not_found', 404);
+      const cr2 = await sb(`/rest/v1/group_publish_consents?request_id=eq.${rq}&select=user_id,status,responded_at`);
+      const consents = cr2.ok ? await cr2.json() : [];
+      const mine = consents.find(c => c.user_id === me);
+      if (!mine && req.proposer_id !== me) return fail('not_found', 404);
+      const vr = await sb(`/rest/v1/group_story_versions?story_id=eq.${req.story_id}&n=eq.${req.version_n}&select=snapshot`);
+      const sn = ((vr.ok ? await vr.json() : [])[0] || {}).snapshot || {};
+      const urls = await urlsFor(req.story_id, (sn.scenes || []).map(x => x.final && x.final.image));
+      const N = await nicks([req.proposer_id, ...consents.map(c => c.user_id), ...(sn.scenes || []).map(x => x.final_by)]);
+      const expired = req.status === 'pending' && Date.parse(req.expires_at) < Date.now();
+      return json({
+        request: { id: req.id, status: expired ? 'expired' : req.status, title: req.title, caption: req.caption || '', visibility: req.visibility, expires_at: req.expires_at, post_id: req.post_id,
+          proposer: N[req.proposer_id] || '', story_title: (req.story || {}).title || '', group_name: ((req.story || {}).group || {}).name || '' },
+        my_consent: mine ? mine.status : null, is_proposer: req.proposer_id === me, story_id: req.story_id,
+        consents: consents.map(c => ({ nickname: N[c.user_id] || '', status: c.status })),
+        scenes: (sn.scenes || []).filter(x => x.final).map(x => ({ k: x.k, script: x.final.script || '', image_url: x.final.image ? urls[x.final.image] || null : null, by: N[x.final_by] || '', mine: x.final_by === me })),
+      });
+    }
     if (gid) {
       if (!UUID.test(gid)) return fail('not_found', 404);
       const mr = await sb(`/rest/v1/group_members?group_id=eq.${gid}&user_id=eq.${me}&select=role`);
@@ -103,15 +156,19 @@ export async function onRequest({ request, env }) {
         scenes: (sn.scenes || []).map(x => ({ k: x.k, ord: x.ord, script: (x.final || {}).script || '', image_url: x.final && x.final.image ? urls[x.final.image] || null : null })) });
     }
 
-    const [mr, vr, ar] = await Promise.all([
+    if (role === 'owner' && Math.random() < 0.1) await gcGroupAssets(env, id).catch(() => null);   // 가끔: 쓰지 않는 그림 정리
+    const [mr, vr, ar, pr] = await Promise.all([
       sb(`/rest/v1/group_members?group_id=eq.${s.group_id}&select=role,user_id,user:profiles!group_members_user_id_fkey(nickname)&order=joined_at.asc`),
       sb(`/rest/v1/group_story_versions?story_id=eq.${id}&select=n,note,created_at,created_by&order=n.desc&limit=20`),
       sb(`/rest/v1/group_story_activity?story_id=eq.${id}&select=action,k,data,created_at,user_id&order=created_at.desc&limit=60`),
+      sb(`/rest/v1/group_publish_requests?story_id=eq.${id}&select=id,status,title,version_n,expires_at,post_id,proposer_id,consents:group_publish_consents(user_id,status)&order=created_at.desc&limit=1`),
     ]);
+    const lastReq = pr.ok ? ((await pr.json())[0] || null) : null;
     const members = mr.ok ? await mr.json() : [];
     const versions = vr.ok ? await vr.json() : [];
     const activity = ar.ok ? await ar.json() : [];
-    const N = await nicks([...scenes.flatMap(x => [x.assignee_id, x.lock_user, x.final_by]), ...versions.map(v => v.created_by), ...activity.map(a => a.user_id), ...members.map(m => m.user_id)]);
+    const reqConsents = (lastReq && lastReq.consents) || [];
+    const N = await nicks([...scenes.flatMap(x => [x.assignee_id, x.lock_user, x.final_by]), ...versions.map(v => v.created_by), ...activity.map(a => a.user_id), ...members.map(m => m.user_id), ...reqConsents.map(c => c.user_id)]);
     const owner = role === 'owner';
     const canSeeDraft = x => owner || x.assignee_id === me || x.lock_user === me;
     const urls = await urlsFor(id, [s.common && s.common.charRef, ...scenes.flatMap(x => [x.final && x.final.image, canSeeDraft(x) && x.draft && x.draft.image])]);
@@ -133,6 +190,11 @@ export async function onRequest({ request, env }) {
       }),
       versions: versions.map(v => ({ n: v.n, note: v.note || '', created_at: v.created_at, by: N[v.created_by] || '' })),
       activity: activity.map(a => ({ action: a.action, k: a.k, data: a.data, created_at: a.created_at, by: N[a.user_id] || '' })),
+      publish: lastReq ? {
+        id: lastReq.id, title: lastReq.title, version_n: lastReq.version_n, post_id: lastReq.post_id, expires_at: lastReq.expires_at,
+        status: lastReq.status === 'pending' && Date.parse(lastReq.expires_at) < now ? 'expired' : lastReq.status,
+        consents: reqConsents.map(c => ({ nickname: N[c.user_id] || '', status: c.status, mine: c.user_id === me })),
+      } : null,
     });
   }
 
@@ -153,6 +215,12 @@ export async function onRequest({ request, env }) {
     const common = { logline: clean(c.logline, 500), charDesc: clean(c.charDesc, 500), style: clean(c.style, 40) || 'storybook', styleText: clean(c.styleText, 300),
       aspect: ASPECTS.includes(c.aspect) ? c.aspect : '4:3', charRef: null };
     return out(await rpc(env, 'gs_create', { p_user: me, p_group: b.group_id, p_mode: b.mode === 'long' ? 'long' : 'short', p_title: title, p_common: common, p_scenes: scenes }));
+  }
+
+  // 게시 동의·거절: 동의 목록에 있으면 그룹을 나갔어도 답할 수 있어 역할 확인보다 먼저
+  if (a === 'respond_publish') {
+    if (!UUID.test(String(b.request_id || ''))) return fail('not_found', 404);
+    return out(await rpc(env, 'gp_respond', { p_user: me, p_request: b.request_id, p_agree: !!b.agree }));
   }
 
   if (!sid) return fail('not_found', 404);
@@ -196,6 +264,19 @@ export async function onRequest({ request, env }) {
       await sb(`/rest/v1/group_story_assets?id=eq.${row.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ready' }) });
     }
     return json({ ok: true, asset_id: row.id });
+  }
+
+  if (a === 'propose' || a === 'cancel_publish') {
+    if (role !== 'owner') return fail('not_owner', 403);
+    if (a === 'cancel_publish') {
+      await sb(`/rest/v1/group_publish_requests?story_id=eq.${sid}&status=in.(pending,approved)`, { method: 'PATCH', body: JSON.stringify({ status: 'canceled', decided_at: new Date().toISOString() }) });
+      return json({ ok: true });
+    }
+    const title = clean(b.title, 60), caption = clean(b.caption, 500);
+    if (!title) return json({ error: '제목을 적어 주세요.', code: 'title_required' }, 400);
+    if (hasBadWord(title) || hasBadWord(caption)) return json({ error: '고운 말로 다시 써 주세요. 🙂', code: 'bad_word' }, 400);
+    return out(await rpc(env, 'gp_propose', { p_actor: me, p_story: sid, p_title: title, p_caption: caption,
+      p_visibility: b.visibility === 'followers' ? 'followers' : 'public', p_cmode: ['followers', 'off'].includes(b.comments_mode) ? b.comments_mode : 'all' }));
   }
 
   if (a === 'update_common' || a === 'import_images' || a === 'restore' || a === 'delete') {

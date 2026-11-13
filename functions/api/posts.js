@@ -7,6 +7,8 @@
 //  POST   /api/posts?action=finish              {id} 업로드 확인 후 확인 대기 또는 공개
 //  PATCH  /api/posts?id=                        {title?, caption?} 내 게시물 고치기 (승인 모드면 다시 확인 대기)
 //  DELETE /api/posts?id=                        내 게시물 삭제
+//  POST   /api/posts?action=uncredit            {id} 그룹 작품 게시물에서 내 이름 빼기 (함께 만든 사람)
+//  (4-C) 게시 시작·마무리에 group_request_id 를 주면 동의가 다 모인 그룹 작품 게시로 처리한다
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { signUpload, objectInfo, removeObjects, POST_BUCKET } from './_lib/storage.js';
 import { housekeeping } from './_lib/housekeeping.js';
@@ -88,12 +90,22 @@ export async function onRequest({ request, env }) {
       const isOwner = !!(p && me && p.owner_id === me);
       if (!p || p.status === 'deleted') return json({ error: 'not_found' }, 404);
       // 볼 수 있는지: 내 게시물·관리자 / 공개된 게시물 중 전체 공개 또는 (팔로워만이면 수락된 팔로워), 차단 관계 제외
+      // 그룹 작품: 함께 만든 사람 (이름을 뺀 사람은 목록에 없다)
+      let credits = [], myCredit = null;
+      if (p.group_story_id) {
+        const cr = await sb(`/rest/v1/post_credits?post_id=eq.${id}&select=user_id,role,user:profiles(nickname,avatar_url)`);
+        const rows = cr.ok ? await cr.json() : [];
+        credits = rows.sort((a, b) => (a.role === 'owner' ? 0 : 1) - (b.role === 'owner' ? 0 : 1))
+          .map(c => ({ nickname: (c.user || {}).nickname || '', avatar_url: (c.user || {}).avatar_url || null, role: c.role }));
+        myCredit = (rows.find(c => c.user_id === me) || {}).role || null;
+      }
       let follow = null;
       if (!isOwner && !who.admin) {
         if (p.status !== 'published') return json({ error: 'not_found' }, 404);
         if (me && (await blockedIds(env, me)).includes(p.owner_id)) return json({ error: 'not_found' }, 404);
         follow = await followStatus(env, me, p.owner_id);
-        if (p.visibility !== 'public' && follow !== 'accepted') return json({ error: 'not_found' }, 404);
+        // 함께 만든 사람은 팔로워만 공개여도 볼 수 있다
+        if (p.visibility !== 'public' && follow !== 'accepted' && !myCredit) return json({ error: 'not_found' }, 404);
       }
       const media = await mediaOf(env, id);
       let liked = false;
@@ -104,7 +116,7 @@ export async function onRequest({ request, env }) {
       const mode = p.comments_mode || 'all';
       let can_comment = !!me && p.status === 'published' && mode !== 'off' && (mode === 'all' || isOwner || follow === 'accepted');
       return json({
-        ...publicPost(p), media, is_owner: isOwner, liked, comments_mode: mode, can_comment,
+        ...publicPost(p), media, is_owner: isOwner, liked, comments_mode: mode, can_comment, credits, my_credit: myCredit,
         comment_hint: !me ? '로그인하면 댓글을 쓸 수 있어요.' : mode === 'off' ? '이 게시물은 댓글을 받지 않아요.' : (!can_comment && mode === 'followers') ? '팔로워만 댓글을 쓸 수 있어요.' : '',
         ...(isOwner || who.admin ? { status: p.status, status_text: statusText(p.status, p.status_reason) } : {}),
       });
@@ -119,8 +131,18 @@ export async function onRequest({ request, env }) {
   if (request.method === 'POST' && !url.searchParams.get('action')) {
     let b; try { b = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
     const kind = String(b.kind || '');
-    const title = clean(b.title, 60);
-    const caption = clean(b.caption, 500);
+    let title = clean(b.title, 60);
+    let caption = clean(b.caption, 500);
+    // 그룹 작품 게시: 내가 제안했고 함께 만든 사람 전원이 동의한(approved) 제안이어야 한다. 제목·소개·공개 범위는 동의받은 그대로
+    let gReq = null;
+    if (b.group_request_id != null) {
+      if (!UUID.test(String(b.group_request_id)) || kind !== 'story') return json({ error: 'not_found' }, 404);
+      const gr = await sb(`/rest/v1/group_publish_requests?id=eq.${b.group_request_id}&select=id,status,proposer_id,title,caption,visibility,comments_mode,story:group_stories(deleted_at)`);
+      gReq = (gr.ok ? await gr.json() : [])[0];
+      if (!gReq || gReq.proposer_id !== who.user.id || !gReq.story || gReq.story.deleted_at) return json({ error: 'not_found' }, 404);
+      if (gReq.status !== 'approved') return json({ error: '함께 만든 사람 모두가 동의해야 게시할 수 있어요.', code: 'not_ready' }, 409);
+      title = gReq.title; caption = gReq.caption || ''; b.visibility = gReq.visibility; b.comments_mode = gReq.comments_mode;
+    }
     if (!KINDS.includes(kind)) return json({ error: 'invalid_kind' }, 400);
     const isDub = kind === 'dub';
     if (!title) return json({ error: '제목을 적어 주세요.', code: 'title_required' }, 400);
@@ -153,8 +175,8 @@ export async function onRequest({ request, env }) {
       media.push(item);
     }
     if (isDub && !audioCount) return json({ error: '녹음한 장면이 하나 이상 있어야 더빙을 게시할 수 있어요.', code: 'no_audio' }, 400);
-    const project = UUID.test(String(b.source_project_id || '')) ? b.source_project_id : null;
-    const replaces = UUID.test(String(b.replaces_post_id || '')) ? b.replaces_post_id : null;
+    const project = !gReq && UUID.test(String(b.source_project_id || '')) ? b.source_project_id : null;
+    const replaces = !gReq && UUID.test(String(b.replaces_post_id || '')) ? b.replaces_post_id : null;
     const res = await rpc(env, 'social_begin_post', {
       p_owner: who.user.id, p_id: postId, p_kind: kind, p_title: title, p_caption: caption, p_visibility: visibility,
       p_project: project, p_replaces: replaces, p_media: media,
@@ -205,11 +227,30 @@ export async function onRequest({ request, env }) {
         }
       }
     }
+    // 그룹 작품: 공개 전에 함께 만든 사람을 먼저 잇는다 (그새 제안이 취소됐으면 게시를 지운다)
+    if (b.group_request_id != null) {
+      const gc = UUID.test(String(b.group_request_id)) ? await rpc(env, 'gp_complete', { p_actor: who.user.id, p_request: b.group_request_id, p_post: b.id }) : null;
+      if (!gc || !gc.data || !gc.data.ok) {
+        const del = await rpc(env, 'social_delete_post', { p_post: b.id, p_owner: who.user.id, p_admin: false });
+        await removeObjects(env, (del.data && del.data.paths) || [], POST_BUCKET);
+        return json({ error: '게시 제안이 바뀌었거나 취소됐어요. 작업 화면에서 다시 확인해 주세요.', code: 'not_ready' }, 409);
+      }
+    }
     const res = await rpc(env, 'social_finish_post', { p_owner: who.user.id, p_post: b.id });
     if (res.missing) return json({ error: 'social_not_ready' }, 503);
     if (res.failed || !res.data || !res.data.ok) return json({ error: 'finish_failed' }, 500);
     if (Array.isArray(res.data.old_paths) && res.data.old_paths.length) await removeObjects(env, res.data.old_paths, POST_BUCKET);
     return json({ id: b.id, status: res.data.status, status_text: statusText(res.data.status) });
+  }
+
+  // ── 내 이름 빼기 (함께 만든 사람) ──
+  if (request.method === 'POST' && url.searchParams.get('action') === 'uncredit') {
+    let b; try { b = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+    if (!UUID.test(String(b.id || ''))) return json({ error: 'not_found' }, 404);
+    const r = await sb(`/rest/v1/post_credits?post_id=eq.${b.id}&user_id=eq.${who.user.id}&role=eq.contributor`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
+    const rows = r.ok ? await r.json().catch(() => []) : [];
+    if (!rows.length) return json({ error: 'not_found' }, 404);
+    return json({ ok: true });
   }
 
   // ── 고치기 ──

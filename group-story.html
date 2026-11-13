@@ -26,6 +26,7 @@
   <div class="card" id="head">불러오는 중...</div>
   <div class="card" id="commonCard" style="display:none"></div>
   <div class="card" id="scenesCard" style="display:none"><h2>장면</h2><div id="scenes"></div></div>
+  <div class="card" id="pubCard" style="display:none"></div>
   <div class="card" id="verCard" style="display:none"></div>
   <div class="card" id="actCard" style="display:none"></div>
 </div>
@@ -41,8 +42,11 @@
   const STATUS = { open: '아직', editing: '고치는 중', draft: '임시 저장', submitted: '제출됨 · 확인 기다림', approved: '완성', returned: '다시 요청' };
   const STYLES = [['storybook', '그림책'], ['anime', '애니메이션'], ['3d', '3D'], ['crayon', '크레용'], ['flat', '플랫'], ['webtoon', '웹툰'], ['oil', '유화'], ['papercut', '종이 오리기'], ['pencil', '연필'], ['cinema', '실사 영화'], ['clay', '클레이']];
   const ACT = { create: '작품을 만들었어요', assign: '장면을 맡겼어요', lock: '고치기 시작했어요', unlock: '고치기를 마쳤어요', force_unlock: '잠금을 풀었어요',
-    submit: '제출했어요', approve: '승인했어요', return: '다시 요청했어요', settings: '공통 설정을 바꿨어요', restore: '예전 버전으로 되돌렸어요', delete: '작품을 지웠어요' };
-  let D = null, editing = null;   // editing = {k, script, image, image_url, timer, saving, hb}
+    submit: '제출했어요', approve: '승인했어요', return: '다시 요청했어요', settings: '공통 설정을 바꿨어요', restore: '예전 버전으로 되돌렸어요', delete: '작품을 지웠어요',
+    propose: '게시를 제안했어요', consent: '게시에 동의했어요', decline: '게시에 동의하지 않았어요', publish: '게시했어요' };
+  const PUB = { pending: '동의를 기다리는 중', approved: '모두 동의했어요 — 게시할 수 있어요', declined: '동의하지 않은 사람이 있어 취소됐어요', expired: '7일이 지나 취소됐어요', canceled: '모둠장이 취소했어요', published: '게시했어요' };
+  const CONSENT = { pending: '⏳ 기다리는 중', agreed: '✅ 동의', declined: '❌ 동의 안 함' };
+  let D = null, editing = null, pubBusy = false;   // editing = {k, script, image, image_url, timer, saving, hb}
 
   const api = (body) => U.api('/api/group-stories', { method: 'POST', body: JSON.stringify({ story_id: id, ...body }) });
   const sceneNo = s => D.scenes.filter(x => x.k !== 'cover').findIndex(x => x.k === s.k) + 1;
@@ -87,6 +91,7 @@
 
     renderCommon(owner);
     renderScenes(owner);
+    renderPublish(owner);
     renderVersions(owner);
     const ac = $('actCard'); ac.style.display = ''; ac.innerHTML = '';
     ac.append(el('h2', '', '누가 무엇을 했나요'));
@@ -242,6 +247,104 @@
     return p;
   }
 
+  // ── 게시 (4-C): 모둠장 제안 → 완성본에 장면이 들어간 친구 모두 동의 → 모둠장이 게시 ──
+  function renderPublish(owner) {
+    const pc = $('pubCard'); pc.style.display = ''; pc.innerHTML = '';
+    pc.append(el('h2', '', '📤 작품 게시'));
+    const P = D.publish;
+    const active = P && (P.status === 'pending' || P.status === 'approved');
+    if (P) {
+      pc.append(el('p', 'post-body', '"' + P.title + '" (' + P.version_n + '번 버전) · ' + (PUB[P.status] || P.status)));
+      if (P.status === 'pending') pc.append(el('div', 'tiny', new Date(P.expires_at).toLocaleString('ko-KR') + '까지 동의를 받아야 해요.'));
+      if (P.consents.length) {
+        const ul = el('div'); ul.style.margin = '6px 0';
+        P.consents.forEach(c => ul.append(el('div', 'hint', c.nickname + (c.mine ? ' (나)' : '') + ' · ' + (CONSENT[c.status] || c.status))));
+        pc.append(ul);
+      } else if (active) pc.append(el('div', 'hint', '완성본의 장면을 모두 모둠장이 만들어서 동의받을 사람이 없어요.'));
+      const acts = el('div', 'acts');
+      const mine = P.consents.find(c => c.mine);
+      if (mine && mine.status === 'pending' && P.status === 'pending') {
+        const a = el('a', 'chip on', '내 동의 확인하기'); a.href = '/group-publish?id=' + encodeURIComponent(P.id); acts.append(a);
+      }
+      if (P.status === 'published' && P.post_id) { const a = el('a', 'chip on', '게시물 보기'); a.href = '/post?id=' + encodeURIComponent(P.post_id); acts.append(a); }
+      if (owner && P.status === 'approved') { const g = el('button', 'chip on', '📤 지금 게시하기'); g.type = 'button'; g.onclick = () => publishNow(P, g); acts.append(g); }
+      if (owner && active) {
+        const c = el('button', 'chip', '제안 취소'); c.type = 'button';
+        c.onclick = async () => { if (!confirm('게시 제안을 취소할까요?')) return; try { await api({ action: 'cancel_publish' }); load(); } catch (e) { alert(e.message); } };
+        acts.append(c);
+      }
+      pc.append(acts);
+    }
+    if (!owner) { if (!P) pc.append(el('div', 'hint', '모둠장이 게시를 제안하면, 완성본에 내 장면이 들어 있을 때 동의를 부탁하는 알림이 와요.')); return; }
+    if (!D.scenes.some(x => x.final)) { pc.append(el('div', 'hint', '완성된 장면이 생기면 게시를 제안할 수 있어요.')); return; }
+    const open = el('button', 'btn btn-sub', active ? '새로 제안하기 (지금 제안은 취소돼요)' : '게시 제안하기'); open.type = 'button';
+    open.onclick = () => {
+      open.remove();
+      const f = el('div');
+      const t = el('input'); t.type = 'text'; t.maxLength = 60; t.value = D.story.title;
+      const cap = el('textarea'); cap.maxLength = 500; cap.placeholder = '작품 소개 (선택, 500자까지)';
+      const sel = opts => { const s = el('select'); opts.forEach(([v, n]) => { const o = el('option', '', n); o.value = v; s.append(o); }); return s; };
+      const vis = sel([['public', '전체 공개 — 누구나 볼 수 있어요'], ['followers', '팔로워만 — 내가 수락한 팔로워만 볼 수 있어요']]);
+      const cm = sel([['all', '누구나 (로그인한 회원)'], ['followers', '팔로워만'], ['off', '댓글 받지 않기']]);
+      const agreeRow = el('label'); agreeRow.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-weight:400';
+      const ag = el('input'); ag.type = 'checkbox'; ag.style.cssText = 'width:auto;margin-top:3px';
+      agreeRow.append(ag, el('span', 'hint', '다른 사람의 얼굴·이름·연락처 같은 개인정보가 없고, 다른 사람의 작품을 허락 없이 쓰지 않았어요.'));
+      const msg = el('div', 'msg');
+      const go = el('button', 'btn btn-main', '동의 요청 보내기'); go.type = 'button';
+      go.onclick = async () => {
+        if (!t.value.trim()) { msg.className = 'msg err'; msg.textContent = '제목을 적어 주세요.'; return; }
+        if (!ag.checked) { msg.className = 'msg err'; msg.textContent = '확인 칸에 체크해 주세요.'; return; }
+        go.disabled = true;
+        try {
+          const r = await api({ action: 'propose', title: t.value.trim(), caption: cap.value.trim(), visibility: vis.value, comments_mode: cm.value });
+          alert(r.status === 'approved' ? '동의받을 사람이 없어서 바로 게시할 수 있어요. "지금 게시하기"를 눌러 주세요.' : '함께 만든 ' + r.consents + '명에게 동의를 부탁했어요. 모두 동의하면 알려 줄게요.');
+          load();
+        } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; go.disabled = false; }
+      };
+      f.append(el('div', 'hint', '지금 완성본(승인된 장면)이 버전으로 저장되고, 그 버전 그대로 게시돼요. 완성본에 장면이 들어간 친구 모두가 동의해야 게시할 수 있고, 7일 안에 동의를 받아야 해요. 게시물에는 함께 만든 사람의 닉네임이 표시돼요.'),
+        el('label', '', '제목'), t, el('label', '', '소개'), cap, el('label', '', '공개 범위'), vis, el('label', '', '댓글'), cm, agreeRow, msg, go);
+      pc.append(f);
+    };
+    pc.append(open);
+  }
+
+  // 동의받은 버전의 그림으로 게시물 만들기 (그림 있는 장면만, 20장까지)
+  async function publishNow(P, btn) {
+    if (pubBusy) return; pubBusy = true;
+    btn.disabled = true; const old = btn.textContent;
+    const step = t => { btn.textContent = t; };
+    try {
+      step('그림 준비 중...');
+      const v = await U.api('/api/group-stories?id=' + encodeURIComponent(id) + '&version=' + P.version_n);
+      const list = v.scenes.slice().sort((a, b) => (a.k === 'cover' ? -1 : b.k === 'cover' ? 1 : (a.ord || 0) - (b.ord || 0))).filter(s => s.image_url);
+      if (!list.length) throw new Error('그림이 있는 장면이 없어요. 장면 그림을 만든 뒤 다시 제안해 주세요.');
+      if (list.length > 20 && !confirm('그림은 20장까지만 게시돼요. 앞의 20장을 올릴까요?')) { pubBusy = false; btn.disabled = false; btn.textContent = old; return; }
+      const files = [];
+      for (const s of list.slice(0, 20)) {
+        const blob = await toJpeg(s.image_url);
+        if (!blob) throw new Error('그림을 만들지 못했어요.');
+        const im = await loadImg(URL.createObjectURL(blob));
+        files.push({ blob, width: im.naturalWidth, height: im.naturalHeight, sha256: await sha256hex(blob), body: String(s.script || '').slice(0, 1000) });
+      }
+      step('게시물 만드는 중...');
+      const start = await U.api('/api/posts', { method: 'POST', body: JSON.stringify({
+        kind: 'story', title: P.title, group_request_id: P.id,
+        media: files.map(f => ({ mime: 'image/jpeg', bytes: f.blob.size, width: f.width, height: f.height, sha256: f.sha256, body: f.body })),
+      }) });
+      const c = await BoldAuth.client();
+      for (let i = 0; i < start.uploads.length; i++) {
+        step('올리는 중... ' + (i + 1) + '/' + start.uploads.length);
+        const u = start.uploads[i];
+        const up = await c.storage.from(start.bucket).uploadToSignedUrl(u.path, u.token, files[u.idx].blob, { contentType: 'image/jpeg' });
+        if (up.error) throw new Error('그림을 올리지 못했어요. 다시 해 주세요.');
+      }
+      step('마무리 중...');
+      const fin = await U.api('/api/posts?action=finish', { method: 'POST', body: JSON.stringify({ id: start.id, group_request_id: P.id }) });
+      alert(fin.status === 'published' ? '게시했어요! 🎉 함께 만든 친구들에게도 알려 줬어요.' : '올렸어요! ' + (fin.status_text || ''));
+      pubBusy = false; load();
+    } catch (e) { pubBusy = false; alert(e.message === 'login_required' ? '로그인이 필요해요.' : (e.message || '게시하지 못했어요.')); btn.disabled = false; btn.textContent = old; }
+  }
+
   function renderVersions(owner) {
     const vc = $('verCard'); vc.style.display = ''; vc.innerHTML = '';
     vc.append(el('h2', '', '버전 기록 (최근 20개)'));
@@ -299,7 +402,7 @@
   }
   // 고친 뒤 1.5초 안에 화면을 닫으면 마지막 글자가 저장되지 않을 수 있어 알려 준다
   window.addEventListener('beforeunload', e => { if (editing && editing.timer) { flush(); e.preventDefault(); e.returnValue = ''; } });
-  setInterval(() => { if (document.visibilityState === 'visible' && !editing) load(); }, 60000);   // 다른 친구의 변화를 1분마다 반영 (편집 중에는 쉼)
+  setInterval(() => { if (document.visibilityState === 'visible' && !editing && !pubBusy && !document.querySelector('#pubCard input')) load(); }, 60000);   // 다른 친구의 변화를 1분마다 반영 (편집 중에는 쉼)
   load();
 })();
 </script>

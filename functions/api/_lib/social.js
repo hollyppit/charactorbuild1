@@ -78,13 +78,13 @@ export function publicPost(p) {
   return {
     id: p.id, kind: p.kind, title: p.title, caption: p.caption || '', media_count: p.media_count,
     published_at: p.published_at, created_at: p.created_at, visibility: p.visibility,
-    like_count: p.like_count || 0, comment_count: p.comment_count || 0,
+    like_count: p.like_count || 0, comment_count: p.comment_count || 0, is_group: !!p.group_story_id,
     owner: { nickname: o.nickname || '', avatar_url: o.avatar_url || null },
   };
 }
 
 // 0010(3-B) 이후 컬럼(like_count, comment_count, comments_mode) 포함 — 0010 을 먼저 적용한 뒤 배포할 것
-export const POST_COLS = 'id,owner_id,kind,title,caption,visibility,status,status_reason,media_count,bytes,report_count,like_count,comment_count,comments_mode,source_project_id,created_at,updated_at,published_at,reviewed_at,owner:profiles!posts_owner_id_fkey(nickname,avatar_url,visibility)';
+export const POST_COLS = 'id,owner_id,kind,title,caption,visibility,status,status_reason,media_count,bytes,report_count,like_count,comment_count,comments_mode,group_story_id,source_project_id,created_at,updated_at,published_at,reviewed_at,owner:profiles!posts_owner_id_fkey(nickname,avatar_url,visibility)';
 
 // 게시물 주인에게 보여 줄 상태 안내
 export function statusText(status, reason) {

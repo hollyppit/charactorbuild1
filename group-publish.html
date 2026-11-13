@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>그룹 작품 게시 동의 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+<style>
+  .scs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0}
+  .scs .s{background:#0d0008;border:2px solid #2d0040;padding:6px;font-size:.8rem}
+  .scs .s.mine{border-color:var(--yellow)}
+  .scs img{display:block;width:100%;height:auto;background:#2d0040;margin-bottom:4px}
+  .scs .t{white-space:pre-wrap;max-height:5.5em;overflow:hidden;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card" id="box">불러오는 중...</div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script src="/assets/js/noti-toast.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), box = document.getElementById('box'), el = U.el;
+  await U.header(root);
+  if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+  const rid = new URLSearchParams(location.search).get('id') || '';
+  const PUB = { pending: '동의를 기다리는 중이에요.', approved: '모두 동의했어요. 모둠장이 게시하면 알려 줄게요.', declined: '동의하지 않은 사람이 있어 이번 게시는 취소됐어요.', expired: '7일이 지나 이번 게시는 취소됐어요.', canceled: '모둠장이 이번 게시를 취소했어요.', published: '게시됐어요! 🎉' };
+  const CONSENT = { pending: '⏳ 기다리는 중', agreed: '✅ 동의', declined: '❌ 동의 안 함' };
+
+  async function load() {
+    let d;
+    try { d = await U.api('/api/group-stories?request=' + encodeURIComponent(rid)); }
+    catch (e) {
+      if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);
+      box.textContent = e.status === 404 ? '게시 요청을 찾을 수 없어요. 동의를 부탁받은 사람만 볼 수 있어요.' : '불러오지 못했어요.';
+      return;
+    }
+    const r = d.request;
+    box.innerHTML = '';
+    box.append(el('h1', '', '📤 그룹 작품 게시 동의'));
+    box.append(el('p', 'sub', '"' + r.group_name + '" 그룹 · 모둠장 ' + r.proposer + '님이 함께 만든 그림책을 게시하자고 해요.'));
+    box.append(el('h2', '', r.title));
+    if (r.caption) box.append(el('p', 'post-body', r.caption));
+    box.append(el('p', 'hint', '공개 범위: ' + (r.visibility === 'followers' ? '모둠장의 팔로워만' : '전체 공개') + (r.status === 'pending' ? ' · ' + new Date(r.expires_at).toLocaleString('ko-KR') + '까지 답해 주세요' : '')));
+
+    const g = el('div', 'scs');
+    d.scenes.forEach((s, i) => {
+      const c = el('div', 's' + (s.mine ? ' mine' : ''));
+      if (s.image_url) { const im = el('img'); im.src = s.image_url; im.alt = ''; im.loading = 'lazy'; c.append(im); }
+      c.append(el('div', '', (s.k === 'cover' ? '표지' : '장면 ' + i) + ' · ' + (s.by || '') + (s.mine ? ' (나)' : '')));
+      if (s.script) c.append(el('div', 't', s.script));
+      g.append(c);
+    });
+    box.append(el('h2', '', '게시될 내용'), el('p', 'hint', '노란 테두리가 내가 만든 장면이에요. 그림이 있는 장면만 게시물에 올라가요.'), g);
+
+    box.append(el('h2', '', '함께 만든 사람의 동의'));
+    d.consents.forEach(c => box.append(el('div', 'hint', c.nickname + ' · ' + (CONSENT[c.status] || c.status))));
+    box.append(el('p', 'post-body', PUB[r.status] || ''));
+
+    if (r.status === 'published' && r.post_id) { const a = el('a', 'btn btn-main', '게시물 보기'); a.href = '/post?id=' + encodeURIComponent(r.post_id); a.style.textDecoration = 'none'; box.append(a); }
+
+    if (d.my_consent === 'pending' && r.status === 'pending') {
+      box.append(el('p', 'hint', '동의하면 게시물에 "함께 만든 사람"으로 내 닉네임이 표시돼요. 게시된 뒤에도 게시물에서 언제든 "내 이름 빼기"를 할 수 있어요. 동의하지 않으면 이번 게시는 취소되고, 모둠장에게 알려 줘요.'));
+      const msg = el('div', 'msg');
+      const row = el('div', 'row2');
+      const send = async agree => {
+        if (!agree && !confirm('동의하지 않으면 이번 게시가 취소돼요. 괜찮을까요?')) return;
+        yes.disabled = no.disabled = true;
+        try { await U.api('/api/group-stories', { method: 'POST', body: JSON.stringify({ action: 'respond_publish', request_id: rid, agree }) }); load(); }
+        catch (e) { msg.className = 'msg err'; msg.textContent = e.message; yes.disabled = no.disabled = false; }
+      };
+      const yes = el('button', 'btn btn-main', '✅ 동의해요'); yes.type = 'button'; yes.onclick = () => send(true);
+      const no = el('button', 'btn btn-danger', '동의하지 않아요'); no.type = 'button'; no.onclick = () => send(false);
+      row.append(yes, no); box.append(row, msg);
+    } else if (d.my_consent) {
+      box.append(el('p', 'hint', '내 답: ' + (CONSENT[d.my_consent] || d.my_consent)));
+    }
+    const back = el('a', 'hint', '← 작업 화면으로'); back.href = '/group-story?id=' + encodeURIComponent(d.story_id || ''); back.style.display = d.story_id ? '' : 'none';
+    box.append(back);
+  }
+  load();
+})();
+</script>
+</body>
+</html>
