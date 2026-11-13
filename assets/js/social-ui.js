@@ -95,8 +95,56 @@
     const f = el('a', 'chip', '둘러보기'); f.href = '/feed'; f.style.textDecoration = 'none';
     const s = await session();
     const m = el('a', 'chip', s ? '마이페이지' : '로그인'); m.href = s ? '/me.html' : '/account.html?next=' + encodeURIComponent(location.pathname + location.search); m.style.textDecoration = 'none';
-    nav.append(f, m); top.append(brand, nav); root.prepend(top);
+    nav.append(f);
+    if (s) { const b = bell(); nav.append(b); }
+    nav.append(m); top.append(brand, nav); root.prepend(top);
   }
 
-  window.SocialUI = { api, session, card, el, date, avatar, report, disabledBox, header, KIND };
+  // 🔔 알림 버튼 (읽지 않은 개수). 로그인했을 때만
+  function bell() {
+    const a = el('a', 'chip', '🔔'); a.href = '/notifications'; a.style.textDecoration = 'none'; a.title = '알림';
+    api('/api/notifications?count=1').then(d => { if (d.unread) a.textContent = '🔔 ' + (d.unread >= 100 ? '99+' : d.unread); }).catch(() => {});
+    return a;
+  }
+
+  // 사람 한 줄 (사진·닉네임 + 오른쪽 버튼들)
+  function userRow(u, buttons) {
+    const row = el('div', 'row2'); row.style.cssText = 'align-items:center;margin-bottom:10px';
+    const a = el('a', 'author'); a.href = '/u?n=' + encodeURIComponent(u.nickname); a.style.margin = '0';
+    const im = el('img'); im.alt = ''; im.src = avatar(u.avatar_url); a.append(im, el('span', '', u.nickname));
+    const btns = el('div'); btns.style.cssText = 'display:flex;gap:6px;flex:none;justify-content:flex-end';
+    (buttons || []).forEach(([label, fn, cls]) => { const b = el('button', 'chip ' + (cls || ''), label); b.type = 'button'; b.onclick = () => fn(b); btns.append(b); });
+    row.append(a, btns);
+    return row;
+  }
+
+  // 알림 문장
+  const KIND_SANC = { warning: '경고', post_ban: '게시 금지', suspend: '이용 정지' };
+  function notiText(n) {
+    const who = n.actor ? n.actor.nickname + '님이 ' : '';
+    const t = n.post_title ? '"' + n.post_title + '"' : '게시물';
+    const reason = n.data && n.data.reason ? ' (사유: ' + n.data.reason + ')' : '';
+    switch (n.type) {
+      case 'follow': return who + '나를 팔로우했어요.';
+      case 'follow_request': return who + '팔로우를 요청했어요. 마이페이지에서 수락할 수 있어요.';
+      case 'follow_accept': return who + '팔로우 요청을 수락했어요.';
+      case 'like': return who + t + '을(를) 좋아해요.';
+      case 'comment': return who + t + '에 댓글을 남겼어요' + (n.data && n.data.preview ? ': ' + n.data.preview : '.');
+      case 'post_approved': return t + '이(가) 공개됐어요.';
+      case 'post_rejected': return t + '이(가) 공개되지 않았어요' + reason + '.';
+      case 'post_hidden': return t + '이(가) 가려졌어요' + reason + '.';
+      case 'post_removed': return t + '이(가) 삭제됐어요' + reason + '.';
+      case 'comment_hidden': return '내 댓글이 ' + (n.data && n.data.removed ? '삭제' : '가려') + '졌어요' + reason + '.';
+      case 'sanction': return '이용 제한을 받았어요: ' + (KIND_SANC[n.data && n.data.kind] || '') + reason + '. 마이페이지에서 확인해 주세요.';
+      default: return '새 알림';
+    }
+  }
+  function notiLink(n) {
+    if (n.type === 'follow' || n.type === 'follow_accept') return n.actor ? '/u?n=' + encodeURIComponent(n.actor.nickname) : null;
+    if (n.type === 'follow_request' || n.type === 'sanction') return '/me.html';
+    if (n.post_id && n.type !== 'post_removed') return '/post?id=' + encodeURIComponent(n.post_id);
+    return null;
+  }
+
+  window.SocialUI = { api, session, card, el, date, avatar, report, disabledBox, header, bell, userRow, notiText, notiLink, KIND };
 })();

@@ -1,6 +1,7 @@
 // 작품 게시물
-//  GET    /api/posts?feed=latest[&before=ISO]   둘러보기: 공개된 게시물 최신순 24개
-//  GET    /api/posts?id=                        게시물 하나(그림 전체). 공개 게시물 또는 내 게시물
+//  GET    /api/posts?feed=latest[&before=ISO]   둘러보기: 전체 공개 게시물 최신순 24개 (차단 관계 제외)
+//  GET    /api/posts?feed=following[&before=]   팔로잉: 내가 팔로우한 사람의 게시물(팔로워만 포함)
+//  GET    /api/posts?id=                        게시물 하나(그림 전체·좋아요·댓글 가능 여부)
 //  GET    /api/posts?mine=1[&project=uuid]      내 게시물 목록(상태 포함)
 //  POST   /api/posts                            게시 시작 → 그림 업로드 토큰 발급
 //  POST   /api/posts?action=finish              {id} 업로드 확인 후 확인 대기 또는 공개
@@ -8,7 +9,11 @@
 //  DELETE /api/posts?id=                        내 게시물 삭제
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { signUpload, objectInfo, removeObjects, POST_BUCKET } from './_lib/storage.js';
-import { whoIs, disabledReply, rpc, attachCovers, mediaOf, publicPost, statusText, POST_COLS, UUID, KINDS, MIME_EXT } from './_lib/social.js';
+import { whoIs, disabledReply, rpc, attachCovers, mediaOf, publicPost, statusText, POST_COLS, UUID, KINDS, MIME_EXT,
+  blockedIds, followeeIds, followStatus, notInList } from './_lib/social.js';
+
+const VIS = ['public', 'followers'];
+const CMODES = ['all', 'followers', 'off'];
 
 const PAGE = 24;
 const SHA = /^[0-9a-f]{64}$/;
@@ -37,9 +42,20 @@ export async function onRequest({ request, env }) {
 
   // ── 읽기 ──
   if (request.method === 'GET') {
-    if (url.searchParams.get('feed') === 'latest') {
+    const feed = url.searchParams.get('feed');
+    if (feed === 'latest' || feed === 'following') {
       const before = url.searchParams.get('before');
-      let q = `/rest/v1/posts?status=eq.published&visibility=eq.public&select=${POST_COLS}&order=published_at.desc&limit=${PAGE}`;
+      const me = who.user ? who.user.id : null;
+      const blocked = await blockedIds(env, me);
+      let q;
+      if (feed === 'following') {
+        if (!me) return json({ error: '로그인하면 팔로잉 피드를 볼 수 있어요.', code: 'login_required' }, 401);
+        const ids = (await followeeIds(env, me)).filter(x => !blocked.includes(x));
+        if (!ids.length) return json({ posts: [], next: null });
+        q = `/rest/v1/posts?status=eq.published&visibility=in.(public,followers)&owner_id=in.(${ids.join(',')})&select=${POST_COLS}&order=published_at.desc&limit=${PAGE}`;
+      } else {
+        q = `/rest/v1/posts?status=eq.published&visibility=eq.public${notInList('owner_id', blocked)}&select=${POST_COLS}&order=published_at.desc&limit=${PAGE}`;
+      }
       if (before && !isNaN(Date.parse(before))) q += `&published_at=lt.${encodeURIComponent(new Date(before).toISOString())}`;
       const r = await sb(q);
       if (r.status === 404 || r.status === 400) return json({ error: 'social_not_ready' }, 503);
@@ -57,7 +73,7 @@ export async function onRequest({ request, env }) {
       const rows = r.ok ? await r.json() : [];
       const posts = (await attachCovers(env, rows)).map(p => ({
         ...publicPost(p), cover: p.cover, status: p.status, status_text: statusText(p.status, p.status_reason),
-        source_project_id: p.source_project_id,
+        source_project_id: p.source_project_id, comments_mode: p.comments_mode,
       }));
       return json({ posts });
     }
@@ -66,12 +82,28 @@ export async function onRequest({ request, env }) {
       if (!UUID.test(id)) return json({ error: 'not_found' }, 404);
       const r = await sb(`/rest/v1/posts?id=eq.${id}&select=${POST_COLS}`);
       const p = (r.ok ? await r.json() : [])[0];
-      const isOwner = !!(p && who.user && p.owner_id === who.user.id);
-      const visible = p && p.status !== 'deleted' && ((p.status === 'published' && p.visibility === 'public') || isOwner || who.admin);
-      if (!visible) return json({ error: 'not_found' }, 404);
+      const me = who.user ? who.user.id : null;
+      const isOwner = !!(p && me && p.owner_id === me);
+      if (!p || p.status === 'deleted') return json({ error: 'not_found' }, 404);
+      // 볼 수 있는지: 내 게시물·관리자 / 공개된 게시물 중 전체 공개 또는 (팔로워만이면 수락된 팔로워), 차단 관계 제외
+      let follow = null;
+      if (!isOwner && !who.admin) {
+        if (p.status !== 'published') return json({ error: 'not_found' }, 404);
+        if (me && (await blockedIds(env, me)).includes(p.owner_id)) return json({ error: 'not_found' }, 404);
+        follow = await followStatus(env, me, p.owner_id);
+        if (p.visibility !== 'public' && follow !== 'accepted') return json({ error: 'not_found' }, 404);
+      }
       const media = await mediaOf(env, id);
+      let liked = false;
+      if (me) {
+        const lr = await sb(`/rest/v1/likes?post_id=eq.${id}&user_id=eq.${me}&select=post_id`);
+        liked = !!(lr.ok ? await lr.json() : []).length;
+      }
+      const mode = p.comments_mode || 'all';
+      let can_comment = !!me && p.status === 'published' && mode !== 'off' && (mode === 'all' || isOwner || follow === 'accepted');
       return json({
-        ...publicPost(p), media, is_owner: isOwner,
+        ...publicPost(p), media, is_owner: isOwner, liked, comments_mode: mode, can_comment,
+        comment_hint: !me ? '로그인하면 댓글을 쓸 수 있어요.' : mode === 'off' ? '이 게시물은 댓글을 받지 않아요.' : (!can_comment && mode === 'followers') ? '팔로워만 댓글을 쓸 수 있어요.' : '',
         ...(isOwner || who.admin ? { status: p.status, status_text: statusText(p.status, p.status_reason) } : {}),
       });
     }
@@ -89,7 +121,10 @@ export async function onRequest({ request, env }) {
     const caption = clean(b.caption, 500);
     if (!KINDS.includes(kind) || kind === 'dub') return json({ error: 'invalid_kind' }, 400);
     if (!title) return json({ error: '제목을 적어 주세요.', code: 'title_required' }, 400);
-    if (b.visibility && b.visibility !== 'public') return json({ error: '지금은 전체 공개만 고를 수 있어요.', code: 'invalid_visibility' }, 400);
+    const visibility = b.visibility || 'public';
+    const cmode = b.comments_mode || 'all';
+    if (!VIS.includes(visibility)) return json({ error: '공개 범위를 다시 골라 주세요.', code: 'invalid_visibility' }, 400);
+    if (!CMODES.includes(cmode)) return json({ error: '댓글 설정을 다시 골라 주세요.', code: 'invalid_comments_mode' }, 400);
     if (!Array.isArray(b.media) || b.media.length < 1 || b.media.length > 20) return json({ error: ERR.invalid_media, code: 'invalid_media' }, 400);
     const postId = crypto.randomUUID();
     const media = [];
@@ -106,7 +141,7 @@ export async function onRequest({ request, env }) {
     const project = UUID.test(String(b.source_project_id || '')) ? b.source_project_id : null;
     const replaces = UUID.test(String(b.replaces_post_id || '')) ? b.replaces_post_id : null;
     const res = await rpc(env, 'social_begin_post', {
-      p_owner: who.user.id, p_id: postId, p_kind: kind, p_title: title, p_caption: caption, p_visibility: 'public',
+      p_owner: who.user.id, p_id: postId, p_kind: kind, p_title: title, p_caption: caption, p_visibility: visibility,
       p_project: project, p_replaces: replaces, p_media: media,
     });
     if (res.missing) return json({ error: 'social_not_ready' }, 503);
@@ -114,6 +149,7 @@ export async function onRequest({ request, env }) {
     const d = res.data;
     if (Array.isArray(d.stale_paths) && d.stale_paths.length) await removeObjects(env, d.stale_paths, POST_BUCKET);
     if (!d.ok) return json({ error: ERR[d.error] || d.error, code: d.error, sanction: d.sanction || undefined }, d.error === 'sanctioned' ? 403 : d.error === 'quota_exceeded' ? 413 : 429);
+    if (cmode !== 'all') await sb(`/rest/v1/posts?id=eq.${postId}&owner_id=eq.${who.user.id}`, { method: 'PATCH', body: JSON.stringify({ comments_mode: cmode }) });
 
     const uploads = [];
     for (const m of media) {
@@ -161,10 +197,15 @@ export async function onRequest({ request, env }) {
     const patch = { updated_at: new Date().toISOString() };
     if ('title' in b) { const t = clean(b.title, 60); if (!t) return json({ error: '제목을 적어 주세요.', code: 'title_required' }, 400); patch.title = t; }
     if ('caption' in b) patch.caption = clean(b.caption, 500) || null;
-    // 승인 모드에서는 고친 내용을 다시 확인받는다
-    const sr = await sb('/rest/v1/social_settings?id=eq.1&select=require_approval');
-    const needApproval = ((sr.ok ? await sr.json() : [])[0] || { require_approval: true }).require_approval;
-    if (needApproval && (p.status === 'published' || p.status === 'rejected')) { patch.status = 'pending'; patch.published_at = null; patch.status_reason = null; }
+    if ('visibility' in b) { if (!VIS.includes(b.visibility)) return json({ error: 'invalid_visibility' }, 400); patch.visibility = b.visibility; }
+    if ('comments_mode' in b) { if (!CMODES.includes(b.comments_mode)) return json({ error: 'invalid_comments_mode' }, 400); patch.comments_mode = b.comments_mode; }
+    // 승인 모드에서는 제목·소개를 고치면 다시 확인받는다 (공개 범위·댓글 설정만 바꾸면 그대로)
+    const contentChanged = 'title' in patch || 'caption' in patch;
+    if (contentChanged) {
+      const sr = await sb('/rest/v1/social_settings?id=eq.1&select=require_approval');
+      const needApproval = ((sr.ok ? await sr.json() : [])[0] || { require_approval: true }).require_approval;
+      if (needApproval && (p.status === 'published' || p.status === 'rejected')) { patch.status = 'pending'; patch.published_at = null; patch.status_reason = null; }
+    }
     const r = await sb(`/rest/v1/posts?id=eq.${id}&owner_id=eq.${who.user.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
     if (!r.ok) return json({ error: 'update_failed' }, 500);
     const status = patch.status || p.status;

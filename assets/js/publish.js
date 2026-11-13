@@ -105,6 +105,10 @@
     const title = el('input', 'width:100%;padding:10px;border:2px solid #444;font-size:16px'); title.maxLength = 60; title.value = String(data.title || '').slice(0, 60);
     const cap = el('textarea', 'width:100%;min-height:80px;padding:10px;border:2px solid #444;font-size:15px'); cap.maxLength = 500; cap.placeholder = '작품 소개 (선택, 500자까지)';
     box.append(lab('제목'), title, lab('소개'), cap);
+    const pick = (opts) => { const s = el('select', 'width:100%;padding:10px;border:2px solid #444;font-size:15px'); opts.forEach(([v, t]) => { const o = el('option', '', t); o.value = v; s.append(o); }); return s; };
+    const vis = pick([['public', '전체 공개 — 누구나 볼 수 있어요'], ['followers', '팔로워만 — 내가 수락한 팔로워만 볼 수 있어요']]);
+    const cmode = pick([['all', '누구나 (로그인한 회원)'], ['followers', '팔로워만'], ['off', '댓글 받지 않기']]);
+    box.append(lab('공개 범위'), vis, lab('댓글'), cmode);
 
     let replaceBox = null, existing = null;
     if (data.projectId) {
@@ -122,7 +126,7 @@
 
     const agreeRow = el('label', 'display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13px;line-height:1.5');
     const agree = el('input'); agree.type = 'checkbox'; agree.style.marginTop = '3px';
-    agreeRow.append(agree, el('span', '', '다른 사람의 얼굴·이름·연락처 같은 개인정보가 없고, 다른 사람의 작품을 허락 없이 쓰지 않았어요. 게시물은 누구나 볼 수 있어요.'));
+    agreeRow.append(agree, el('span', '', '다른 사람의 얼굴·이름·연락처 같은 개인정보가 없고, 다른 사람의 작품을 허락 없이 쓰지 않았어요. 고른 공개 범위의 사람들이 볼 수 있어요.'));
     box.appendChild(agreeRow);
     box.appendChild(el('div', 'color:#666;font-size:12px;margin-top:8px', '운영 방식에 따라 관리자가 확인한 뒤 공개될 수 있어요. 게시 뒤 작업을 고쳐도 게시물은 바뀌지 않아요(다시 게시하면 바뀌어요).'));
 
@@ -148,7 +152,7 @@
         }
         msg.textContent = '게시물 만드는 중...';
         const start = await BoldAuth.api('/api/posts', { method: 'POST', body: JSON.stringify({
-          kind: tool, title: title.value.trim(), caption: cap.value.trim(), visibility: 'public',
+          kind: tool, title: title.value.trim(), caption: cap.value.trim(), visibility: vis.value, comments_mode: cmode.value,
           source_project_id: data.projectId || undefined,
           replaces_post_id: replaceBox && replaceBox.checked && existing ? existing.id : undefined,
           media: files.map(f => ({ mime: 'image/jpeg', bytes: f.blob.size, width: f.width, height: f.height, sha256: f.sha256, body: f.body })),
@@ -191,6 +195,14 @@
     const canSee = mode === 'on' || beta;
     const link = $('feedLink'); if (link && canSee) link.style.display = 'flex';
     if (!member || !canSee) return;
+    // 🔔 알림 (읽지 않은 개수)
+    if (link && !$('bellLink')) {
+      const b = document.createElement('a');
+      b.id = 'bellLink'; b.className = link.className; b.href = '/notifications'; b.title = '알림'; b.textContent = '🔔';
+      b.style.cssText = 'display:flex;align-items:center;text-decoration:none';
+      link.after(b);
+      BoldAuth.api('/api/notifications?count=1').then(d => { if (d.unread) b.textContent = '🔔 ' + (d.unread >= 100 ? '99+' : d.unread); }).catch(() => {});
+    }
     for (const [tool, t] of Object.entries(TOOLS)) {
       const b = $(t.btn); if (!b) continue;
       b.style.display = '';

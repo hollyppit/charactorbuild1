@@ -66,12 +66,14 @@ export function publicPost(p) {
   const o = p.owner || {};
   return {
     id: p.id, kind: p.kind, title: p.title, caption: p.caption || '', media_count: p.media_count,
-    published_at: p.published_at, created_at: p.created_at,
+    published_at: p.published_at, created_at: p.created_at, visibility: p.visibility,
+    like_count: p.like_count || 0, comment_count: p.comment_count || 0,
     owner: { nickname: o.nickname || '', avatar_url: o.avatar_url || null },
   };
 }
 
-export const POST_COLS = 'id,owner_id,kind,title,caption,visibility,status,status_reason,media_count,bytes,report_count,source_project_id,created_at,updated_at,published_at,reviewed_at,owner:profiles!posts_owner_id_fkey(nickname,avatar_url,visibility)';
+// 0010(3-B) 이후 컬럼(like_count, comment_count, comments_mode) 포함 — 0010 을 먼저 적용한 뒤 배포할 것
+export const POST_COLS = 'id,owner_id,kind,title,caption,visibility,status,status_reason,media_count,bytes,report_count,like_count,comment_count,comments_mode,source_project_id,created_at,updated_at,published_at,reviewed_at,owner:profiles!posts_owner_id_fkey(nickname,avatar_url,visibility)';
 
 // 게시물 주인에게 보여 줄 상태 안내
 export function statusText(status, reason) {
@@ -85,4 +87,37 @@ export function statusText(status, reason) {
   }
   if (status === 'uploading') return '그림을 올리는 중이에요.';
   return '';
+}
+
+// ── 3-B: 차단·팔로우 확인 ──
+// 나와 차단 관계(어느 쪽이든)인 사람 id 목록
+export async function blockedIds(env, userId) {
+  if (!userId) return [];
+  const sb = makeSb(env);
+  const [a, b] = await Promise.all([
+    sb(`/rest/v1/blocks?blocker_id=eq.${userId}&select=blocked_id`),
+    sb(`/rest/v1/blocks?blocked_id=eq.${userId}&select=blocker_id`),
+  ]);
+  const ids = [...(a.ok ? await a.json() : []).map(x => x.blocked_id), ...(b.ok ? await b.json() : []).map(x => x.blocker_id)];
+  return [...new Set(ids)];
+}
+// 내가 (수락된) 팔로우 중인 사람 id 목록
+export async function followeeIds(env, userId) {
+  if (!userId) return [];
+  const r = await makeSb(env)(`/rest/v1/follows?follower_id=eq.${userId}&status=eq.accepted&select=followee_id&limit=5000`);
+  return (r.ok ? await r.json() : []).map(x => x.followee_id);
+}
+// a 가 b 를 팔로우하는 상태: null | 'pending' | 'accepted'
+export async function followStatus(env, a, b) {
+  if (!a || !b || a === b) return null;
+  const r = await makeSb(env)(`/rest/v1/follows?follower_id=eq.${a}&followee_id=eq.${b}&select=status`);
+  return ((r.ok ? await r.json() : [])[0] || {}).status || null;
+}
+export const notInList = (col, ids) => ids.length ? `&${col}=not.in.(${ids.join(',')})` : '';
+
+// 관리 알림 넣기 (서버 전용). 0010 적용 전에는 조용히 실패
+export async function notify(env, userId, type, extra) {
+  try {
+    await makeSb(env)('/rest/v1/notifications', { method: 'POST', body: JSON.stringify({ user_id: userId, type, ...(extra || {}) }) });
+  } catch (_) {}
 }

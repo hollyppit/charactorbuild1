@@ -51,7 +51,7 @@
       <label for="visibility">프로필 공개 범위</label>
       <select id="visibility">
         <option value="private">비공개 — 나만 볼 수 있어요</option>
-        <option value="followers">팔로워 공개 (준비 중, 지금은 비공개와 같아요)</option>
+        <option value="followers">팔로워 공개 — 내가 수락한 팔로워만 볼 수 있어요</option>
         <option value="public">전체 공개 — 누구나 볼 수 있어요</option>
       </select>
 
@@ -116,7 +116,20 @@
         <a class="chip" href="/feed" style="text-decoration:none;text-align:center">둘러보기</a>
       </div>
       <div class="post-grid" id="myPosts"></div>
-      <p class="hint">제작 화면의 "📤 게시하기"로 작품을 올릴 수 있어요. 게시물은 누구나 볼 수 있어요.</p>
+      <p class="hint">제작 화면의 "📤 게시하기"로 작품을 올릴 수 있어요. 게시할 때 "전체 공개" 또는 "팔로워만"을 고를 수 있어요.</p>
+    </div>
+
+    <!-- 친구 관계: 팔로우 요청·팔로워·팔로잉·차단 (소셜 기능이 켜졌을 때만 보임) -->
+    <div class="card" id="relCard" style="display:none">
+      <h2>친구 관계</h2>
+      <div class="tabs" id="relTabs">
+        <button class="chip on" type="button" data-l="requests">팔로우 요청</button>
+        <button class="chip" type="button" data-l="followers">팔로워</button>
+        <button class="chip" type="button" data-l="following">팔로잉</button>
+        <button class="chip" type="button" data-l="blocks">차단 목록</button>
+      </div>
+      <div id="relList"></div>
+      <p class="hint"><a href="/notifications">🔔 알림 보기</a></p>
     </div>
 
     <div class="card">
@@ -477,6 +490,7 @@
       if (cfg.social !== 'on' && !(cfg.social === 'beta' && profile && profile.role === 'admin')) return;
       const d = await BoldAuth.api('/api/posts?mine=1');
       $('postsCard').style.display = '';
+      loadRel('requests');
       $('myProfileLink').href = '/u?n=' + encodeURIComponent(profile.nickname);
       const grid = $('myPosts'); grid.innerHTML = '';
       if (!d.posts.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = '아직 게시한 작품이 없어요.'; grid.append(e); return; }
@@ -490,6 +504,43 @@
       });
     } catch (e) { /* 소셜 기능 준비 전이면 조용히 숨김 */ }
   }
+
+  /* ── 친구 관계 ── */
+  async function loadRel(list) {
+    $('relCard').style.display = '';
+    document.querySelectorAll('#relTabs .chip').forEach(b => b.classList.toggle('on', b.dataset.l === list));
+    const box = $('relList'); box.textContent = '불러오는 중...';
+    const post = async (path, body) => { try { await BoldAuth.api(path, { method: 'POST', body: JSON.stringify(body) }); loadRel(list); } catch (e) { status(e.message || '처리하지 못했어요', 'err'); } };
+    try {
+      const d = list === 'blocks' ? await BoldAuth.api('/api/blocks') : await BoldAuth.api('/api/follows?list=' + list);
+      box.innerHTML = '';
+      const EMPTY = { requests: '받은 팔로우 요청이 없어요.', followers: '아직 팔로워가 없어요.', following: '아직 팔로우한 친구가 없어요. 둘러보기에서 찾아보세요!', blocks: '차단한 사람이 없어요.' };
+      if (!d.users.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = EMPTY[list]; box.append(e); return; }
+      d.users.forEach(u => {
+        let btns = [];
+        if (list === 'requests') btns = [['수락', () => post('/api/follows', { action: 'accept', nickname: u.nickname }), 'on'], ['거절', () => post('/api/follows', { action: 'reject', nickname: u.nickname })]];
+        if (list === 'followers') btns = [['내보내기', () => { if (confirm(u.nickname + '님을 팔로워에서 내보낼까요?')) post('/api/follows', { action: 'remove', nickname: u.nickname }); }]];
+        if (list === 'following') btns = [[u.status === 'pending' ? '요청 취소' : '팔로우 끊기', () => post('/api/follows', { action: 'unfollow', nickname: u.nickname })]];
+        if (list === 'blocks') btns = [['차단 풀기', () => post('/api/blocks', { action: 'unblock', nickname: u.nickname })]];
+        const row = SocialUIlite.userRow(u, btns);
+        if (list === 'following' && u.status === 'pending') row.querySelector('span').textContent += ' (수락 기다리는 중)';
+        box.append(row);
+      });
+    } catch (e) { box.textContent = '불러오지 못했어요.'; }
+  }
+  document.querySelectorAll('#relTabs .chip').forEach(b => { b.onclick = () => loadRel(b.dataset.l); });
+  // 마이페이지용 작은 사람 줄 (social-ui.js 를 불러오지 않으므로 여기서 만든다)
+  const SocialUIlite = {
+    userRow(u, buttons) {
+      const row = document.createElement('div'); row.className = 'row2'; row.style.cssText = 'align-items:center;margin-bottom:10px';
+      const a = document.createElement('a'); a.className = 'author'; a.href = '/u?n=' + encodeURIComponent(u.nickname); a.style.margin = '0';
+      const im = document.createElement('img'); im.alt = ''; im.src = u.avatar_url || DEFAULT_AVATAR;
+      const sp = document.createElement('span'); sp.textContent = u.nickname; a.append(im, sp);
+      const bx = document.createElement('div'); bx.style.cssText = 'display:flex;gap:6px;flex:none;justify-content:flex-end';
+      buttons.forEach(([label, fn, cls]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip ' + (cls || ''); b.textContent = label; b.onclick = fn; bx.append(b); });
+      row.append(a, bx); return row;
+    },
+  };
 
   /* ── 오늘 AI 사용량 ── */
   async function loadAiUsage() {

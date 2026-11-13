@@ -3,13 +3,14 @@
 //  GET  /api/admin/social?view=user&id=uuid   (또는 &n=닉네임)
 //  POST /api/admin/social  {action, ...}
 //    approve {post_id} / reject {post_id, reason} / hide {post_id, reason} / restore {post_id} / remove {post_id, reason}
+//    hide_comment {comment_id, reason} / restore_comment {comment_id} / remove_comment {comment_id, reason}
 //    resolve_report {report_id, resolution} / dismiss_report {report_id, resolution?}
 //    sanction {user_id, kind:'warning'|'post_ban'|'suspend', reason, days?(비우면 기한 없음), report_id?}
 //    revoke_sanction {sanction_id}
 //    settings {require_approval, auto_hide_reports, daily_post_limit, daily_report_limit}
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, isAdmin, makeSb } from '../_lib/common.js';
 import { removeObjects, signDownloads, POST_BUCKET } from '../_lib/storage.js';
-import { rpc, attachCovers, POST_COLS, UUID } from '../_lib/social.js';
+import { rpc, attachCovers, POST_COLS, UUID, notify } from '../_lib/social.js';
 
 const now = () => new Date().toISOString();
 const txt = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
@@ -56,7 +57,13 @@ export async function onRequest({ request, env }) {
         const rows = await attachCovers(env, pr.ok ? await pr.json() : []);
         posts = Object.fromEntries(rows.map(p => [p.id, p]));
       }
-      return json({ reports: reports.map(x => ({ ...x, post: posts[x.target_id] || null })) });
+      const commentIds = [...new Set(reports.filter(x => x.target_type === 'comment').map(x => x.target_id))];
+      let comments = {};
+      if (commentIds.length) {
+        const cr = await sb(`/rest/v1/comments?id=in.(${commentIds.join(',')})&select=id,post_id,body,status,status_reason,report_count,created_at,author_id,author:profiles!comments_author_id_fkey(nickname),post:posts(title)`);
+        comments = Object.fromEntries((cr.ok ? await cr.json() : []).map(c => [c.id, c]));
+      }
+      return json({ reports: reports.map(x => ({ ...x, post: posts[x.target_id] || null, comment: comments[x.target_id] || null })) });
     }
     if (view === 'user') {
       const id = url.searchParams.get('id'), n = url.searchParams.get('n');
@@ -65,14 +72,17 @@ export async function onRequest({ request, env }) {
       const r = await sb(`/rest/v1/profiles?${q}&select=id,nickname,avatar_url,visibility,role,created_at`);
       const p = (r.ok ? await r.json() : [])[0];
       if (!p) return json({ error: 'not_found' }, 404);
-      const [sr, pr, rr] = await Promise.all([
+      const [sr, pr, rr, cr, br] = await Promise.all([
         sb(`/rest/v1/sanctions?user_id=eq.${p.id}&select=*&order=created_at.desc&limit=50`),
         sb(`/rest/v1/posts?owner_id=eq.${p.id}&status=neq.deleted&select=${POST_COLS}&order=created_at.desc&limit=50`),
         sb(`/rest/v1/reports?target_owner=eq.${p.id}&select=id,target_type,reason,status,created_at&order=created_at.desc&limit=50`),
+        sb(`/rest/v1/comments?author_id=eq.${p.id}&status=neq.deleted&select=id,post_id,body,status,report_count,created_at,post:posts(title)&order=created_at.desc&limit=50`),
+        sb(`/rest/v1/blocks?blocked_id=eq.${p.id}&select=blocker_id&limit=1000`),
       ]);
       return json({
         profile: p, sanctions: sr.ok ? await sr.json() : [],
         posts: await attachCovers(env, pr.ok ? await pr.json() : []), reports: rr.ok ? await rr.json() : [],
+        comments: cr.ok ? await cr.json() : [], blocked_by_count: br.ok ? (await br.json()).length : 0,
       });
     }
     if (view === 'post') {
@@ -115,6 +125,38 @@ export async function onRequest({ request, env }) {
       if (res.data && res.data.ok) await removeObjects(env, res.data.paths || [], POST_BUCKET);
       await sb(`/rest/v1/posts?id=eq.${p.id}`, { method: 'PATCH', body: JSON.stringify({ status_reason: reason }) });
     }
+    // 게시자에게 알림 (앱 안)
+    const nt = { approve: 'post_approved', reject: 'post_rejected', hide: 'post_hidden', remove: 'post_removed' }[a];
+    if (nt) await notify(env, p.owner_id, nt, { post_id: p.id, data: reason ? { reason } : null });
+    return json({ ok: true });
+  }
+
+  // ── 댓글 관리 ──
+  if (['hide_comment', 'restore_comment', 'remove_comment'].includes(a)) {
+    if (!UUID.test(String(b.comment_id || ''))) return json({ error: 'not_found' }, 404);
+    const cr = await sb(`/rest/v1/comments?id=eq.${b.comment_id}&select=id,post_id,author_id,status`);
+    const c = (cr.ok ? await cr.json() : [])[0];
+    if (!c || c.status === 'deleted') return json({ error: 'not_found' }, 404);
+    const reason = txt(b.reason, 500);
+    if (a !== 'restore_comment' && !reason) return json({ error: '사유를 적어 주세요 (댓글 쓴 사람에게 보여요).' }, 400);
+    const closeC = (status, resolution) => sb(`/rest/v1/reports?target_type=eq.comment&target_id=eq.${c.id}&status=eq.open`, {
+      method: 'PATCH', body: JSON.stringify({ status, resolution, resolved_at: now() }) });
+    if (a === 'restore_comment') {
+      await sb(`/rest/v1/comments?id=eq.${c.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'visible', status_reason: null, report_count: 0, updated_at: now() }) });
+      await closeC('dismissed', reason || '검토 결과 문제없음');
+    } else if (a === 'hide_comment') {
+      await sb(`/rest/v1/comments?id=eq.${c.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'hidden', status_reason: reason, updated_at: now() }) });
+      await closeC('resolved', '가림 처리: ' + reason);
+      await notify(env, c.author_id, 'comment_hidden', { post_id: c.post_id, data: { reason } });
+    } else {
+      await rpc(env, 'social_delete_comment', { p_actor: null, p_comment: c.id, p_admin: true });
+      await sb(`/rest/v1/comments?id=eq.${c.id}`, { method: 'PATCH', body: JSON.stringify({ status_reason: reason }) });
+      await closeC('resolved', '삭제 처리: ' + reason);
+      await notify(env, c.author_id, 'comment_hidden', { post_id: c.post_id, data: { reason, removed: true } });
+    }
+    // 게시물의 보이는 댓글 수 다시 세기
+    const vr = await sb(`/rest/v1/comments?post_id=eq.${c.post_id}&status=eq.visible&select=id&limit=10000`);
+    await sb(`/rest/v1/posts?id=eq.${c.post_id}`, { method: 'PATCH', body: JSON.stringify({ comment_count: (vr.ok ? await vr.json() : []).length }) });
     return json({ ok: true });
   }
 
@@ -128,10 +170,11 @@ export async function onRequest({ request, env }) {
     if (!rows.length) return json({ error: 'not_found' }, 404);
     // 게시물 신고 수 다시 세기
     const rep = rows[0];
-    if (rep.target_type === 'post') {
-      const cr = await sb(`/rest/v1/reports?target_type=eq.post&target_id=eq.${rep.target_id}&status=eq.open&select=reporter_id`);
+    if (rep.target_type === 'post' || rep.target_type === 'comment') {
+      const cr = await sb(`/rest/v1/reports?target_type=eq.${rep.target_type}&target_id=eq.${rep.target_id}&status=eq.open&select=reporter_id`);
       const open = cr.ok ? await cr.json() : [];
-      await sb(`/rest/v1/posts?id=eq.${rep.target_id}`, { method: 'PATCH', body: JSON.stringify({ report_count: new Set(open.map(x => x.reporter_id)).size }) });
+      const tbl = rep.target_type === 'post' ? 'posts' : 'comments';
+      await sb(`/rest/v1/${tbl}?id=eq.${rep.target_id}`, { method: 'PATCH', body: JSON.stringify({ report_count: new Set(open.map(x => x.reporter_id)).size }) });
     }
     return json({ ok: true });
   }
@@ -152,6 +195,7 @@ export async function onRequest({ request, env }) {
         method: 'PATCH', body: JSON.stringify({ status: 'hidden', status_reason: 'account_suspended', updated_at: now() }),
       });
     }
+    await notify(env, b.user_id, 'sanction', { data: { kind: b.kind, reason, ends_at: row.ends_at } });
     return json({ ok: true, sanction: (await r.json())[0] });
   }
 
@@ -182,6 +226,7 @@ export async function onRequest({ request, env }) {
       auto_hide_reports: int(s.auto_hide_reports, 1, 100),
       daily_post_limit: int(s.daily_post_limit, 0, 1000),
       daily_report_limit: int(s.daily_report_limit, 0, 1000),
+      ...(s.hourly_comment_limit != null ? { hourly_comment_limit: int(s.hourly_comment_limit, 0, 1000) } : {}),
     };
     if (Object.values(patch).some(v => v === null)) return json({ error: '숫자를 확인해 주세요.' }, 400);
     const r = await sb('/rest/v1/social_settings?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ ...patch, updated_at: now() }) });

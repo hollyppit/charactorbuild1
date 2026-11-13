@@ -9,24 +9,79 @@
 <body>
 <div class="wrap" id="root">
   <div class="card" id="box">불러오는 중...</div>
+  <div class="card" id="cbox" style="display:none">
+    <h2 id="ctitle">댓글</h2>
+    <div id="clist"></div>
+    <div id="cform" style="display:none">
+      <textarea id="ctext" maxlength="300" placeholder="따뜻한 댓글을 남겨 주세요 (300자까지)"></textarea>
+      <div class="msg" id="cmsg"></div>
+      <button class="btn btn-main" id="csend" type="button">댓글 쓰기</button>
+    </div>
+    <p class="hint" id="chint"></p>
+  </div>
 </div>
 <script src="/assets/js/auth-client.js"></script>
 <script src="/assets/js/social-ui.js"></script>
 <script>
 (async function () {
   const U = SocialUI, root = document.getElementById('root'), box = document.getElementById('box');
+  const $ = id => document.getElementById(id);
   await U.header(root);
   const id = new URLSearchParams(location.search).get('id') || '';
+  let post = null;
+
+  function likeButton(p) {
+    const b = U.el('button', 'chip' + (p.liked ? ' on' : ''), (p.liked ? '♥ ' : '♡ ') + p.like_count); b.type = 'button';
+    b.title = '좋아요';
+    b.onclick = async () => {
+      if (!(await U.session())) { if (confirm('로그인하면 좋아요를 누를 수 있어요. 로그인하러 갈까요?')) location.href = '/account.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+      b.disabled = true;
+      try { const r = await U.api('/api/likes', { method: 'POST', body: JSON.stringify({ post_id: p.id, on: !p.liked }) }); p.liked = r.liked; p.like_count = r.like_count; b.className = 'chip' + (p.liked ? ' on' : ''); b.textContent = (p.liked ? '♥ ' : '♡ ') + p.like_count; }
+      catch (e) { alert(e.message); }
+      b.disabled = false;
+    };
+    return b;
+  }
+
+  function ownerTools(p) {
+    const wrap = U.el('div'); wrap.style.marginTop = '14px';
+    const sel = (label, opts, val, key) => {
+      const l = U.el('label', '', label); const s = U.el('select');
+      opts.forEach(([v, t]) => { const o = U.el('option', '', t); o.value = v; s.append(o); }); s.value = val;
+      s.onchange = async () => {
+        try { await U.api('/api/posts?id=' + encodeURIComponent(p.id), { method: 'PATCH', body: JSON.stringify({ [key]: s.value }) }); alert('바꿨어요.'); location.reload(); }
+        catch (e) { alert(e.message); s.value = val; }
+      };
+      wrap.append(l, s);
+    };
+    sel('공개 범위', [['public', '전체 공개'], ['followers', '팔로워만']], p.visibility || 'public', 'visibility');
+    sel('댓글', [['all', '누구나 (로그인한 회원)'], ['followers', '팔로워만'], ['off', '댓글 받지 않기']], p.comments_mode || 'all', 'comments_mode');
+    const likers = U.el('button', 'btn btn-sub', '♥ 누가 좋아했는지 보기'); likers.type = 'button'; likers.style.marginTop = '12px';
+    likers.onclick = async () => {
+      try {
+        const d = await U.api('/api/likes?post=' + encodeURIComponent(p.id));
+        const ov = U.el('div', 'modal-ov'); const mb = U.el('div', 'card modal-box');
+        mb.append(U.el('h2', '', '좋아한 친구 ' + d.users.length + '명'));
+        if (!d.users.length) mb.append(U.el('div', 'empty', '아직 없어요.'));
+        d.users.forEach(u => mb.append(U.userRow(u)));
+        const c = U.el('button', 'btn btn-sub', '닫기'); c.type = 'button'; c.onclick = () => ov.remove(); mb.append(c);
+        ov.onclick = e => { if (e.target === ov) ov.remove(); }; ov.append(mb); document.body.append(ov);
+      } catch (e) { alert(e.message); }
+    };
+    wrap.append(likers);
+    return wrap;
+  }
 
   function render(p) {
+    post = p;
     box.innerHTML = '';
     document.title = p.title + ' · 볼드하다';
     box.append(U.el('h1', '', p.title));
     const au = U.el('a', 'author'); au.href = '/u?n=' + encodeURIComponent(p.owner.nickname);
     const ai = U.el('img'); ai.alt = ''; ai.src = U.avatar(p.owner.avatar_url);
-    au.append(ai, U.el('span', '', p.owner.nickname + ' · ' + (U.KIND[p.kind] || '') + ' · ' + U.date(p.published_at || p.created_at)));
+    au.append(ai, U.el('span', '', p.owner.nickname + ' · ' + (U.KIND[p.kind] || '') + ' · ' + U.date(p.published_at || p.created_at) + (p.visibility === 'followers' ? ' · 👥 팔로워만' : '')));
     box.append(au);
-    if (p.status_text && p.status !== 'published') { const s = U.el('p', 'msg err', '📌 ' + p.status_text); box.append(s); }
+    if (p.status_text && p.status !== 'published') box.append(U.el('p', 'msg err', '📌 ' + p.status_text));
     if (p.caption) box.append(U.el('p', 'post-body', p.caption));
     const view = U.el('div', 'post-view');
     p.media.forEach(m => {
@@ -37,6 +92,11 @@
       if (m.body) view.append(U.el('p', 'post-body', m.body));
     });
     box.append(view);
+
+    const bar = U.el('div', 'chips'); bar.style.margin = '0 0 14px';
+    if (p.status === 'published' || !p.status) bar.append(likeButton(p));
+    bar.append(U.el('span', 'chip', '💬 ' + p.comment_count));
+    box.append(bar);
 
     const acts = U.el('div', 'row2');
     if (p.is_owner) {
@@ -57,12 +117,46 @@
       const r = U.el('button', 'btn btn-sub', '🚩 신고하기'); r.type = 'button'; r.onclick = () => U.report('post', p.id); acts.append(r);
     }
     box.append(acts);
+    if (p.is_owner) box.append(ownerTools(p));
+    if (p.status === 'published' || !p.status) loadComments(p);
   }
+
+  async function loadComments(p) {
+    $('cbox').style.display = '';
+    $('cform').style.display = p.can_comment ? '' : 'none';
+    $('chint').textContent = p.comment_hint || '';
+    const list = $('clist'); list.innerHTML = '불러오는 중...';
+    try {
+      const d = await U.api('/api/comments?post=' + encodeURIComponent(p.id));
+      list.innerHTML = '';
+      $('ctitle').textContent = '댓글 ' + d.comments.length + (d.next ? '+' : '');
+      if (!d.comments.length) list.append(U.el('div', 'hint', '아직 댓글이 없어요.'));
+      d.comments.forEach(c => {
+        const row = U.el('div'); row.style.cssText = 'border-bottom:1px solid #3a2a3a;padding:10px 0';
+        const head = U.el('div', 'hint');
+        const who = U.el('a', '', c.author.nickname); who.href = '/u?n=' + encodeURIComponent(c.author.nickname);
+        head.append(who, ' · ' + U.date(c.created_at));
+        const body = U.el('div', 'post-body', c.body); body.style.margin = '4px 0';
+        const tools = U.el('div', 'chips'); tools.style.marginTop = '4px';
+        if (c.can_delete) { const d2 = U.el('button', 'chip', '삭제'); d2.type = 'button'; d2.onclick = async () => { if (!confirm('이 댓글을 지울까요?')) return; try { await U.api('/api/comments?id=' + c.id, { method: 'DELETE' }); loadComments(p); } catch (e) { alert(e.message); } }; tools.append(d2); }
+        if (!c.is_mine) { const r2 = U.el('button', 'chip', '🚩 신고'); r2.type = 'button'; r2.onclick = () => U.report('comment', c.id); tools.append(r2); }
+        row.append(head, body, tools); list.append(row);
+      });
+    } catch (e) { list.textContent = '댓글을 불러오지 못했어요.'; }
+  }
+
+  $('csend').onclick = async () => {
+    const t = $('ctext').value.trim(); if (!t) return;
+    $('csend').disabled = true; $('cmsg').className = 'msg'; $('cmsg').textContent = '';
+    try { await U.api('/api/comments', { method: 'POST', body: JSON.stringify({ post_id: post.id, body: t }) }); $('ctext').value = ''; loadComments(post); }
+    catch (e) { $('cmsg').className = 'msg err'; $('cmsg').textContent = e.message; }
+    $('csend').disabled = false;
+  };
 
   try { render(await U.api('/api/posts?id=' + encodeURIComponent(id))); }
   catch (e) {
     if (e.code === 'social_disabled') return U.disabledBox(root, e);
-    box.textContent = e.status === 404 ? '게시물을 찾을 수 없어요. 삭제되었거나 공개되지 않은 게시물이에요.' : '불러오지 못했어요.';
+    box.textContent = e.status === 404 ? '게시물을 찾을 수 없어요. 삭제되었거나 볼 수 없는 게시물이에요.' : '불러오지 못했어요.';
   }
 })();
 </script>

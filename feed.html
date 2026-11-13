@@ -10,8 +10,12 @@
 <div class="wrap wide" id="root">
   <h1>둘러보기</h1>
   <p class="sub">볼드하다 친구들이 만든 작품이에요. 마음에 들지 않는 내용이 있으면 게시물에서 🚩 신고해 주세요.</p>
+  <div class="tabs">
+    <button class="chip on" type="button" data-f="latest">최신</button>
+    <button class="chip" type="button" data-f="following">팔로잉</button>
+  </div>
   <div class="post-grid" id="grid"></div>
-  <div class="empty" id="empty" style="display:none">아직 공개된 작품이 없어요. 제작 화면에서 "📤 게시하기"로 첫 작품을 올려 보세요!</div>
+  <div class="empty" id="empty" style="display:none"></div>
   <button class="btn btn-sub" id="more" type="button" style="display:none;margin-top:18px">더 보기</button>
 </div>
 <script src="/assets/js/auth-client.js"></script>
@@ -20,25 +24,35 @@
 (async function () {
   const U = SocialUI, root = document.getElementById('root');
   await U.header(root);
-  let next = null;
-  async function load() {
-    const more = document.getElementById('more');
+  let next = null, feed = new URLSearchParams(location.search).get('f') === 'following' ? 'following' : 'latest';
+  const grid = document.getElementById('grid'), empty = document.getElementById('empty'), more = document.getElementById('more');
+  const EMPTY = { latest: '아직 공개된 작품이 없어요. 제작 화면에서 "📤 게시하기"로 첫 작품을 올려 보세요!', following: '팔로우한 친구의 작품이 아직 없어요. 마음에 드는 친구의 프로필에서 팔로우해 보세요!' };
+
+  async function load(reset) {
+    if (reset) { grid.innerHTML = ''; next = null; empty.style.display = 'none'; }
     more.disabled = true;
     try {
-      const d = await U.api('/api/posts?feed=latest' + (next ? '&before=' + encodeURIComponent(next) : ''));
-      const grid = document.getElementById('grid');
+      const d = await U.api('/api/posts?feed=' + feed + (next ? '&before=' + encodeURIComponent(next) : ''));
       d.posts.forEach(p => grid.append(U.card(p)));
-      document.getElementById('empty').style.display = grid.children.length ? 'none' : '';
-      next = d.next;
-      more.style.display = next ? '' : 'none';
+      empty.textContent = EMPTY[feed]; empty.style.display = grid.children.length ? 'none' : '';
+      next = d.next; more.style.display = next ? '' : 'none';
     } catch (e) {
-      if (e.status === 404 || e.status === 503) return U.disabledBox(root, e);
-      document.getElementById('empty').textContent = '불러오지 못했어요. 잠시 뒤 다시 와 주세요.';
-      document.getElementById('empty').style.display = '';
+      if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);
+      if (e.status === 401) { empty.textContent = '로그인하면 팔로우한 친구의 작품을 모아 볼 수 있어요.'; empty.style.display = ''; more.style.display = 'none'; return; }
+      empty.textContent = '불러오지 못했어요. 잠시 뒤 다시 와 주세요.'; empty.style.display = '';
     } finally { more.disabled = false; }
   }
-  document.getElementById('more').onclick = load;
-  load();
+  document.querySelectorAll('.tabs .chip').forEach(b => {
+    b.classList.toggle('on', b.dataset.f === feed);
+    b.onclick = () => {
+      feed = b.dataset.f;
+      document.querySelectorAll('.tabs .chip').forEach(x => x.classList.toggle('on', x === b));
+      history.replaceState(null, '', feed === 'following' ? '?f=following' : location.pathname);
+      load(true);
+    };
+  });
+  more.onclick = () => load(false);
+  load(true);
 })();
 </script>
 <script src="/assets/js/notice.js"></script>

@@ -23,26 +23,55 @@
   let next = null, prof = null;
   const head = document.getElementById('head'), empty = document.getElementById('empty');
 
+  async function needLogin(msg) {
+    if (await U.session()) return false;
+    if (confirm(msg + ' 로그인하러 갈까요?')) location.href = '/account.html?next=' + encodeURIComponent(location.pathname + location.search);
+    return true;
+  }
+  async function act(path, body, okMsg) {
+    try { await U.api(path, { method: 'POST', body: JSON.stringify(body) }); if (okMsg) alert(okMsg); location.reload(); }
+    catch (e) { alert(e.message); }
+  }
+
+  function followLabel(p) {
+    if (p.follow_status === 'accepted') return '팔로잉 ✓';
+    if (p.follow_status === 'pending') return '요청함 (취소)';
+    return p.follow_needs_approval ? '팔로우 요청' : '팔로우';
+  }
+
   function renderHead(p) {
     head.innerHTML = '';
     const row = U.el('div', 'avatar-row');
     const img = U.el('img', 'avatar'); img.alt = ''; img.src = U.avatar(p.avatar_url);
     const info = U.el('div');
     info.append(U.el('h1', '', p.nickname));
-    if (!p.private) {
+    if (!p.blocked) info.append(U.el('p', 'hint', '팔로워 ' + (p.followers_count || 0) + ' · 팔로잉 ' + (p.following_count || 0)));
+    if (p.blocked) info.append(U.el('p', 'sub', '내가 차단한 사람이에요. 서로의 게시물·댓글이 보이지 않아요.'));
+    else if (!p.private) {
       if (p.bio) info.append(U.el('p', 'sub', p.bio));
-      if (p.interests && p.interests.length) {
-        const chips = U.el('div', 'chips'); p.interests.forEach(t => chips.append(U.el('span', 'chip', '#' + t))); info.append(chips);
-      }
+      if (p.interests && p.interests.length) { const chips = U.el('div', 'chips'); p.interests.forEach(t => chips.append(U.el('span', 'chip', '#' + t))); info.append(chips); }
     } else {
-      info.append(U.el('p', 'sub', '비공개 프로필이에요.'));
+      info.append(U.el('p', 'sub', p.visibility === 'followers' ? '팔로워에게만 공개된 프로필이에요. 팔로우 요청이 수락되면 볼 수 있어요.' : '비공개 프로필이에요.'));
     }
     row.append(img, info); head.append(row);
+
     const acts = U.el('div', 'row2'); acts.style.marginTop = '14px';
+    const btn = (label, cls, fn) => { const b = U.el('button', 'btn ' + cls, label); b.type = 'button'; b.onclick = fn; acts.append(b); return b; };
     if (p.is_me) {
       const a = U.el('a', 'btn btn-sub', '프로필 고치기 (마이페이지)'); a.href = '/me.html'; a.style.textDecoration = 'none'; acts.append(a);
+    } else if (p.blocked) {
+      btn('차단 풀기', 'btn-sub', async () => { if (confirm(p.nickname + '님 차단을 풀까요?')) act('/api/blocks', { action: 'unblock', nickname: p.nickname }); });
     } else {
-      const r = U.el('button', 'btn btn-sub', '🚩 프로필 신고'); r.type = 'button'; r.onclick = () => U.report('profile', p.id); acts.append(r);
+      btn(followLabel(p), p.follow_status ? 'btn-sub' : 'btn-main', async () => {
+        if (await needLogin('로그인하면 팔로우할 수 있어요.')) return;
+        if (p.follow_status === 'accepted' && !confirm(p.nickname + '님 팔로우를 끊을까요?')) return;
+        act('/api/follows', { action: p.follow_status ? 'unfollow' : 'follow', nickname: p.nickname });
+      });
+      btn('🚩 신고', 'btn-sub', () => U.report('profile', p.id));
+      btn('차단', 'btn-sub', async () => {
+        if (await needLogin('로그인하면 차단할 수 있어요.')) return;
+        if (confirm(p.nickname + '님을 차단할까요?\n서로 팔로우가 끊기고, 서로의 게시물·댓글이 보이지 않아요. 상대에게는 알리지 않아요.')) act('/api/blocks', { action: 'block', nickname: p.nickname }, '차단했어요.');
+      });
     }
     head.append(acts);
     document.title = p.nickname + ' · 볼드하다';
@@ -56,7 +85,7 @@
       if (!prof) { prof = d; renderHead(d); }
       const grid = document.getElementById('grid');
       (d.posts || []).forEach(p => grid.append(U.card(p)));
-      if (!grid.children.length) { empty.textContent = d.private ? '이 친구의 작품 목록은 공개되어 있지 않아요.' : '아직 공개된 작품이 없어요.'; empty.style.display = ''; }
+      if (!grid.children.length) { empty.textContent = d.blocked ? '' : d.private ? '이 친구의 작품 목록은 볼 수 없어요.' : '아직 공개된 작품이 없어요.'; empty.style.display = empty.textContent ? '' : 'none'; }
       next = d.next; more.style.display = next ? '' : 'none';
     } catch (e) {
       if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);

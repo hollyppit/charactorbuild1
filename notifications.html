@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>알림 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card">
+    <h1>🔔 알림</h1>
+    <p class="sub">최근 50개를 보여 줘요. 알림은 90일 동안 남아요.</p>
+    <div id="list">불러오는 중...</div>
+  </div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), list = document.getElementById('list');
+  await U.header(root);
+  if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent('/notifications')); return; }
+  try {
+    const d = await U.api('/api/notifications');
+    list.innerHTML = '';
+    if (!d.notifications.length) list.append(U.el('div', 'empty', '아직 알림이 없어요.'));
+    d.notifications.forEach(n => {
+      const link = U.notiLink(n);
+      const row = U.el(link ? 'a' : 'div');
+      if (link) row.href = link;
+      row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #3a2a3a;color:var(--text);text-decoration:none' + (n.read ? ';opacity:.6' : '');
+      const im = U.el('img'); im.alt = ''; im.src = U.avatar(n.actor && n.actor.avatar_url);
+      im.style.cssText = 'width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;border:2px solid #000';
+      const t = U.el('div'); t.style.flex = '1';
+      t.append(U.el('div', '', (n.read ? '' : '● ') + U.notiText(n)), U.el('div', 'hint', new Date(n.created_at).toLocaleString('ko-KR')));
+      row.append(im, t); list.append(row);
+    });
+    if (d.unread) U.api('/api/notifications', { method: 'POST', body: JSON.stringify({ action: 'read_all' }) }).catch(() => {});
+  } catch (e) {
+    if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);
+    list.textContent = '불러오지 못했어요.';
+  }
+})();
+</script>
+</body>
+</html>
