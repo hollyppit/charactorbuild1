@@ -9,6 +9,7 @@
 //  DELETE /api/posts?id=                        내 게시물 삭제
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { signUpload, objectInfo, removeObjects, POST_BUCKET } from './_lib/storage.js';
+import { housekeeping } from './_lib/housekeeping.js';
 import { whoIs, disabledReply, rpc, attachCovers, mediaOf, publicPost, statusText, POST_COLS, UUID, KINDS, MIME_EXT,
   blockedIds, followeeIds, followStatus, notInList } from './_lib/social.js';
 
@@ -44,6 +45,7 @@ export async function onRequest({ request, env }) {
   if (request.method === 'GET') {
     const feed = url.searchParams.get('feed');
     if (feed === 'latest' || feed === 'following') {
+      await housekeeping(env, 0.02);   // 보관 기간 지난 기록 가끔 정리
       const before = url.searchParams.get('before');
       const me = who.user ? who.user.id : null;
       const blocked = await blockedIds(env, me);

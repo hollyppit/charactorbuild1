@@ -11,6 +11,7 @@
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, isAdmin, makeSb } from '../_lib/common.js';
 import { removeObjects, signDownloads, POST_BUCKET } from '../_lib/storage.js';
 import { rpc, attachCovers, POST_COLS, UUID, notify } from '../_lib/social.js';
+import { housekeeping } from '../_lib/housekeeping.js';
 
 const now = () => new Date().toISOString();
 const txt = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
@@ -38,6 +39,7 @@ export async function onRequest({ request, env }) {
 
   // ── 조회 ──
   if (request.method === 'GET') {
+    await housekeeping(env, 0.3);   // 관리자 화면을 열 때 보관 기간 지난 기록 정리
     const view = url.searchParams.get('view') || 'pending';
     if (['pending', 'hidden', 'published', 'rejected'].includes(view)) {
       const order = view === 'published' ? 'published_at.desc' : 'updated_at.desc';
