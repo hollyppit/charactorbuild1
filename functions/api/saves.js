@@ -1,4 +1,5 @@
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, isAdmin, makeSb, supabaseKey, timingSafeEqual } from './_lib/common.js';
+import { getUser } from './_lib/auth.js';
 
 const MAX_BODY = 80 * 1024 * 1024;
 
@@ -22,6 +23,13 @@ export async function onRequest(context) {
   }
 
   const sb = makeSb(env);
+
+  // 새 저장(POST)·덮어쓰기(PUT)는 로그인한 사용자 또는 관리자만. 조회·삭제(비밀번호 확인)는 기존대로 둔다
+  // (예전 비회원 저장을 불러오거나 계정으로 옮기고, 지울 수 있게)
+  if ((request.method === 'POST' || request.method === 'PUT') && !admin) {
+    const user = await getUser(request, env);
+    if (!user) return json({ error: 'login_required' }, 401);
+  }
 
   // ── GET: 목록 또는 단건 조회 ─────────────────────────────
   if (request.method === 'GET') {
