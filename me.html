@@ -98,7 +98,14 @@
       <div class="hint" id="quotaText" style="margin-bottom:6px"></div>
       <div style="height:8px;background:#2d0040;margin-bottom:14px"><div id="quotaBar" style="height:100%;width:0;background:var(--yellow)"></div></div>
       <div id="worksList"></div>
-      <p class="hint" id="worksNote">제작 도구에서 로그인한 계정으로 저장하는 기능은 도구별로 차례로 연결돼요. 지금은 기존처럼 저장해 주세요.</p>
+      <p class="hint" id="worksNote">각 제작 도구의 "☁ 계정에 저장" 버튼으로 저장한 작업이 여기에 모여요.</p>
+    </div>
+
+    <div class="card">
+      <h2>오늘 AI 사용량</h2>
+      <div class="hint" id="aiUseText" style="margin-bottom:6px">불러오는 중...</div>
+      <div style="height:8px;background:#2d0040;margin-bottom:8px"><div id="aiUseBar" style="height:100%;width:0;background:var(--yellow)"></div></div>
+      <p class="hint" id="aiUseNote"></p>
     </div>
 
     <div class="card">
@@ -430,6 +437,19 @@
     row.append(thumb, info, btns);
     return row;
   }
+  /* ── 오늘 AI 사용량 ── */
+  async function loadAiUsage() {
+    try {
+      const u = await BoldAuth.api('/api/ai-usage');
+      const c = u.cost || {};
+      $('aiUseText').textContent = u.used + ' / ' + u.limit + '점 사용 (한국 시간 0시에 다시 채워져요)';
+      $('aiUseBar').style.width = (u.limit ? Math.min(100, u.used / u.limit * 100) : 100) + '%';
+      $('aiUseNote').textContent = '그림 1장 ' + (c.image ?? 10) + '점 · 목소리 1번 ' + (c.tts ?? 2) + '점 · 글 1번 ' + (c.text ?? 1) + '점. AI가 실패하면 점수는 돌려받아요.';
+    } catch (e) {
+      $('aiUseText').textContent = e.message === 'usage_not_ready' ? 'AI 사용량 기능을 준비 중이에요.' : '사용량을 불러오지 못했어요.';
+    }
+  }
+
   async function loadWorks() {
     $('tabWorks').classList.toggle('on', !showTrash); $('tabTrash').classList.toggle('on', showTrash);
     const box = $('worksList');
@@ -474,6 +494,7 @@
       $('loading').style.display = 'none'; $('main').style.display = 'block';
       loadKids();
       loadWorks();
+      loadAiUsage();
     } catch (e) {
       if (e.status === 401) { location.replace('/account.html?next=' + encodeURIComponent('/me.html')); return; }
       $('loading').textContent = ERR[e.message] || '프로필을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';

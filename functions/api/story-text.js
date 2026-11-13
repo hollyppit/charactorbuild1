@@ -1,11 +1,10 @@
-import { corsHeaders as corsFor, guardAi } from './_lib/common.js';
+import { corsHeaders as corsFor } from './_lib/common.js';
+import { withAiUsage } from './_lib/ai-usage.js';
 // 스토리 만들기 — 텍스트 AI (대본 다듬기 / 질문별 힌트)
 // 1순위 Gemini → 실패 시 OpenAI 폴백
-export async function onRequest(context) {
+async function handle(context) {
   const corsHeaders = { ...corsFor(context.request, context.env, 'POST,OPTIONS'), 'Content-Type': 'application/json' };
   if (context.request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  const denied = await guardAi(context.request, context.env, corsHeaders);
-  if (denied) return denied;
 
   try {
     const body = await context.request.json();
@@ -132,3 +131,6 @@ async function generateJson(prompt, GEMINI_KEY, OPENAI_KEY) {
 
   throw new Error('AI 요청에 실패했어요. 잠시 후 다시 시도해 주세요. (' + lastError.slice(0, 200) + ')');
 }
+
+// AI 사용 기록·하루 한도(관리자·회원·비회원 구분, 실패 시 점수 반환)는 감싸는 함수가 처리
+export const onRequest = withAiUsage('text', handle);

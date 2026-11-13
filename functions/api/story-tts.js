@@ -1,13 +1,12 @@
-import { corsHeaders as corsFor, guardAi } from './_lib/common.js';
+import { corsHeaders as corsFor } from './_lib/common.js';
+import { withAiUsage } from './_lib/ai-usage.js';
 // 스토리 만들기 — 나레이션 음성(Gemini TTS)
 // 응답: { pcm: base64(16bit little-endian 모노 PCM), rate: 24000 }
 const VOICES = ['Kore', 'Puck', 'Charon', 'Leda', 'Aoede', 'Sulafat', 'Zephyr'];
 
-export async function onRequest(context) {
+async function handle(context) {
   const corsHeaders = { ...corsFor(context.request, context.env, 'POST,OPTIONS'), 'Content-Type': 'application/json' };
   if (context.request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  const denied = await guardAi(context.request, context.env, corsHeaders);
-  if (denied) return denied;
 
   try {
     const body = await context.request.json();
@@ -50,3 +49,6 @@ export async function onRequest(context) {
     return new Response(JSON.stringify({ error: err.message }), { status: err.status || 500, headers: corsHeaders });
   }
 }
+
+// AI 사용 기록·하루 한도(관리자·회원·비회원 구분, 실패 시 점수 반환)는 감싸는 함수가 처리
+export const onRequest = withAiUsage('tts', handle);

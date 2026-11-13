@@ -1,4 +1,4 @@
-// 비회원 서버 저장 막기. auth-client.js 다음에 불러온다.
+// 비회원 서버 저장 막기 + 회원 로그인 토큰 첨부(저장·AI). auth-client.js 다음에 불러온다.
 // 직접 그리기의 "☁️ 새 저장 / 🔄 중간 저장"(이름+비밀번호 서버 저장)은 로그인한 사람(또는 관리자)만 쓸 수 있다.
 // 비회원이 누르면 로그인 안내를 보여 준다. PNG 내려받기, 이 기기 자동 저장, 예전 저장 불러오기·삭제는 그대로 둔다.
 // 서버(/api/saves POST·PUT)도 로그인 토큰이 없으면 401 로 막으므로, 로그인한 사용자의 요청에는 토큰을 붙인다.
@@ -33,13 +33,18 @@
   }
   ['openNewDrawSave', 'openQuickSave', 'doDrawSave'].forEach(guard);
 
-  // 로그인한 사용자의 /api/saves 저장 요청에 로그인 토큰 첨부
+  // 회원이면 AI 비밀번호 창을 건너뛴다 (서버가 로그인 토큰으로 확인하고 회원별 하루 한도를 적용)
+  window._boldMember = false;
+  currentSession().then(s => { window._boldMember = !!(s && s.access_token); });
+
+  // 로그인한 사용자의 /api/saves 저장 요청과 AI 요청에 로그인 토큰 첨부
+  const AI_PATH = /^\/api\/(?:imagine|storyboard|story-text|story-scene|story-direct|story-tts)(?:[?#]|$)/;
   const prevFetch = window.fetch;
   window.fetch = async function (input, init) {
     try {
       const url = typeof input === 'string' ? input : (input && input.url) || '';
       const method = String((init && init.method) || 'GET').toUpperCase();
-      if (/^\/api\/saves(?:[?#]|$)/.test(url) && (method === 'POST' || method === 'PUT')) {
+      if ((/^\/api\/saves(?:[?#]|$)/.test(url) && (method === 'POST' || method === 'PUT')) || (AI_PATH.test(url) && method === 'POST')) {
         const s = await currentSession();
         if (s && s.access_token) {
           init = Object.assign({}, init);

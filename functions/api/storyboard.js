@@ -1,9 +1,8 @@
-import { corsHeaders as corsFor, guardAi } from './_lib/common.js';
-export async function onRequest(context) {
+import { corsHeaders as corsFor } from './_lib/common.js';
+import { withAiUsage } from './_lib/ai-usage.js';
+async function handle(context) {
   const corsHeaders = { ...corsFor(context.request, context.env, 'POST,OPTIONS'), 'Content-Type': 'application/json' };
   if (context.request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  const denied = await guardAi(context.request, context.env, corsHeaders);
-  if (denied) return denied;
 
   try {
     const { sketch, charPhoto, genre, sceneDesc: rawDesc } = await context.request.json();
@@ -264,3 +263,6 @@ CRITICAL: Do NOT include any text, words, letters, subtitles, watermarks, captio
     });
   }
 }
+
+// AI 사용 기록·하루 한도(관리자·회원·비회원 구분, 실패 시 점수 반환)는 감싸는 함수가 처리
+export const onRequest = withAiUsage('image', handle);
