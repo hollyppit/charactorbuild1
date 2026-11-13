@@ -10,13 +10,45 @@
     character: { btn: 'btnChPublish', label: '캐릭터' },
     storyboard: { btn: 'btnSbPublish', label: '스토리보드' },
     story: { btn: 'btnStPublish', label: '스토리' },
+    dub: { btn: 'btnDubPublish', label: '그림책 더빙' },
   };
+  const MAX_FILE = 10 * 1024 * 1024;
+  const VIDEO_OK = ['video/mp4', 'video/webm', 'video/quicktime'];
+  const AUDIO_OK = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav'];
+  const baseType = t => String(t || '').split(';')[0].trim().toLowerCase();
+
+  // 동영상 → {width, height, poster(캔버스)}. 첫 장면 그림을 포스터로 쓴다
+  function videoInfo(src) {
+    return new Promise((resolve, reject) => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto'; v.crossOrigin = 'anonymous';
+      const t = setTimeout(() => reject(new Error('동영상을 읽지 못했어요.')), 15000);
+      v.onloadeddata = () => { try { v.currentTime = Math.min(0.2, (v.duration || 1) / 2); } catch (e) {} };
+      v.onseeked = () => {
+        clearTimeout(t);
+        const c = document.createElement('canvas'); c.width = v.videoWidth || 1280; c.height = v.videoHeight || 720;
+        try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); } catch (e) {}
+        resolve({ width: c.width, height: c.height, poster: c });
+      };
+      v.onerror = () => { clearTimeout(t); reject(new Error('동영상을 읽지 못했어요.')); };
+      v.src = src;
+    });
+  }
+  // 그림이 없는 장면용 글자 카드
+  function textCard(text) {
+    const c = document.createElement('canvas'); c.width = 1280; c.height = 720;
+    const x = c.getContext('2d'); x.fillStyle = '#1a1a2e'; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#fff'; x.font = 'bold 48px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(String(text || '').slice(0, 30), c.width / 2, c.height / 2);
+    return c;
+  }
 
   function hasSessionHint() {
     try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^sb-.+-auth-token$/.test(k)) return true; } } catch (e) {}
     return false;
   }
-  const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('그림을 읽지 못했어요.')); i.src = src; });
+  // 기본 작품 그림처럼 다른 주소(http)의 그림은 crossOrigin 으로 불러와야 게시용으로 다시 그릴 수 있다
+  const loadImg = src => new Promise((res, rej) => { const i = new Image(); if (/^https?:/.test(src)) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => rej(new Error('그림을 읽지 못했어요.')); i.src = src; });
   async function sha256hex(blob) {
     const h = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
     return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -77,6 +109,39 @@
       const b = window.StoryCloud && StoryCloud.bound;
       return { title: p.title || (b && b.title) || '나의 그림책', items: items.slice(0, 20), projectId: b && b.id, more: items.length > 20 };
     }
+    if (tool === 'dub') {
+      if (typeof dubCurrentProjectId === 'undefined' || dubCurrentProjectId == null) throw new Error('먼저 더빙할 작품을 고르거나 직접 만들어 주세요.');
+      const proj = dubPersonalProjects.find(p => p.id === dubCurrentProjectId) || dubProjects.find(p => p.id === dubCurrentProjectId);
+      if (!proj || !proj.scenes.length) throw new Error('장면이 없어요.');
+      if (!proj.scenes.some(s => s.audioBlob)) throw new Error('녹음한 장면이 하나 이상 있어야 더빙을 게시할 수 있어요. "🎤 더빙하기"에서 먼저 녹음해 주세요.');
+      const items = [], notes = [];
+      for (const sc of proj.scenes.slice(0, 20)) {
+        const it = { body: String(sc.text || sc.name || '').slice(0, 1000), audio: null };
+        // 녹음
+        if (sc.audioBlob) {
+          const t = baseType(sc.audioBlob.type) || 'audio/webm';
+          if (AUDIO_OK.includes(t) && sc.audioBlob.size <= MAX_FILE) it.audio = new Blob([sc.audioBlob], { type: t });
+          else notes.push('"' + (sc.name || '장면') + '" 녹음은 형식이나 크기 때문에 빠져요.');
+        }
+        // 그림·동영상
+        if (sc.mediaType === 'video' && sc.mediaObjectURL) {
+          let blob = sc.mediaBlob;
+          if (!blob) { try { blob = await (await fetch(sc.mediaObjectURL)).blob(); } catch (e) { blob = null; } }
+          const info = await videoInfo(sc.mediaObjectURL);
+          const t = blob && baseType(blob.type);
+          if (blob && VIDEO_OK.includes(t) && blob.size <= MAX_FILE) { it.video = { blob: new Blob([blob], { type: t }), mime: t, width: info.width, height: info.height }; it.src = info.poster; }
+          else { it.src = info.poster; notes.push('"' + (sc.name || '장면') + '" 동영상은 10MB가 넘거나 형식이 맞지 않아 첫 장면 사진으로 올라가요.'); }
+        } else if (sc.mediaObjectURL) {
+          it.src = sc.mediaObjectURL;
+        } else {
+          it.src = textCard(sc.name || sc.text || '');
+        }
+        items.push(it);
+      }
+      if (proj.scenes.length > 20) notes.push('장면은 20개까지만 게시돼요. 앞의 20개를 올려요.');
+      const b = window.DubCloud && DubCloud.bound;
+      return { title: proj.title || '나의 더빙', items, projectId: b && b.id, notes };
+    }
     throw new Error('알 수 없는 도구');
   }
 
@@ -96,10 +161,15 @@
       const im = el('img', 'height:84px;border:1px solid #ccc;flex:none;background:#f5f5f5');
       im.alt = '';
       im.src = typeof it.src === 'string' ? it.src : (() => { try { return it.src.toDataURL('image/jpeg', 0.6); } catch (e) { return ''; } })();
-      strip.appendChild(im);
+      const cell = el('div', 'position:relative;flex:none');
+      cell.appendChild(im);
+      if (tool === 'dub') cell.appendChild(el('div', 'position:absolute;left:2px;bottom:2px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;padding:1px 4px', (it.video ? '🎬 ' : '') + (it.audio ? '🎤' : '무음')));
+      strip.appendChild(cell);
     });
     box.appendChild(strip);
     if (data.more) box.appendChild(el('div', 'color:#a33;font-size:12px;margin-bottom:8px', '그림은 20장까지만 게시돼요. 앞의 20장을 올려요.'));
+    (data.notes || []).forEach(n => box.appendChild(el('div', 'color:#a33;font-size:12px;margin-bottom:4px', '※ ' + n)));
+    if (tool === 'dub') box.appendChild(el('div', 'color:#555;font-size:12px;margin-bottom:6px', '🎤 목소리 녹음도 함께 올라가요. 녹음에서 이름·학교·연락처 같은 개인정보를 말하지 않았는지 확인해 주세요.'));
 
     const lab = t => el('div', 'font-weight:700;margin:10px 0 4px', t);
     const title = el('input', 'width:100%;padding:10px;border:2px solid #444;font-size:16px'); title.maxLength = 60; title.value = String(data.title || '').slice(0, 60);
@@ -147,22 +217,27 @@
         msg.textContent = '그림 준비 중...';
         const files = [];
         for (const it of data.items) {
-          const j = await toJpeg(it.src);
-          files.push({ ...j, sha256: await sha256hex(j.blob), body: String(it.body || '').slice(0, 1000) });
+          const j = it.video ? { blob: it.video.blob, width: it.video.width, height: it.video.height, mime: it.video.mime } : { ...(await toJpeg(it.src)), mime: 'image/jpeg' };
+          const f = { ...j, sha256: await sha256hex(j.blob), body: String(it.body || '').slice(0, 1000) };
+          if (it.audio) f.audio = { blob: it.audio, mime: it.audio.type, sha256: await sha256hex(it.audio) };
+          files.push(f);
         }
         msg.textContent = '게시물 만드는 중...';
         const start = await BoldAuth.api('/api/posts', { method: 'POST', body: JSON.stringify({
           kind: tool, title: title.value.trim(), caption: cap.value.trim(), visibility: vis.value, comments_mode: cmode.value,
           source_project_id: data.projectId || undefined,
           replaces_post_id: replaceBox && replaceBox.checked && existing ? existing.id : undefined,
-          media: files.map(f => ({ mime: 'image/jpeg', bytes: f.blob.size, width: f.width, height: f.height, sha256: f.sha256, body: f.body })),
+          media: files.map(f => ({ mime: f.mime, bytes: f.blob.size, width: f.width, height: f.height, sha256: f.sha256, body: f.body,
+            audio: f.audio ? { mime: f.audio.mime, bytes: f.audio.blob.size, sha256: f.audio.sha256 } : undefined })),
         }) });
         const c = await BoldAuth.client();
         for (let i = 0; i < start.uploads.length; i++) {
-          msg.textContent = '그림 올리는 중... ' + (i + 1) + '/' + start.uploads.length;
+          msg.textContent = '파일 올리는 중... ' + (i + 1) + '/' + start.uploads.length;
           const u = start.uploads[i];
-          const up = await c.storage.from(start.bucket).uploadToSignedUrl(u.path, u.token, files[u.idx].blob, { contentType: 'image/jpeg' });
-          if (up.error) throw new Error('그림을 올리지 못했어요. 다시 해 주세요.');
+          const f = files[u.idx];
+          const part = u.part === 'audio' ? f.audio : f;
+          const up = await c.storage.from(start.bucket).uploadToSignedUrl(u.path, u.token, part.blob, { contentType: part.mime });
+          if (up.error) throw new Error('파일을 올리지 못했어요. 다시 해 주세요.');
         }
         msg.textContent = '마무리 중...';
         const fin = await BoldAuth.api('/api/posts?action=finish', { method: 'POST', body: JSON.stringify({ id: start.id }) });

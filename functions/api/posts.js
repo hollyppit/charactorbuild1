@@ -10,7 +10,7 @@
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { signUpload, objectInfo, removeObjects, POST_BUCKET } from './_lib/storage.js';
 import { housekeeping } from './_lib/housekeeping.js';
-import { whoIs, disabledReply, rpc, attachCovers, mediaOf, publicPost, statusText, POST_COLS, UUID, KINDS, MIME_EXT,
+import { whoIs, disabledReply, rpc, attachCovers, mediaOf, publicPost, statusText, POST_COLS, UUID, KINDS, MIME_EXT, VIDEO_EXT, AUDIO_EXT,
   blockedIds, followeeIds, followStatus, notInList } from './_lib/social.js';
 
 const VIS = ['public', 'followers'];
@@ -121,7 +121,8 @@ export async function onRequest({ request, env }) {
     const kind = String(b.kind || '');
     const title = clean(b.title, 60);
     const caption = clean(b.caption, 500);
-    if (!KINDS.includes(kind) || kind === 'dub') return json({ error: 'invalid_kind' }, 400);
+    if (!KINDS.includes(kind)) return json({ error: 'invalid_kind' }, 400);
+    const isDub = kind === 'dub';
     if (!title) return json({ error: '제목을 적어 주세요.', code: 'title_required' }, 400);
     const visibility = b.visibility || 'public';
     const cmode = b.comments_mode || 'all';
@@ -130,16 +131,28 @@ export async function onRequest({ request, env }) {
     if (!Array.isArray(b.media) || b.media.length < 1 || b.media.length > 20) return json({ error: ERR.invalid_media, code: 'invalid_media' }, 400);
     const postId = crypto.randomUUID();
     const media = [];
+    const okSize = n => Number.isInteger(n) && n >= 1 && n <= 10 * 1024 * 1024;
+    let audioCount = 0;
     for (let i = 0; i < b.media.length; i++) {
       const m = b.media[i] || {};
       const bytes = Number(m.bytes), w = Number(m.width), h = Number(m.height);
-      if (!MIME_EXT[m.mime] || !Number.isInteger(bytes) || bytes < 1 || bytes > 10 * 1024 * 1024 || !SHA.test(String(m.sha256 || ''))
+      const ext = MIME_EXT[m.mime] || (isDub ? VIDEO_EXT[m.mime] : null);   // 동영상 장면은 더빙만
+      if (!ext || !okSize(bytes) || !SHA.test(String(m.sha256 || ''))
         || !Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > 10000 || h > 10000) {
         return json({ error: '그림 정보가 올바르지 않아요.', code: 'invalid_media' }, 400);
       }
-      media.push({ idx: i, path: `${who.user.id}/${postId}/${i}-${m.sha256.slice(0, 16)}.${MIME_EXT[m.mime]}`, mime: m.mime, bytes,
-        width: w, height: h, sha256: m.sha256, body: clean(m.body, 1000) });
+      const item = { idx: i, path: `${who.user.id}/${postId}/${i}-${m.sha256.slice(0, 16)}.${ext}`, mime: m.mime, bytes,
+        width: w, height: h, sha256: m.sha256, body: clean(m.body, 1000) };
+      if (m.audio) {   // 장면 녹음은 더빙만
+        const a = m.audio, ab = Number(a.bytes);
+        if (!isDub || !AUDIO_EXT[a.mime] || !okSize(ab) || !SHA.test(String(a.sha256 || ''))) return json({ error: '녹음 정보가 올바르지 않아요.', code: 'invalid_audio' }, 400);
+        item.audio_path = `${who.user.id}/${postId}/${i}-a-${a.sha256.slice(0, 16)}.${AUDIO_EXT[a.mime]}`;
+        item.audio_mime = a.mime; item.audio_bytes = ab;
+        audioCount++;
+      }
+      media.push(item);
     }
+    if (isDub && !audioCount) return json({ error: '녹음한 장면이 하나 이상 있어야 더빙을 게시할 수 있어요.', code: 'no_audio' }, 400);
     const project = UUID.test(String(b.source_project_id || '')) ? b.source_project_id : null;
     const replaces = UUID.test(String(b.replaces_post_id || '')) ? b.replaces_post_id : null;
     const res = await rpc(env, 'social_begin_post', {
@@ -154,10 +167,15 @@ export async function onRequest({ request, env }) {
     if (cmode !== 'all') await sb(`/rest/v1/posts?id=eq.${postId}&owner_id=eq.${who.user.id}`, { method: 'PATCH', body: JSON.stringify({ comments_mode: cmode }) });
 
     const uploads = [];
+    const files = [];
     for (const m of media) {
-      const t = await signUpload(env, m.path, POST_BUCKET);
+      files.push({ idx: m.idx, part: 'media', path: m.path });
+      if (m.audio_path) files.push({ idx: m.idx, part: 'audio', path: m.audio_path });
+    }
+    for (const f of files) {
+      const t = await signUpload(env, f.path, POST_BUCKET);
       if (!t) { await rpc(env, 'social_delete_post', { p_post: postId, p_owner: who.user.id, p_admin: false }); return json({ error: 'sign_failed' }, 500); }
-      uploads.push({ idx: m.idx, path: m.path, token: t.token });
+      uploads.push({ idx: f.idx, part: f.part, path: f.path, token: t.token });
     }
     return json({ id: postId, bucket: POST_BUCKET, uploads });
   }
@@ -170,14 +188,19 @@ export async function onRequest({ request, env }) {
     const p = (pr.ok ? await pr.json() : [])[0];
     if (!p) return json({ error: 'not_found' }, 404);
     if (p.status === 'uploading') {
-      const mr = await sb(`/rest/v1/post_media?post_id=eq.${b.id}&select=path,bytes`);
+      const mr = await sb(`/rest/v1/post_media?post_id=eq.${b.id}&select=path,bytes,audio_path,audio_bytes`);
       const rows = mr.ok ? await mr.json() : [];
+      const checks = [];
       for (const m of rows) {
-        const info = await objectInfo(env, m.path, POST_BUCKET);
+        checks.push([m.path, m.bytes]);
+        if (m.audio_path) checks.push([m.audio_path, m.audio_bytes]);
+      }
+      for (const [path, want] of checks) {
+        const info = await objectInfo(env, path, POST_BUCKET);
         const size = info && Number(info.size != null ? info.size : (info.metadata && info.metadata.size));
-        if (!info || size !== Number(m.bytes)) {
+        if (!info || size !== Number(want)) {
           const del = await rpc(env, 'social_delete_post', { p_post: b.id, p_owner: who.user.id, p_admin: false });
-          await removeObjects(env, (del.data && del.data.paths) || rows.map(x => x.path), POST_BUCKET);
+          await removeObjects(env, (del.data && del.data.paths) || checks.map(x => x[0]), POST_BUCKET);
           return json({ error: '그림이 다 올라가지 않았어요. 다시 게시해 주세요.', code: 'upload_incomplete' }, 400);
         }
       }

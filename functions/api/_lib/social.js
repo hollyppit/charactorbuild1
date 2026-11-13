@@ -9,6 +9,9 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 export const KINDS = ['draw', 'character', 'storyboard', 'story', 'dub'];
 export const REASONS = ['inappropriate', 'bullying', 'privacy', 'copyright', 'spam', 'other'];
 export const MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+// 더빙 게시(0011): 장면 동영상과 장면 녹음
+export const VIDEO_EXT = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' };
+export const AUDIO_EXT = { 'audio/webm': 'weba', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
 
 export function socialMode(env) {
   const v = String(env.SOCIAL_ENABLED || '').trim().toLowerCase();
@@ -46,8 +49,12 @@ export async function rpc(env, fn, args) {
 export async function attachCovers(env, posts) {
   if (!posts.length) return posts;
   const ids = posts.map(p => p.id).join(',');
-  const r = await makeSb(env)(`/rest/v1/post_media?post_id=in.(${ids})&idx=eq.0&status=eq.ready&select=post_id,path,width,height`);
-  const rows = r.ok ? await r.json() : [];
+  // 표지 = 게시물의 첫 "사진" (더빙은 첫 장면이 동영상일 수 있어 사진 중 가장 앞의 것)
+  const r = await makeSb(env)(`/rest/v1/post_media?post_id=in.(${ids})&mime=like.image%2F*&status=eq.ready&select=post_id,idx,path,width,height&order=idx.asc`);
+  const all = r.ok ? await r.json() : [];
+  const first = {};
+  for (const x of all) if (!first[x.post_id]) first[x.post_id] = x;
+  const rows = Object.values(first);
   const urls = await signDownloads(env, rows.map(x => x.path), 3600, POST_BUCKET);
   const byPost = Object.fromEntries(rows.map(x => [x.post_id, { url: urls[x.path] || null, width: x.width, height: x.height }]));
   return posts.map(p => ({ ...p, cover: byPost[p.id] || null }));
@@ -55,10 +62,14 @@ export async function attachCovers(env, posts) {
 
 // 한 게시물의 그림 전체(순서대로) + 서명 주소
 export async function mediaOf(env, postId) {
-  const r = await makeSb(env)(`/rest/v1/post_media?post_id=eq.${postId}&status=eq.ready&select=idx,path,mime,width,height,body&order=idx.asc`);
+  const r = await makeSb(env)(`/rest/v1/post_media?post_id=eq.${postId}&status=eq.ready&select=idx,path,mime,width,height,body,audio_path,audio_mime&order=idx.asc`);
   const rows = r.ok ? await r.json() : [];
-  const urls = await signDownloads(env, rows.map(x => x.path), 3600, POST_BUCKET);
-  return rows.map(x => ({ idx: x.idx, url: urls[x.path] || null, width: x.width, height: x.height, body: x.body || '' }));
+  const urls = await signDownloads(env, [...rows.map(x => x.path), ...rows.filter(x => x.audio_path).map(x => x.audio_path)], 3600, POST_BUCKET);
+  return rows.map(x => ({
+    idx: x.idx, url: urls[x.path] || null, type: String(x.mime || '').startsWith('video/') ? 'video' : 'image',
+    width: x.width, height: x.height, body: x.body || '',
+    audio_url: x.audio_path ? urls[x.audio_path] || null : null,
+  }));
 }
 
 // 게시물을 밖으로 내보낼 때의 모양 (owner 는 profiles 임베드 결과)

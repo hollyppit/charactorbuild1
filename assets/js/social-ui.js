@@ -1,6 +1,6 @@
 // 소셜 화면(둘러보기·프로필·게시물) 공통 도우미. auth-client.js 다음에 불러온다. window.SocialUI
 (function () {
-  const KIND = { draw: '✏️ 그림', character: '👗 캐릭터', storyboard: '🎬 스토리보드', story: '📖 그림책', dub: '📚 더빙' };
+  const KIND = { draw: '✏️ 그림', character: '👗 캐릭터', storyboard: '🎬 스토리보드', story: '📖 그림책', dub: '🎤 더빙' };
   const REASONS = [
     ['inappropriate', '어린이에게 맞지 않는 그림이나 글'],
     ['bullying', '놀림·괴롭힘·욕설'],

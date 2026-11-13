@@ -90,10 +90,10 @@ export async function onRequest({ request, env }) {
     if (view === 'post') {
       const id = url.searchParams.get('id');
       if (!UUID.test(String(id || ''))) return json({ error: 'not_found' }, 404);
-      const mr = await sb(`/rest/v1/post_media?post_id=eq.${id}&select=idx,path,body&order=idx.asc`);
+      const mr = await sb(`/rest/v1/post_media?post_id=eq.${id}&select=idx,path,mime,body,audio_path&order=idx.asc`);
       const rows = mr.ok ? await mr.json() : [];
-      const urls = await signDownloads(env, rows.map(x => x.path), 3600, POST_BUCKET);
-      return json({ media: rows.map(x => ({ idx: x.idx, url: urls[x.path] || null, body: x.body || '' })) });
+      const urls = await signDownloads(env, [...rows.map(x => x.path), ...rows.filter(x => x.audio_path).map(x => x.audio_path)], 3600, POST_BUCKET);
+      return json({ media: rows.map(x => ({ idx: x.idx, url: urls[x.path] || null, type: String(x.mime || '').startsWith('video/') ? 'video' : 'image', body: x.body || '', audio_url: x.audio_path ? urls[x.audio_path] || null : null })) });
     }
     if (view === 'settings') {
       const r = await sb('/rest/v1/social_settings?id=eq.1&select=*');

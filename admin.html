@@ -84,7 +84,16 @@
       const d = await api('/api/admin/social?view=post&id=' + post.id);
       box.querySelector('.sub').textContent = post.caption || '';
       const v = el('div', 'post-view');
-      d.media.forEach(m => { if (m.url) { const i = el('img'); i.src = m.url; v.append(i); } if (m.body) v.append(el('p', 'post-body', m.body)); });
+      d.media.forEach((m, idx) => {
+        if (d.media.length > 1) v.append(el('div', 'hint', '장면 ' + (idx + 1)));
+        if (m.url) {
+          if (m.type === 'video') { const vv = el('video'); vv.src = m.url; vv.controls = true; vv.playsInline = true; vv.style.cssText = 'display:block;width:100%;margin-bottom:8px;background:#000'; v.append(vv); }
+          else { const i = el('img'); i.src = m.url; v.append(i); }
+        }
+        // 더빙 녹음도 들어 보고 검토
+        if (m.audio_url) { const a = el('audio'); a.src = m.audio_url; a.controls = true; a.preload = 'none'; a.style.cssText = 'width:100%;margin-bottom:6px'; v.append(a); }
+        if (m.body) v.append(el('p', 'post-body', m.body));
+      });
       box.append(v);
     } catch (e) { box.querySelector('.sub').textContent = e.message; }
     box.append(close);

@@ -84,12 +84,25 @@
     box.append(au);
     if (p.status_text && p.status !== 'published') box.append(U.el('p', 'msg err', '📌 ' + p.status_text));
     if (p.caption) box.append(U.el('p', 'post-body', p.caption));
+    if (p.kind === 'dub') {
+      const play = U.el('button', 'btn btn-main', '▶ 처음부터 재생'); play.type = 'button';
+      play.onclick = () => playDub(p);
+      box.append(play);
+    }
     const view = U.el('div', 'post-view');
-    p.media.forEach(m => {
+    p.media.forEach((m, i) => {
       if (!m.url) return;
-      const img = U.el('img'); img.alt = p.title; img.loading = 'lazy'; img.src = m.url;
-      if (m.width && m.height) { img.width = m.width; img.height = m.height; }
-      view.append(img);
+      if (p.kind === 'dub') view.append(U.el('div', 'hint', '장면 ' + (i + 1)));
+      if (m.type === 'video') {
+        const v = U.el('video'); v.src = m.url; v.controls = true; v.playsInline = true; v.muted = !!m.audio_url; v.preload = 'metadata';
+        v.style.cssText = 'display:block;width:100%;border:3px solid #000;margin-bottom:8px;background:#000';
+        view.append(v);
+      } else {
+        const img = U.el('img'); img.alt = p.title; img.loading = 'lazy'; img.src = m.url;
+        if (m.width && m.height) { img.width = m.width; img.height = m.height; }
+        view.append(img);
+      }
+      if (m.audio_url) { const a = U.el('audio'); a.src = m.audio_url; a.controls = true; a.preload = 'none'; a.style.cssText = 'width:100%;margin-bottom:6px'; view.append(a); }
       if (m.body) view.append(U.el('p', 'post-body', m.body));
     });
     box.append(view);
@@ -120,6 +133,43 @@
     box.append(acts);
     if (p.is_owner) box.append(ownerTools(p));
     if (p.status === 'published' || !p.status) loadComments(p);
+  }
+
+  // 더빙 재생: 장면 그림(또는 동영상) 위에 자막, 녹음이 끝나면 다음 장면. 녹음 없는 장면은 3초
+  function playDub(p) {
+    const scenes = p.media.filter(m => m.url);
+    if (!scenes.length) return;
+    const ov = U.el('div', 'modal-ov'); ov.style.background = 'rgba(0,0,0,.92)';
+    const stage = U.el('div'); stage.style.cssText = 'position:relative;width:100%;max-width:900px;aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden';
+    const sub = U.el('div'); sub.style.cssText = 'position:absolute;left:5%;right:5%;bottom:6%;text-align:center;color:#fff;font-size:clamp(14px,3.2vw,26px);font-weight:700;text-shadow:0 2px 6px #000;white-space:pre-wrap';
+    const info = U.el('div', 'hint'); info.style.cssText = 'position:absolute;top:8px;left:12px;color:#ddd';
+    const close = U.el('button', 'chip', '✕ 닫기'); close.type = 'button'; close.style.cssText = 'position:absolute;top:8px;right:8px;background:#000';
+    const wrap = U.el('div'); wrap.style.cssText = 'width:100%;display:flex;justify-content:center';
+    wrap.append(stage); ov.append(wrap); document.body.append(ov);
+    let audio = null, timer = null, stopped = false;
+    const stop = () => { stopped = true; clearTimeout(timer); if (audio) audio.pause(); ov.remove(); };
+    close.onclick = stop;
+    function show(i) {
+      if (stopped) return;
+      if (i >= scenes.length) { stop(); return; }
+      const m = scenes[i];
+      stage.innerHTML = '';
+      let el;
+      if (m.type === 'video') { el = U.el('video'); el.src = m.url; el.muted = true; el.loop = true; el.autoplay = true; el.playsInline = true; }
+      else { el = U.el('img'); el.src = m.url; el.alt = ''; }
+      el.style.cssText = 'width:100%;height:100%;object-fit:contain';
+      sub.textContent = m.body || '';
+      info.textContent = '장면 ' + (i + 1) + ' / ' + scenes.length;
+      stage.append(el, sub, info, close);
+      if (audio) { audio.pause(); audio = null; }
+      const next = () => { timer = setTimeout(() => show(i + 1), 500); };
+      if (m.audio_url) {
+        audio = new Audio(m.audio_url);
+        audio.onended = next; audio.onerror = () => { timer = setTimeout(() => show(i + 1), 3000); };
+        audio.play().catch(() => { timer = setTimeout(() => show(i + 1), 3000); });
+      } else timer = setTimeout(() => show(i + 1), 3000);
+    }
+    show(0);
   }
 
   async function loadComments(p) {

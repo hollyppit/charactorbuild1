@@ -103,10 +103,10 @@ export async function onRequest({ request, env }) {
     try {
       const sbx = makeSb(env);
       const [pm, pa] = await Promise.all([
-        sbx(`/rest/v1/post_media?owner_id=eq.${encodeURIComponent(user.id)}&select=path`),
+        sbx(`/rest/v1/post_media?owner_id=eq.${encodeURIComponent(user.id)}&select=path,audio_path`),
         sbx(`/rest/v1/project_assets?owner_id=eq.${encodeURIComponent(user.id)}&select=path`),
       ]);
-      const postPaths = pm.ok ? (await pm.json()).map(x => x.path) : [];
+      const postPaths = pm.ok ? (await pm.json()).flatMap(x => x.audio_path ? [x.path, x.audio_path] : [x.path]) : [];
       const assetPaths = pa.ok ? (await pa.json()).map(x => x.path) : [];
       for (let i = 0; i < postPaths.length; i += 100) await removeObjects(env, postPaths.slice(i, i + 100), POST_BUCKET);
       for (let i = 0; i < assetPaths.length; i += 100) await removeObjects(env, assetPaths.slice(i, i + 100));
