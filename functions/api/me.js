@@ -1,6 +1,7 @@
 // 내 프로필 조회·수정·계정 삭제. 인증은 JWT(Authorization: Bearer)로 서버가 검증한다.
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb, supabaseKey } from './_lib/common.js';
 import { getUser } from './_lib/auth.js';
+import { removeObjects, POST_BUCKET } from './_lib/storage.js';
 
 const NICK_RE = /^[0-9A-Za-z가-힣_]{2,20}$/;
 const VISIBILITY = ['public', 'followers', 'private'];
@@ -23,7 +24,14 @@ export async function onRequest({ request, env }) {
     const rows = await r.json();
     if (!Array.isArray(rows)) return json({ error: 'profiles_not_ready' }, 503);
     if (!rows.length) return json({ error: 'profile_not_found' }, 404);
-    return json({ ...rows[0], email: user.email || null, provider: user.app_metadata?.provider || null });
+    // 제재 안내 (0009 적용 전에는 빈 목록). 지난 90일 경고와 지금 효력 있는 제한
+    let sanctions = [];
+    try {
+      const since = new Date(Date.now() - 90 * 86400000).toISOString();
+      const sr = await sb(`/rest/v1/sanctions?user_id=eq.${encodeURIComponent(user.id)}&revoked_at=is.null&or=(and(kind.neq.warning,or(ends_at.is.null,ends_at.gt.${new Date().toISOString()})),created_at.gt.${since})&select=kind,reason,starts_at,ends_at,created_at&order=created_at.desc&limit=10`);
+      if (sr.ok) sanctions = await sr.json();
+    } catch (_) {}
+    return json({ ...rows[0], email: user.email || null, provider: user.app_metadata?.provider || null, sanctions });
   }
 
   if (request.method === 'PATCH') {
@@ -90,6 +98,18 @@ export async function onRequest({ request, env }) {
           body: JSON.stringify({ prefixes: files.map(f => `${user.id}/${f.name}`) }),
         });
       }
+    } catch (_) {}
+    // 게시물 그림·작업 파일 정리 (DB 행은 계정 삭제 때 CASCADE 로 함께 지워짐. 실패해도 계속)
+    try {
+      const sbx = makeSb(env);
+      const [pm, pa] = await Promise.all([
+        sbx(`/rest/v1/post_media?owner_id=eq.${encodeURIComponent(user.id)}&select=path`),
+        sbx(`/rest/v1/project_assets?owner_id=eq.${encodeURIComponent(user.id)}&select=path`),
+      ]);
+      const postPaths = pm.ok ? (await pm.json()).map(x => x.path) : [];
+      const assetPaths = pa.ok ? (await pa.json()).map(x => x.path) : [];
+      for (let i = 0; i < postPaths.length; i += 100) await removeObjects(env, postPaths.slice(i, i + 100), POST_BUCKET);
+      for (let i = 0; i < assetPaths.length; i += 100) await removeObjects(env, assetPaths.slice(i, i + 100));
     } catch (_) {}
     // 계정 삭제 (profiles 는 ON DELETE CASCADE)
     const d = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(user.id)}`, {

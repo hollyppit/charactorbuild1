@@ -47,3 +47,27 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--yellow)}
 .doc .tbd{background:#fbea1a33;border-bottom:2px solid var(--yellow);padding:0 3px}
 .doc .draft{background:#3a2a00;border:2px solid var(--yellow);padding:12px 14px;margin-bottom:18px;font-size:.88rem}
 @media(max-width:560px){.doc table{display:block;overflow-x:auto}}
+/* 소셜: 둘러보기·프로필·게시물 */
+.wrap.wide{max-width:960px}
+.post-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+@media(max-width:480px){.post-grid{grid-template-columns:repeat(2,1fr);gap:10px}}
+.post-card{display:block;background:var(--card);border:3px solid #000;box-shadow:4px 4px 0 var(--purple);color:var(--text);text-decoration:none;overflow:hidden}
+.post-card img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;background:#2d0040}
+.post-card img.noimg{min-height:120px}
+.post-meta{padding:8px 10px}
+.post-title{font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-sub{font-size:.75rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-status{font-size:.75rem;margin-top:4px;color:var(--yellow)}
+.post-status.st-published{color:var(--green)}.post-status.st-rejected,.post-status.st-hidden{color:var(--red)}
+.post-view img{display:block;width:100%;height:auto;border:3px solid #000;margin-bottom:8px;background:#2d0040}
+.post-body{white-space:pre-wrap;line-height:1.6;margin:0 0 18px;color:#ddd}
+.author{display:flex;gap:10px;align-items:center;color:var(--text);text-decoration:none;margin:8px 0 14px}
+.author img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #000}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-box{max-width:460px;width:100%;max-height:90vh;overflow:auto;margin:0}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.adm-row{display:flex;gap:12px;align-items:flex-start;border-bottom:1px solid #3a2a3a;padding:12px 0}
+.adm-row img{width:96px;height:96px;object-fit:cover;flex:none;background:#2d0040;border:2px solid #000;cursor:pointer}
+.adm-row .grow{flex:1;min-width:0}
+.adm-row .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.adm-row .acts .chip{padding:5px 10px}

@@ -1710,6 +1710,7 @@ body.st-active .st-fab{display:block}
     <p>AI 매직 드로잉</p>
   </div>
   <div style="display:flex;align-self:stretch;height:100%">
+    <a class="admin-btn" id="feedLink" href="/feed" style="display:none;align-items:center;text-decoration:none">둘러보기</a>
     <a class="admin-btn" id="loginLink" href="/account.html" style="display:flex;align-items:center;text-decoration:none">로그인</a>
     <button class="admin-btn" id="adminBtn" onclick="toggleAdminPrompt()">ADMIN</button>
   </div>
@@ -1824,6 +1825,7 @@ try {
     <div class="btn-row">
       <button class="btn btn-blue" id="btnChCloudSave" style="display:none">☁ 계정에 저장</button>
       <button class="btn btn-blue" id="btnChCloudOpen" style="display:none">☁ 내 작업 열기</button>
+      <button class="btn btn-blue" id="btnChPublish" style="display:none">📤 게시하기</button>
     </div>
     <div id="chCloudStatus" style="display:none;font-size:12px;text-align:center;min-height:1em" role="status" aria-live="polite"></div>
   </div>
@@ -2035,6 +2037,7 @@ try {
       <!-- 로그인한 사용자에게만 보이는 계정 저장 (assets/js/draw-cloud.js) -->
       <button class="btn btn-blue"   id="btnCloudSave" style="display:none">☁ 계정에 저장</button>
       <button class="btn btn-blue"   id="btnCloudOpen" style="display:none">☁ 내 작업 열기</button>
+      <button class="btn btn-blue"   id="btnDrawPublish" style="display:none">📤 게시하기</button>
       <span id="cloudStatus" style="display:none;align-self:center;font-size:12px;color:#bbb" role="status" aria-live="polite"></span>
     </div>
 
@@ -2128,6 +2131,7 @@ try {
         <button class="btn btn-blue" id="btnSbCloudSave" style="display:none">☁ 계정에 저장</button>
         <button class="btn btn-blue" id="btnSbCloudOpen" style="display:none">☁ 내 작업 열기</button>
         <button class="btn btn-gray" id="btnSbCloudResult" style="display:none">🎬 지난 AI 결과</button>
+        <button class="btn btn-blue" id="btnSbPublish" style="display:none">📤 게시하기</button>
       </div>
       <div id="sbCloudStatus" style="display:none;font-size:12px;text-align:center;min-height:1em" role="status" aria-live="polite"></div>
     </div>
@@ -2198,6 +2202,7 @@ try {
       <!-- 로그인한 사용자에게만 보이는 계정 저장 (assets/js/story-cloud.js) -->
       <button id="btnStCloudSave" style="display:none">☁ 계정에 저장</button>
       <button id="btnStCloudOpen" style="display:none">☁ 내 작업 열기</button>
+      <button id="btnStPublish" style="display:none">📤 게시하기</button>
       <span id="stCloudStatus" style="display:none;font-size:12px;align-self:center" role="status" aria-live="polite"></span>
       <button class="st-del" onclick="storyNewProject()">🗑 이 작품 새로 시작</button>
     </div>
@@ -12656,6 +12661,7 @@ async function stDirExportRun(){
 <script src="/assets/js/cloud-save.js"></script>
 <script src="/assets/js/save-guard.js"></script>
 <script src="/assets/js/ai-usage-admin.js"></script>
+<script src="/assets/js/publish.js"></script>
 <script src="/assets/js/notice.js"></script>
 <script src="/assets/js/draw-cloud.js"></script>
 <script src="/assets/js/story-cloud.js"></script>

@@ -241,6 +241,6 @@
     }
   }
 
-  window.DrawCloud = { open: openProject };
+  window.DrawCloud = { open: openProject, get bound() { return cur ? { id: cur.id, title: cur.title } : null; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

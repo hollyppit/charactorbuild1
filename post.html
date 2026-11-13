@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>작품 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card" id="box">불러오는 중...</div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), box = document.getElementById('box');
+  await U.header(root);
+  const id = new URLSearchParams(location.search).get('id') || '';
+
+  function render(p) {
+    box.innerHTML = '';
+    document.title = p.title + ' · 볼드하다';
+    box.append(U.el('h1', '', p.title));
+    const au = U.el('a', 'author'); au.href = '/u?n=' + encodeURIComponent(p.owner.nickname);
+    const ai = U.el('img'); ai.alt = ''; ai.src = U.avatar(p.owner.avatar_url);
+    au.append(ai, U.el('span', '', p.owner.nickname + ' · ' + (U.KIND[p.kind] || '') + ' · ' + U.date(p.published_at || p.created_at)));
+    box.append(au);
+    if (p.status_text && p.status !== 'published') { const s = U.el('p', 'msg err', '📌 ' + p.status_text); box.append(s); }
+    if (p.caption) box.append(U.el('p', 'post-body', p.caption));
+    const view = U.el('div', 'post-view');
+    p.media.forEach(m => {
+      if (!m.url) return;
+      const img = U.el('img'); img.alt = p.title; img.loading = 'lazy'; img.src = m.url;
+      if (m.width && m.height) { img.width = m.width; img.height = m.height; }
+      view.append(img);
+      if (m.body) view.append(U.el('p', 'post-body', m.body));
+    });
+    box.append(view);
+
+    const acts = U.el('div', 'row2');
+    if (p.is_owner) {
+      const ed = U.el('button', 'btn btn-sub', '제목·소개 고치기'); ed.type = 'button';
+      ed.onclick = async () => {
+        const t = prompt('제목 (60자까지)', p.title); if (t == null) return;
+        const c = prompt('소개 (500자까지)', p.caption || ''); if (c == null) return;
+        try { const r = await U.api('/api/posts?id=' + encodeURIComponent(p.id), { method: 'PATCH', body: JSON.stringify({ title: t, caption: c }) }); alert('고쳤어요. ' + (r.status_text || '')); location.reload(); }
+        catch (e) { alert(e.message); }
+      };
+      const del = U.el('button', 'btn btn-danger', '게시물 삭제'); del.type = 'button';
+      del.onclick = async () => {
+        if (!confirm('이 게시물을 삭제할까요? 되돌릴 수 없어요. (원본 작업은 그대로 남아요)')) return;
+        try { await U.api('/api/posts?id=' + encodeURIComponent(p.id), { method: 'DELETE' }); location.href = '/me.html'; } catch (e) { alert(e.message); }
+      };
+      acts.append(ed, del);
+    } else {
+      const r = U.el('button', 'btn btn-sub', '🚩 신고하기'); r.type = 'button'; r.onclick = () => U.report('post', p.id); acts.append(r);
+    }
+    box.append(acts);
+  }
+
+  try { render(await U.api('/api/posts?id=' + encodeURIComponent(id))); }
+  catch (e) {
+    if (e.code === 'social_disabled') return U.disabledBox(root, e);
+    box.textContent = e.status === 404 ? '게시물을 찾을 수 없어요. 삭제되었거나 공개되지 않은 게시물이에요.' : '불러오지 못했어요.';
+  }
+})();
+</script>
+</body>
+</html>

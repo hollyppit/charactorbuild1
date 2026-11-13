@@ -252,6 +252,6 @@
     }
   }
 
-  window.StoryCloud = { open: openProject, _pack: pack, _unpack: unpack };
+  window.StoryCloud = { open: openProject, _pack: pack, _unpack: unpack, get bound() { return cur ? { id: cur.id, title: cur.title, mode: cur.mode } : null; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

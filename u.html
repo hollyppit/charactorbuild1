@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>프로필 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap wide" id="root">
+  <div class="card" id="head">불러오는 중...</div>
+  <div class="post-grid" id="grid"></div>
+  <div class="empty" id="empty" style="display:none"></div>
+  <button class="btn btn-sub" id="more" type="button" style="display:none;margin-top:18px">더 보기</button>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root');
+  await U.header(root);
+  const n = new URLSearchParams(location.search).get('n') || '';
+  let next = null, prof = null;
+  const head = document.getElementById('head'), empty = document.getElementById('empty');
+
+  function renderHead(p) {
+    head.innerHTML = '';
+    const row = U.el('div', 'avatar-row');
+    const img = U.el('img', 'avatar'); img.alt = ''; img.src = U.avatar(p.avatar_url);
+    const info = U.el('div');
+    info.append(U.el('h1', '', p.nickname));
+    if (!p.private) {
+      if (p.bio) info.append(U.el('p', 'sub', p.bio));
+      if (p.interests && p.interests.length) {
+        const chips = U.el('div', 'chips'); p.interests.forEach(t => chips.append(U.el('span', 'chip', '#' + t))); info.append(chips);
+      }
+    } else {
+      info.append(U.el('p', 'sub', '비공개 프로필이에요.'));
+    }
+    row.append(img, info); head.append(row);
+    const acts = U.el('div', 'row2'); acts.style.marginTop = '14px';
+    if (p.is_me) {
+      const a = U.el('a', 'btn btn-sub', '프로필 고치기 (마이페이지)'); a.href = '/me.html'; a.style.textDecoration = 'none'; acts.append(a);
+    } else {
+      const r = U.el('button', 'btn btn-sub', '🚩 프로필 신고'); r.type = 'button'; r.onclick = () => U.report('profile', p.id); acts.append(r);
+    }
+    head.append(acts);
+    document.title = p.nickname + ' · 볼드하다';
+  }
+
+  async function load() {
+    const more = document.getElementById('more');
+    more.disabled = true;
+    try {
+      const d = await U.api('/api/u?n=' + encodeURIComponent(n) + (next ? '&before=' + encodeURIComponent(next) : ''));
+      if (!prof) { prof = d; renderHead(d); }
+      const grid = document.getElementById('grid');
+      (d.posts || []).forEach(p => grid.append(U.card(p)));
+      if (!grid.children.length) { empty.textContent = d.private ? '이 친구의 작품 목록은 공개되어 있지 않아요.' : '아직 공개된 작품이 없어요.'; empty.style.display = ''; }
+      next = d.next; more.style.display = next ? '' : 'none';
+    } catch (e) {
+      if (e.code === 'social_disabled' || e.status === 503) return U.disabledBox(root, e);
+      head.textContent = e.status === 404 ? '프로필을 찾을 수 없어요.' : '불러오지 못했어요.';
+    } finally { more.disabled = false; }
+  }
+  document.getElementById('more').onclick = load;
+  load();
+})();
+</script>
+</body>
+</html>

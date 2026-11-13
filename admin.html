@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>관리자 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap wide">
+  <div class="top"><a class="brand" href="/">볼드하다 관리자</a><a class="chip" href="/feed" style="text-decoration:none">둘러보기</a></div>
+
+  <div class="card" id="login">
+    <h2>관리자 로그인</h2>
+    <p class="sub">제작 화면의 ADMIN 비밀번호와 같아요. 새로고침하면 다시 로그인해야 해요.</p>
+    <input type="password" id="pw" autocomplete="current-password" placeholder="관리자 비밀번호" style="width:100%;padding:12px;background:#0d0008;color:#fff;border:2px solid var(--purple);font-size:16px">
+    <div class="msg" id="loginMsg"></div>
+    <button class="btn btn-main" id="btnLogin" type="button">로그인</button>
+  </div>
+
+  <div id="main" style="display:none">
+    <div class="tabs" id="tabs">
+      <button class="chip on" data-v="pending" type="button">승인 대기</button>
+      <button class="chip" data-v="reports" type="button">신고</button>
+      <button class="chip" data-v="hidden" type="button">가려진 게시물</button>
+      <button class="chip" data-v="published" type="button">공개 중</button>
+      <button class="chip" data-v="rejected" type="button">거절됨</button>
+      <button class="chip" data-v="user" type="button">회원 찾기·제재</button>
+      <button class="chip" data-v="settings" type="button">설정</button>
+    </div>
+    <div class="card" id="view"></div>
+  </div>
+</div>
+<div class="status" id="status"></div>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  let HASH = '';
+  const REASON = { inappropriate: '부적절한 그림·글', bullying: '괴롭힘·욕설', privacy: '개인정보', copyright: '저작권', spam: '도배·광고', other: '기타' };
+  const KIND = { draw: '그림', character: '캐릭터', storyboard: '스토리보드', story: '그림책', dub: '더빙' };
+  const SANC = { warning: '경고', post_ban: '게시 금지', suspend: '이용 정지' };
+  const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+  const dt = s => s ? new Date(s).toLocaleString('ko-KR') : '';
+  function status(text, cls) { const s = $('status'); s.textContent = text; s.className = 'status show ' + (cls || ''); clearTimeout(s._t); s._t = setTimeout(() => s.className = 'status', 2500); }
+
+  async function api(path, body) {
+    const res = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: JSON.stringify(body) }
+      : { headers: { 'X-Admin-Hash': HASH } });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error === 'social_not_ready' ? 'DB(0009)가 아직 적용되지 않았어요.' : (d.error || '요청 실패 (' + res.status + ')'));
+    return d;
+  }
+  async function act(body, okText) {
+    try { await api('/api/admin/social', body); status(okText || '처리했어요 ✓', 'ok'); show(cur); } catch (e) { status(e.message, 'err'); }
+  }
+  const ask = (q, def) => { const v = prompt(q, def || ''); return v == null ? null : v.trim(); };
+
+  async function sha256hex(text) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  $('btnLogin').onclick = async () => {
+    const pw = $('pw').value; if (!pw) return;
+    $('loginMsg').textContent = '확인 중...';
+    const h = await sha256hex(pw);
+    const r = await fetch('/api/admin-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hash: h }) });
+    if (!r.ok) { $('loginMsg').className = 'msg err'; $('loginMsg').textContent = r.status === 503 ? '관리자 기능이 설정되지 않았어요.' : '비밀번호가 틀렸어요.'; return; }
+    HASH = h; $('pw').value = ''; $('login').style.display = 'none'; $('main').style.display = ''; show('pending');
+  };
+  $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
+
+  let cur = 'pending';
+  $('tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; show(b.dataset.v); };
+
+  // 게시물 그림 전체 보기
+  async function viewMedia(post) {
+    const ov = el('div', 'modal-ov'); const box = el('div', 'card modal-box'); box.style.maxWidth = '720px';
+    box.append(el('h2', '', post.title), el('p', 'sub', '불러오는 중...'));
+    const close = el('button', 'btn btn-sub', '닫기'); close.type = 'button'; close.onclick = () => ov.remove();
+    ov.onclick = e => { if (e.target === ov) ov.remove(); };
+    ov.append(box); document.body.append(ov);
+    try {
+      const d = await api('/api/admin/social?view=post&id=' + post.id);
+      box.querySelector('.sub').textContent = post.caption || '';
+      const v = el('div', 'post-view');
+      d.media.forEach(m => { if (m.url) { const i = el('img'); i.src = m.url; v.append(i); } if (m.body) v.append(el('p', 'post-body', m.body)); });
+      box.append(v);
+    } catch (e) { box.querySelector('.sub').textContent = e.message; }
+    box.append(close);
+  }
+
+  function postRow(p, extra) {
+    const row = el('div', 'adm-row');
+    const img = el('img'); img.alt = ''; if (p.cover && p.cover.url) img.src = p.cover.url; img.onclick = () => viewMedia(p);
+    const g = el('div', 'grow');
+    g.append(el('div', 'post-title', p.title + ' (' + (KIND[p.kind] || p.kind) + ', ' + p.media_count + '장)'));
+    const who = el('a', '', (p.owner && p.owner.nickname) || '(알 수 없음)'); who.href = '#'; who.onclick = e => { e.preventDefault(); show('user', { id: p.owner_id }); };
+    const sub = el('div', 'post-sub'); sub.append('작성자 ', who, ' · ' + dt(p.created_at) + (p.report_count ? ' · 신고 ' + p.report_count + '명' : ''));
+    g.append(sub);
+    if (p.status_reason) g.append(el('div', 'post-status st-hidden', '사유: ' + (p.status_reason === 'auto_hidden' ? '신고 누적 자동 가림' : p.status_reason === 'account_suspended' ? '계정 이용 정지' : p.status_reason)));
+    if (p.caption) g.append(el('div', 'hint', p.caption.slice(0, 200)));
+    const acts = el('div', 'acts');
+    const b = (t, fn) => { const x = el('button', 'chip', t); x.type = 'button'; x.onclick = fn; acts.append(x); };
+    b('그림 보기', () => viewMedia(p));
+    if (p.status === 'pending' || p.status === 'rejected') b('✅ 승인(공개)', () => act({ action: 'approve', post_id: p.id }, '공개했어요'));
+    if (p.status === 'pending') b('거절', () => { const r = ask('거절 사유 (게시자에게 보여요)'); if (r) act({ action: 'reject', post_id: p.id, reason: r }); });
+    if (p.status === 'published') b('가리기', () => { const r = ask('가리는 사유 (게시자에게 보여요)'); if (r) act({ action: 'hide', post_id: p.id, reason: r }); });
+    if (p.status === 'hidden') b('다시 공개 (신고 기각)', () => act({ action: 'restore', post_id: p.id }, '다시 공개했어요'));
+    if (p.status !== 'deleted') b('🗑 삭제', () => { const r = ask('삭제 사유 (게시자에게 보여요). 그림 파일도 지워지고 되돌릴 수 없어요.'); if (r) act({ action: 'remove', post_id: p.id, reason: r }, '삭제했어요'); });
+    if (extra) extra(acts);
+    g.append(acts); row.append(img, g);
+    return row;
+  }
+
+  async function show(v, opt) {
+    cur = v;
+    document.querySelectorAll('#tabs .chip').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+    const view = $('view'); view.innerHTML = '불러오는 중...';
+    try {
+      if (['pending', 'hidden', 'published', 'rejected'].includes(v)) {
+        const d = await api('/api/admin/social?view=' + v);
+        view.innerHTML = '';
+        if (!d.posts.length) view.append(el('div', 'empty', '없어요.'));
+        d.posts.forEach(p => view.append(postRow(p)));
+      } else if (v === 'reports') {
+        const d = await api('/api/admin/social?view=reports');
+        view.innerHTML = '';
+        if (!d.reports.length) view.append(el('div', 'empty', '처리할 신고가 없어요.'));
+        d.reports.forEach(r => {
+          const head = el('div', 'hint', '🚩 ' + (REASON[r.reason] || r.reason) + (r.detail ? ' — "' + r.detail + '"' : '') + ' · 신고자 ' + ((r.reporter && r.reporter.nickname) || '(탈퇴)') + ' · ' + dt(r.created_at));
+          head.style.cssText = 'color:var(--yellow);margin-top:10px';
+          view.append(head);
+          const extra = acts => {
+            const b = (t, fn) => { const x = el('button', 'chip', t); x.type = 'button'; x.onclick = fn; acts.append(x); };
+            b('신고 처리 완료', () => act({ action: 'resolve_report', report_id: r.id, resolution: ask('처리 내용 메모 (선택)') || '' }));
+            b('문제없음(기각)', () => act({ action: 'dismiss_report', report_id: r.id }));
+            b('작성자 제재…', () => show('user', { id: r.target_owner, report_id: r.id }));
+          };
+          if (r.target_type === 'post' && r.post) view.append(postRow(r.post, extra));
+          else {
+            const row = el('div', 'adm-row'); const g = el('div', 'grow');
+            g.append(el('div', 'post-title', r.target_type === 'profile' ? '프로필 신고: ' + ((r.owner && r.owner.nickname) || '(알 수 없음)') : '삭제된 게시물'));
+            const acts = el('div', 'acts'); extra(acts); g.append(acts); row.append(g); view.append(row);
+          }
+        });
+      } else if (v === 'user') {
+        view.innerHTML = '';
+        const sr = el('div', 'row2'); const q = el('input'); q.type = 'text'; q.placeholder = '닉네임으로 찾기'; q.value = (opt && opt.n) || '';
+        const go = el('button', 'btn btn-main', '찾기'); go.type = 'button'; go.style.marginBottom = '0';
+        go.onclick = () => show('user', { n: q.value.trim() });
+        sr.append(q, go); view.append(sr);
+        if (!opt || (!opt.id && !opt.n)) return;
+        const d = await api('/api/admin/social?view=user&' + (opt.id ? 'id=' + opt.id : 'n=' + encodeURIComponent(opt.n)));
+        const p = d.profile;
+        view.append(el('h2', '', p.nickname + (p.role === 'admin' ? ' (관리자 역할)' : '')));
+        view.append(el('p', 'sub', '가입 ' + dt(p.created_at) + ' · 프로필 ' + p.visibility + ' · 받은 신고 ' + d.reports.length + '건'));
+        view.append(el('h2', '', '제재 기록'));
+        if (!d.sanctions.length) view.append(el('div', 'hint', '없어요.'));
+        d.sanctions.forEach(s => {
+          const active = !s.revoked_at && (!s.ends_at || new Date(s.ends_at) > new Date());
+          const row = el('div', 'hint', SANC[s.kind] + ' · ' + s.reason + ' · ' + dt(s.created_at) + (s.ends_at ? ' ~ ' + dt(s.ends_at) : s.kind === 'warning' ? '' : ' ~ 해제할 때까지') + (s.revoked_at ? ' (해제됨)' : active ? ' (효력 있음)' : ' (끝남)'));
+          if (active && s.kind !== 'warning') { const x = el('button', 'chip', '해제'); x.type = 'button'; x.style.marginLeft = '8px'; x.onclick = () => { if (confirm('이 제재를 해제할까요?')) act({ action: 'revoke_sanction', sanction_id: s.id }, '해제했어요'); }; row.append(x); }
+          view.append(row);
+        });
+        view.append(el('h2', '', '새 제재'));
+        const kind = el('select'); Object.entries(SANC).forEach(([k, t]) => { const o = el('option', '', t); o.value = k; kind.append(o); });
+        const days = el('input'); days.type = 'text'; days.placeholder = '기간(일). 비우면 해제할 때까지 (경고는 무시)';
+        const reason = el('textarea'); reason.placeholder = '사유 (본인 마이페이지에 그대로 보여요)'; reason.maxLength = 500;
+        const give = el('button', 'btn btn-danger', '제재하기'); give.type = 'button';
+        give.onclick = () => {
+          if (!reason.value.trim()) return status('사유를 적어 주세요', 'err');
+          if (!confirm(p.nickname + ' 님에게 "' + SANC[kind.value] + '"을(를) 줄까요?' + (kind.value === 'suspend' ? '\n(공개 중인 게시물이 모두 가려져요)' : ''))) return;
+          act({ action: 'sanction', user_id: p.id, kind: kind.value, days: kind.value === 'warning' ? null : (days.value.trim() || null), reason: reason.value.trim(), report_id: opt.report_id }, '제재했어요');
+        };
+        view.append(kind, days, reason, give);
+        view.append(el('h2', '', '게시물'));
+        if (!d.posts.length) view.append(el('div', 'hint', '없어요.'));
+        d.posts.forEach(x => view.append(postRow(x)));
+      } else if (v === 'settings') {
+        const d = await api('/api/admin/social?view=settings');
+        const s = d.settings; view.innerHTML = '';
+        view.append(el('p', 'sub', '공개 스위치(Cloudflare 환경변수 SOCIAL_ENABLED): ' + (d.mode || 'off') + ' — on=모두, beta=관리자 역할 회원만, 비움=꺼짐'));
+        const ra = el('label', 'consent'); const rc = el('input'); rc.type = 'checkbox'; rc.checked = s.require_approval;
+        ra.append(rc, el('span', '', '관리자 승인 후 공개 (끄면 바로 공개되고 신고로 거름)'));
+        const num = (label, val) => { const l = el('label', '', label); const i = el('input'); i.type = 'text'; i.value = val; view.append(l, i); return i; };
+        view.append(ra);
+        const ah = num('자동 가림 기준 (서로 다른 신고자 수)', s.auto_hide_reports);
+        const dp = num('1인 하루 게시 개수', s.daily_post_limit);
+        const dr = num('1인 하루 신고 개수', s.daily_report_limit);
+        const save = el('button', 'btn btn-main', '설정 저장'); save.type = 'button'; save.style.marginTop = '14px';
+        save.onclick = () => act({ action: 'settings', settings: { require_approval: rc.checked, auto_hide_reports: ah.value, daily_post_limit: dp.value, daily_report_limit: dr.value } }, '저장했어요');
+        view.append(save);
+      }
+    } catch (e) { view.textContent = e.message; }
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>둘러보기 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+</head>
+<body>
+<div class="wrap wide" id="root">
+  <h1>둘러보기</h1>
+  <p class="sub">볼드하다 친구들이 만든 작품이에요. 마음에 들지 않는 내용이 있으면 게시물에서 🚩 신고해 주세요.</p>
+  <div class="post-grid" id="grid"></div>
+  <div class="empty" id="empty" style="display:none">아직 공개된 작품이 없어요. 제작 화면에서 "📤 게시하기"로 첫 작품을 올려 보세요!</div>
+  <button class="btn btn-sub" id="more" type="button" style="display:none;margin-top:18px">더 보기</button>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root');
+  await U.header(root);
+  let next = null;
+  async function load() {
+    const more = document.getElementById('more');
+    more.disabled = true;
+    try {
+      const d = await U.api('/api/posts?feed=latest' + (next ? '&before=' + encodeURIComponent(next) : ''));
+      const grid = document.getElementById('grid');
+      d.posts.forEach(p => grid.append(U.card(p)));
+      document.getElementById('empty').style.display = grid.children.length ? 'none' : '';
+      next = d.next;
+      more.style.display = next ? '' : 'none';
+    } catch (e) {
+      if (e.status === 404 || e.status === 503) return U.disabledBox(root, e);
+      document.getElementById('empty').textContent = '불러오지 못했어요. 잠시 뒤 다시 와 주세요.';
+      document.getElementById('empty').style.display = '';
+    } finally { more.disabled = false; }
+  }
+  document.getElementById('more').onclick = load;
+  load();
+})();
+</script>
+<script src="/assets/js/notice.js"></script>
+</body>
+</html>

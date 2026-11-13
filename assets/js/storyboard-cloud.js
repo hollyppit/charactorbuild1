@@ -115,5 +115,6 @@
       if (rb) rb.onclick = () => { if (lastResult) showSBResult(lastResult); };
     },
   });
+  tool.getLastResult = () => lastResult;   // 게시하기(publish.js)에서 사용
   window.StoryboardCloud = tool;
 })();

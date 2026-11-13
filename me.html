@@ -17,6 +17,13 @@
   <div class="card" id="loading">불러오는 중...</div>
 
   <div id="main" style="display:none">
+    <!-- 이용 제한 안내 (제재가 있을 때만 보임) -->
+    <div class="card" id="sanctionCard" style="display:none;border-color:var(--red);box-shadow:6px 6px 0 var(--red)">
+      <h2 style="color:var(--red)">이용 제한 안내</h2>
+      <div id="sanctionList"></div>
+      <p class="hint">제한 내용에 이의가 있으면 h41416922@gmail.com 으로 닉네임과 함께 알려 주세요. 확인한 뒤 답을 드려요.</p>
+    </div>
+
     <div class="card">
       <h1>내 프로필</h1>
       <p class="sub" id="acctInfo"></p>
@@ -101,6 +108,17 @@
       <p class="hint" id="worksNote">각 제작 도구의 "☁ 계정에 저장" 버튼으로 저장한 작업이 여기에 모여요.</p>
     </div>
 
+    <!-- 내 게시물 (소셜 기능이 켜졌을 때만 보임) -->
+    <div class="card" id="postsCard" style="display:none">
+      <h2>내 게시물</h2>
+      <div class="row2" style="margin-bottom:12px">
+        <a class="chip" id="myProfileLink" href="/feed" style="text-decoration:none;text-align:center">내 공개 프로필 보기</a>
+        <a class="chip" href="/feed" style="text-decoration:none;text-align:center">둘러보기</a>
+      </div>
+      <div class="post-grid" id="myPosts"></div>
+      <p class="hint">제작 화면의 "📤 게시하기"로 작품을 올릴 수 있어요. 게시물은 누구나 볼 수 있어요.</p>
+    </div>
+
     <div class="card">
       <h2>오늘 AI 사용량</h2>
       <div class="hint" id="aiUseText" style="margin-bottom:6px">불러오는 중...</div>
@@ -173,6 +191,7 @@
 
   function fill(p) {
     profile = p; interests = p.interests || [];
+    showSanctions(p.sanctions);
     $('nickname').value = p.nickname || '';
     $('bio').value = p.bio || '';
     $('visibility').value = p.visibility || 'private';
@@ -437,6 +456,41 @@
     row.append(thumb, info, btns);
     return row;
   }
+  /* ── 이용 제한 안내 ── */
+  function showSanctions(list) {
+    const KINDS = { warning: '⚠️ 경고', post_ban: '🚫 게시 금지', suspend: '⛔ 이용 정지' };
+    const box = $('sanctionList'); box.innerHTML = '';
+    (list || []).forEach(s => {
+      const d = document.createElement('div'); d.style.cssText = 'margin-bottom:10px;line-height:1.5';
+      const t = document.createElement('div'); t.style.fontWeight = '700';
+      t.textContent = (KINDS[s.kind] || s.kind) + (s.kind === 'warning' ? '' : s.ends_at ? ' (' + new Date(s.ends_at).toLocaleString('ko-KR') + '까지)' : ' (해제될 때까지)');
+      const r = document.createElement('div'); r.className = 'hint'; r.textContent = '사유: ' + s.reason + ' · ' + new Date(s.created_at).toLocaleDateString('ko-KR');
+      d.append(t, r); box.append(d);
+    });
+    $('sanctionCard').style.display = box.children.length ? '' : 'none';
+  }
+
+  /* ── 내 게시물 ── */
+  async function loadMyPosts() {
+    try {
+      const cfg = await (await fetch('/api/config')).json();
+      if (cfg.social !== 'on' && !(cfg.social === 'beta' && profile && profile.role === 'admin')) return;
+      const d = await BoldAuth.api('/api/posts?mine=1');
+      $('postsCard').style.display = '';
+      $('myProfileLink').href = '/u?n=' + encodeURIComponent(profile.nickname);
+      const grid = $('myPosts'); grid.innerHTML = '';
+      if (!d.posts.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = '아직 게시한 작품이 없어요.'; grid.append(e); return; }
+      d.posts.forEach(p => {
+        const a = document.createElement('a'); a.className = 'post-card'; a.href = '/post?id=' + encodeURIComponent(p.id);
+        const img = document.createElement('img'); img.alt = ''; if (p.cover && p.cover.url) img.src = p.cover.url;
+        const m = document.createElement('div'); m.className = 'post-meta';
+        const t = document.createElement('div'); t.className = 'post-title'; t.textContent = p.title;
+        const s = document.createElement('div'); s.className = 'post-status st-' + p.status; s.textContent = p.status_text || '';
+        m.append(t, s); a.append(img, m); grid.append(a);
+      });
+    } catch (e) { /* 소셜 기능 준비 전이면 조용히 숨김 */ }
+  }
+
   /* ── 오늘 AI 사용량 ── */
   async function loadAiUsage() {
     try {
@@ -495,6 +549,7 @@
       loadKids();
       loadWorks();
       loadAiUsage();
+      loadMyPosts();
     } catch (e) {
       if (e.status === 401) { location.replace('/account.html?next=' + encodeURIComponent('/me.html')); return; }
       $('loading').textContent = ERR[e.message] || '프로필을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
