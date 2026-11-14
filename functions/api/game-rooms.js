@@ -8,10 +8,13 @@
 //    ready {room_id, ready} / start {room_id} / state {room_id, state, version} / end {room_id, results:[{nickname, rank?, score?}]}
 //    (그림 릴레이 draw_relay) submit {room_id, step, image|choice} / tick {room_id}  — 진행·점수는 DB 함수(gd_*)가 판단
 //    (기억 조각 그림 memory_parts) submit {room_id, round, image|choice} / tick {room_id} — DB 함수(mp_*)
+//    (쓱싹 퀴즈 sketch_quiz) start {room_id, laps:1|2} / pick {room_id, turn, word} / stroke {room_id, turn, data:[획 조각]} / guess {room_id, turn, text} / tick — DB 함수(qd_*)
+//  GET  ?id=&since=n&sk=마지막 획 id   쓱싹 퀴즈는 버전이 같아도 새 획(strokes)을 함께 줌 / ?id=&strokes_turn=t  끝난 뒤 그 차례의 획 전체
 //  GET  /api/game-rooms?records=1         내 기록(게임별 판 수·1등·최고 점수·최근 5판) — 나만 봄
 // 채팅은 없음(학생 보호). 초대는 서로 팔로우하거나 같은 그룹인 사람만(DB 함수에서 확인).
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { whoIs, rpc, UUID, gamesMode } from './_lib/social.js';
+import { hasBadWord } from './_lib/words.js';
 
 const CODE = /^[A-HJ-NP-Z2-9]{6}$/;
 const ERR = {
@@ -25,6 +28,7 @@ const ERR = {
   not_enough_players: '사람이 더 필요해요.', not_all_ready: '모두 준비해야 시작할 수 있어요.',
   not_playing: '진행 중인 게임이 아니에요.', version_conflict: '그사이 바뀐 내용이 있어요. 다시 해 주세요.',
   state_too_large: '게임 정보가 너무 커요.',
+  too_fast: '조금 천천히 입력해 주세요.',
   step_over: '이번 차례가 이미 끝났어요.', invalid_image: '그림을 다시 내 주세요.', invalid_choice: '보기 중에서 골라 주세요.', not_player: '이번 게임 참가자가 아니에요.',
 };
 
@@ -144,6 +148,54 @@ export async function onRequest({ request, env }) {
     return out;
   }
 
+  // 쓱싹 퀴즈 화면 정보: 제시어는 그리는 사람에게만(맞히는 사람은 글자 수·절반 지나면 첫 글자), 차례가 끝나면 모두에게
+  async function sketchView(room, all) {
+    const st = room.state, order = st.order || [], t = st.turn, ph = st.phase;
+    const nick = Object.fromEntries(all.map(m => [m.user_id, (m.user || {}).nickname || '']));
+    const [tr, hr] = await Promise.all([
+      sb(`/rest/v1/qd_turns?room_id=eq.${room.id}&select=turn,drawer_id,choices,word,draw_started&order=turn.asc`),
+      sb(`/rest/v1/qd_hits?room_id=eq.${room.id}&select=turn,user_id,points,at&order=at.asc`),
+    ]);
+    const turns = tr.ok ? await tr.json() : [], hits = hr.ok ? await hr.json() : [];
+    const hitsOf = n => hits.filter(h => h.turn === n).map(h => ({ nickname: nick[h.user_id] || '(나간 친구)', points: h.points, me: h.user_id === me }));
+    if (ph === 'reveal' || room.status !== 'playing') {
+      return { phase: 'reveal', turns: turns.filter(x => x.word).map(x => ({ turn: x.turn, drawer: nick[x.drawer_id] || '(나간 친구)', mine: x.drawer_id === me, word: x.word, hits: hitsOf(x.turn) })) };
+    }
+    const x = turns.find(y => y.turn === t) || {};
+    const role = x.drawer_id === me ? 'drawer' : order.includes(me) ? 'guesser' : 'watch';
+    const out = { phase: ph, turn: t, turns: st.turns, laps: st.laps, drawer: nick[x.drawer_id] || '', role,
+      remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()), hits: hitsOf(t), my_hit: (hits.find(h => h.turn === t && h.user_id === me) || {}).points || null };
+    if (ph === 'pick' && role === 'drawer') out.choices = x.choices || [];
+    if (ph === 'draw' && x.word) {
+      if (role === 'drawer' || out.my_hit) out.word = x.word;
+      const chars = [...x.word];
+      const half = x.draw_started && (Date.now() - Date.parse(x.draw_started)) >= (st.draw_sec * 1000) / 2;
+      out.hint = chars.map((c, i) => c === ' ' ? ' ' : (half && i === 0 ? c : '○')).join('');
+      out.hint_first = !!half;
+    }
+    if (ph === 'turn_end') out.word = x.word || null;
+    return out;
+  }
+  // 획 조각 정리: 선(번호·색·굵기·좌표)과 되돌리기/지우기만 남김 (다른 친구 화면으로 가는 내용이라 형식을 엄격히)
+  function cleanStrokes(data) {
+    if (!Array.isArray(data) || data.length > 60) return null;
+    const out = []; let pts = 0;
+    for (const it of data) {
+      if (it && (it.op === 'undo' || it.op === 'clear')) { out.push({ op: it.op }); continue; }
+      if (!it || !Number.isInteger(it.i) || it.i < 0 || it.i > 100000 || !/^#[0-9a-fA-F]{6}$/.test(String(it.c)) || !(Number(it.s) >= 1 && Number(it.s) <= 40) || !Array.isArray(it.p)) return null;
+      const p = [];
+      for (const q of it.p) {
+        if (!Array.isArray(q) || q.length !== 2) return null;
+        const x = Math.round(Number(q[0])), y = Math.round(Number(q[1]));
+        if (!(x >= -10 && x <= 490 && y >= -10 && y <= 370)) return null;
+        p.push([x, y]);
+      }
+      pts += p.length; if (!p.length || pts > 1500) return null;
+      out.push({ i: it.i, c: String(it.c).toLowerCase(), s: Math.round(Number(it.s) * 10) / 10, p });
+    }
+    return out;
+  }
+
   if (request.method === 'GET') {
     const url = new URL(request.url);
     if (url.searchParams.get('games') === '1') {
@@ -189,14 +241,27 @@ export async function onRequest({ request, env }) {
       room = { ...room, status: 'closed', version: room.version + 1 };
     }
     // 그림 릴레이: 마감이 지났으면 다음 단계로 넘기고 다시 읽음 (서버 시간 기준)
-    const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance' };
+    const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance', sketch_quiz: 'qd_advance' };
     if (ADV[room.game_key] && room.status === 'playing' && room.state && room.state.deadline && room.state.phase !== 'reveal' && Date.parse(room.state.deadline) <= Date.now()) {
       await rpc(env, ADV[room.game_key], { p_room: id });
       const again = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players)`);
       room = (again.ok ? await again.json() : [])[0] || room;
     }
+    if (room.game_key === 'sketch_quiz' && url.searchParams.get('strokes_turn') != null) {
+      const t = parseInt(url.searchParams.get('strokes_turn'), 10);
+      if (!Number.isInteger(t) || t < 0 || t > 15) return fail('step_over');
+      const sr = await sb(`/rest/v1/qd_strokes?room_id=eq.${id}&turn=eq.${t}&select=id,data&order=id.asc&limit=1000`);
+      return json({ turn: t, strokes: sr.ok ? await sr.json() : [] });
+    }
+    // 쓱싹 퀴즈: 그리는 중이면 버전과 상관없이 마지막으로 받은 획 뒤의 새 획을 붙여 줌
+    let strokes;
+    if (room.game_key === 'sketch_quiz' && room.status === 'playing' && room.state && room.state.phase === 'draw') {
+      const sk = parseInt(url.searchParams.get('sk') || '0', 10) || 0;
+      const sr = await sb(`/rest/v1/qd_strokes?room_id=eq.${id}&turn=eq.${room.state.turn}&id=gt.${sk}&select=id,data&order=id.asc&limit=300`);
+      strokes = { turn: room.state.turn, items: sr.ok ? await sr.json() : [] };
+    }
     const since = parseInt(url.searchParams.get('since') || '', 10);
-    if (since === room.version) return json({ unchanged: true, version: room.version });
+    if (since === room.version) return json({ unchanged: true, version: room.version, strokes });
     let results = [];
     if (room.status === 'ended') {
       const xr = await sb(`/rest/v1/game_results?room_id=eq.${id}&select=user_id,rank,score,user:profiles(nickname)&order=rank.asc.nullslast`);
@@ -205,9 +270,10 @@ export async function onRequest({ request, env }) {
     const active = all.filter(m => !m.left_at);
     const relay = room.game_key === 'draw_relay' && room.state && room.state.order ? await relayView(room, all) : null;
     const memory = room.game_key === 'memory_parts' && room.state && room.state.order ? await memoryView(room, all) : null;
+    const sketch = room.game_key === 'sketch_quiz' && room.state && room.state.order ? await sketchView(room, all) : null;
     return json({
       id: room.id, version: room.version, status: room.status, code: room.status === 'waiting' ? room.join_code : null,
-      game: room.game, max_players: room.max_players, state: relay || memory ? {} : (room.state || {}), relay, memory, expires_at: room.expires_at,
+      game: room.game, max_players: room.max_players, state: relay || memory || sketch ? {} : (room.state || {}), relay, memory, sketch, strokes, expires_at: room.expires_at,
       started_at: room.started_at, ended_at: room.ended_at,
       my_role: mine.left_at ? null : mine.role, me: who.profile.nickname,
       members: active.map(m => ({ nickname: (m.user || {}).nickname || '', avatar_url: (m.user || {}).avatar_url || null, role: m.role, ready: m.ready, me: m.user_id === me })),
@@ -248,15 +314,31 @@ export async function onRequest({ request, env }) {
   }
   if (a === 'ready') return out(await rpc(env, 'gm_ready', { p_user: me, p_room: room, p_ready: !!b.ready }));
   // 게임별 DB 함수
-  const FN = { draw_relay: { start: 'gd_start', submit: 'gd_submit', tick: 'gd_advance' }, memory_parts: { start: 'mp_start', submit: 'mp_submit', tick: 'mp_advance' } };
+  const FN = { draw_relay: { start: 'gd_start', submit: 'gd_submit', tick: 'gd_advance' }, memory_parts: { start: 'mp_start', submit: 'mp_submit', tick: 'mp_advance' },
+    sketch_quiz: { start: 'qd_start', tick: 'qd_advance' } };
   const gameOf = async () => { const gr = await sb(`/rest/v1/game_rooms?id=eq.${room}&select=game_key`); return ((gr.ok ? await gr.json() : [])[0] || {}).game_key || null; };
   if (a === 'start') {
     const fn = FN[await gameOf()];
+    if (fn && fn.start === 'qd_start') return out(await rpc(env, 'qd_start', { p_actor: me, p_room: room, p_laps: b.laps === 2 ? 2 : 1 }));
     return out(await rpc(env, fn ? fn.start : 'gm_start', { p_actor: me, p_room: room }));
+  }
+  if (a === 'pick' || a === 'stroke' || a === 'guess') {
+    const turn = parseInt(b.turn, 10);
+    if (!Number.isInteger(turn)) return fail('step_over');
+    if (a === 'pick') return out(await rpc(env, 'qd_pick', { p_user: me, p_room: room, p_turn: turn, p_word: String(b.word || '').slice(0, 20) }));
+    if (a === 'stroke') {
+      const data = cleanStrokes(b.data);
+      if (!data || !data.length) return fail('invalid_image');
+      return out(await rpc(env, 'qd_stroke', { p_user: me, p_room: room, p_turn: turn, p_data: data }));
+    }
+    const text = String(b.text || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 20);
+    if (!text) return fail('invalid_choice');
+    if (hasBadWord(text)) return json({ error: '고운 말로 다시 써 주세요. 🙂', code: 'bad_word' }, 400);
+    return out(await rpc(env, 'qd_guess', { p_user: me, p_room: room, p_turn: turn, p_text: text }));
   }
   if (a === 'submit') {
     const fn = FN[await gameOf()];
-    if (!fn) return fail('not_playing');
+    if (!fn || !fn.submit) return fail('not_playing');
     const step = parseInt(b.round != null ? b.round : b.step, 10);
     if (!Number.isInteger(step)) return fail('step_over');
     const image = typeof b.image === 'string' ? b.image : null;

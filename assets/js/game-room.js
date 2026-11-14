@@ -8,14 +8,16 @@
   function connect(roomId, handlers) {
     handlers = handlers || {};
     let version = null, timer = null, closed = false, busy = false, last = null;
+    let pollMs = POLL_MS, extra = null; const listeners = [];   // 게임이 바꿀 수 있는 것: 물어보는 간격, 덧붙일 주소 조건, 모든 응답 받기
 
     async function pull() {
       if (closed || busy) return;
       busy = true;
       try {
-        const q = '/api/game-rooms?id=' + encodeURIComponent(roomId) + (version != null ? '&since=' + version : '');
+        const q = '/api/game-rooms?id=' + encodeURIComponent(roomId) + (version != null ? '&since=' + version : '') + (extra ? extra() : '');
         const d = await SocialUI.api(q);
         if (!d.unchanged) { version = d.version; last = d; handlers.onChange && handlers.onChange(d); }
+        listeners.forEach(fn => { try { fn(d); } catch (e) {} });
       } catch (e) {
         handlers.onError && handlers.onError(e);
         if (e.status === 404 || e.status === 401) close();   // 방이 없어졌거나 나감
@@ -24,7 +26,7 @@
     function schedule() {
       clearTimeout(timer);
       if (closed) return;
-      timer = setTimeout(async () => { if (document.visibilityState === 'visible') await pull(); schedule(); }, POLL_MS);
+      timer = setTimeout(async () => { if (document.visibilityState === 'visible') await pull(); schedule(); }, pollMs);
     }
     function onVis() { if (document.visibilityState === 'visible' && !closed) pull(); }
     document.addEventListener('visibilitychange', onVis);
@@ -38,7 +40,8 @@
     function close() { closed = true; clearTimeout(timer); document.removeEventListener('visibilitychange', onVis); }
 
     pull().then(schedule);
-    return { send, close, refresh: () => { version = null; return pull(); }, get state() { return last; } };
+    return { send, close, refresh: () => { version = null; return pull(); }, get state() { return last; },
+      setPollMs: ms => { pollMs = Math.max(800, ms || POLL_MS); }, setExtra: fn => { extra = fn; }, listen: fn => { if (!listeners.includes(fn)) listeners.push(fn); } };
   }
 
   // 방 밖에서 쓰는 동작 (만들기·코드로 들어가기)

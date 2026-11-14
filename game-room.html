@@ -28,6 +28,7 @@
 <script src="/assets/js/draw-pad.js"></script>
 <script src="/assets/js/games/draw-relay.js"></script>
 <script src="/assets/js/games/memory-parts.js"></script>
+<script src="/assets/js/games/sketch-quiz.js"></script>
 <script>
 (async function () {
   const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id), el = U.el;
@@ -35,7 +36,7 @@
   if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
   const id = new URLSearchParams(location.search).get('id') || '';
   const STATUS = { waiting: '친구를 기다리는 중', playing: '게임 중', ended: '끝났어요', closed: '닫힌 방이에요' };
-  let link = null, R = null;
+  let link = null, R = null, twoLaps = false;
   const act = async (action, body, confirmMsg) => {
     if (confirmMsg && !confirm(confirmMsg)) return;
     try { await link.send(action, body); } catch (e) { alert(e.message); }
@@ -74,8 +75,14 @@
       if (host) {
         const notReady = d.members.filter(m => m.role !== 'host' && !m.ready).length;
         const enough = d.members.length >= d.game.min_players;
-        const st = btn('▶ 게임 시작', () => act('start'), 'btn btn-main'); st.disabled = !!notReady || !enough;
+        const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : null), 'btn btn-main'); st.disabled = !!notReady || !enough;
         acts.append(st);
+        // 쓱싹 퀴즈: 모두 한 번씩(기본) 또는 두 바퀴
+        if (d.game.key === 'sketch_quiz') {
+          const lab = el('label', ''); lab.style.cssText = 'display:flex;gap:6px;align-items:center;font-weight:400';
+          const cb = el('input'); cb.type = 'checkbox'; cb.checked = twoLaps; cb.style.width = 'auto'; cb.onchange = () => { twoLaps = cb.checked; };
+          lab.append(cb, el('span', '', '두 바퀴 하기 (모두 두 번씩 그려요)')); acts.append(lab);
+        }
         mc.append(acts, el('div', 'hint', !enough ? d.game.min_players + '명 이상 있어야 시작할 수 있어요.' : notReady ? '모두 준비하면 시작할 수 있어요.' : '모두 준비됐어요!'));
         // 초대: 서로 팔로우하거나 같은 그룹인 친구만
         const inv = el('div'); inv.style.marginTop = '12px';
