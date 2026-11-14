@@ -1,16 +1,29 @@
-// 그림 게임 공통 그림판 (5단계). window.DrawPad.create(parent) → { el, toImage(), clear(), isEmpty(), destroy() }
+// 그림 게임 공통 그림판 (5단계). window.DrawPad.create(parent, opts?) → { el, toImage(), clear(), isEmpty(), destroy() }
+// opts.band = [k, K]: 그림을 위에서 아래로 K칸으로 나눈 것 중 k번째 칸만 밝게 보여 줌 (기억 조각 그림의 부위 칸). 안내용이라 낸 그림에는 안 들어감
 // 펜 굵기 3가지, 색 8개, 지우개, 되돌리기, 전체 지우기. 그림은 480×360 으로 그리고 작게 압축해 낸다(서버 한도 200KB).
 (function () {
   const W = 480, H = 360;
   const COLORS = ['#111111', '#e53935', '#fb8c00', '#fdd835', '#43a047', '#1e88e5', '#8e24aa', '#8d6e63'];
   const SIZES = [[3, '가늘게'], [7, '보통'], [14, '굵게']];
 
-  function create(parent) {
+  function create(parent, opts) {
+    opts = opts || {};
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;flex-direction:column;gap:8px';
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
-    cv.style.cssText = 'width:100%;max-width:560px;aspect-ratio:4/3;background:#fff;border:3px solid #000;touch-action:none;display:block;margin:0 auto;cursor:crosshair';
+    cv.style.cssText = 'width:100%;aspect-ratio:4/3;background:#fff;border:3px solid #000;touch-action:none;display:block;cursor:crosshair;box-sizing:border-box';
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:relative;width:100%;max-width:560px;margin:0 auto';
+    holder.append(cv);
+    if (Array.isArray(opts.band)) {
+      const [k, K] = opts.band;
+      const shade = (top, h) => { const d = document.createElement('div'); d.style.cssText = 'position:absolute;left:3px;right:3px;pointer-events:none;background:rgba(40,40,60,.38);top:' + top + '%;height:' + h + '%'; holder.append(d); };
+      const t = 100 * k / K, b = 100 * (k + 1) / K;
+      if (t > 0) shade(0, t);
+      if (b < 100) shade(b, 100 - b);
+      const line = document.createElement('div'); line.style.cssText = 'position:absolute;left:3px;right:3px;pointer-events:none;border:3px dashed #ff4fa3;box-sizing:border-box;top:' + t + '%;height:' + (b - t) + '%'; holder.append(line);
+    }
     const ctx = cv.getContext('2d');
     const strokes = [];     // [{color, size, pts:[[x,y]...]}]  — 되돌리기용
     let cur = null, color = COLORS[0], size = SIZES[1][0], erasing = false;
@@ -68,7 +81,7 @@
     bar.append(sizeBox, er, undo, clr);
     select(sw[0]);
 
-    wrap.append(cv, bar);
+    wrap.append(holder, bar);
     parent.append(wrap);
 
     // 낼 그림: webp → 안 되면 jpeg, 200KB 넘으면 품질을 낮춤

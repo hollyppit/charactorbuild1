@@ -2395,14 +2395,15 @@ try {
           <h3>🎨 그림 릴레이</h3>
           <div class="gh-tags"><span>친구와 2~8명</span><span class="need">로그인 필요</span></div>
           <p>제시어를 그림으로만 전달해요. 앞 친구 그림만 보고 다시 그리고, 마지막 친구가 처음 제시어를 맞혀요.</p>
-          <div class="gh-note" id="ghRelayNote">확인하는 중...</div>
-          <a class="btn btn-purple" id="ghRelayBtn" style="display:none;text-decoration:none;text-align:center"></a>
+          <div class="gh-note" data-note>확인하는 중...</div>
+          <a class="btn btn-purple" data-btn style="display:none;text-decoration:none;text-align:center"></a>
         </div>
-        <div class="gh-card soon">
+        <div class="gh-card" id="ghMemory">
           <h3>🧩 기억 조각 그림</h3>
-          <div class="gh-tags"><span>친구와 함께</span><span class="need">로그인 필요</span></div>
-          <p>캐릭터를 3초 동안 보고, 부위를 나눠 그린 뒤 어떤 캐릭터인지 맞혀요.</p>
-          <div class="gh-note">곧 나와요!</div>
+          <div class="gh-tags"><span>친구와 2~5명</span><span class="need">로그인 필요</span></div>
+          <p>캐릭터를 3초 동안 보고, 부위를 나눠 그려요. 맞히는 친구가 합친 그림을 보고 어떤 캐릭터인지 골라요.</p>
+          <div class="gh-note" data-note>확인하는 중...</div>
+          <a class="btn btn-purple" data-btn style="display:none;text-decoration:none;text-align:center"></a>
         </div>
         <div class="gh-card soon">
           <h3>✏️ 쓱싹 퀴즈</h3>
@@ -7178,20 +7179,17 @@ function initQuizPanel() {
 
 /* 게임 목록: 친구와 하는 게임은 로그인·공개 상태에 따라 안내 */
 async function gameHubLoad() {
-  const note = document.getElementById('ghRelayNote'), btn = document.getElementById('ghRelayBtn');
-  if (!note || !btn) return;
-  const show = (text, label, href) => { note.textContent = text || ''; btn.style.display = label ? '' : 'none'; if (label) { btn.textContent = label; btn.href = href; } };
+  // 친구와 하는 게임 카드: [카드 id, 게임 키]
+  const cards = [['ghRelay', 'draw_relay'], ['ghMemory', 'memory_parts']].map(([id, key]) => ({ key, el: document.getElementById(id) })).filter(c => c.el);
+  const show = (c, text, label, href) => { const note = c.el.querySelector('[data-note]'), btn = c.el.querySelector('[data-btn]'); note.textContent = text || ''; btn.style.display = label ? '' : 'none'; if (label) { btn.textContent = label; btn.href = href; } };
+  if (!cards.length) return;
   let session = null;
   try { session = window.BoldAuth ? await BoldAuth.session() : null; } catch (e) {}
-  if (!session) { show('친구와 함께 하는 게임이라 로그인이 필요해요. (만 14세 이상)', '🔑 로그인하고 하기', '/account.html?next=' + encodeURIComponent('/#game')); return; }
-  let mode = 'off';
+  if (!session) { cards.forEach(c => show(c, '친구와 함께 하는 게임이라 로그인이 필요해요. (만 14세 이상)', '🔑 로그인하고 하기', '/account.html?next=' + encodeURIComponent('/#game'))); return; }
+  let mode = 'off', keys = [];
   try { mode = (await (await fetch('/api/config')).json()).games || 'off'; } catch (e) {}
-  if (mode === 'off') { show('곧 열려요! 지금은 준비 중이에요.'); return; }
-  try {
-    const d = await BoldAuth.api('/api/game-rooms?games=1');
-    if ((d.games || []).some(g => g.key === 'draw_relay')) { show('방을 만들어 친구를 초대하거나, 친구에게 받은 입장 코드로 들어가요.', '👥 친구와 하기', '/games'); return; }
-  } catch (e) {}
-  show('곧 열려요! 지금은 준비 중이에요.');
+  if (mode !== 'off') { try { keys = ((await BoldAuth.api('/api/game-rooms?games=1')).games || []).map(g => g.key); } catch (e) {} }
+  cards.forEach(c => keys.includes(c.key) ? show(c, '방을 만들어 친구를 초대하거나, 친구에게 받은 입장 코드로 들어가요.', '👥 친구와 하기', '/games') : show(c, '곧 열려요! 지금은 준비 중이에요.'));
 }
 // 주소가 /#game 이면 게임 탭을 바로 연다 (로그인 뒤 돌아올 때 등)
 function _openGameTabFromHash() { if (location.hash === '#game') { const b = document.getElementById('tabGame'); if (b && !b.classList.contains('active')) switchMode('quiz', b); } }

@@ -7,6 +7,7 @@
 //    create {game, max_players?} / join {code} / invite {room_id, nickname} / leave {room_id} / kick {room_id, nickname}
 //    ready {room_id, ready} / start {room_id} / state {room_id, state, version} / end {room_id, results:[{nickname, rank?, score?}]}
 //    (그림 릴레이 draw_relay) submit {room_id, step, image|choice} / tick {room_id}  — 진행·점수는 DB 함수(gd_*)가 판단
+//    (기억 조각 그림 memory_parts) submit {room_id, round, image|choice} / tick {room_id} — DB 함수(mp_*)
 //  GET  /api/game-rooms?records=1         내 기록(게임별 판 수·1등·최고 점수·최근 5판) — 나만 봄
 // 채팅은 없음(학생 보호). 초대는 서로 팔로우하거나 같은 그룹인 사람만(DB 함수에서 확인).
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
@@ -98,6 +99,51 @@ export async function onRequest({ request, env }) {
     };
   }
 
+  // 기억 조각 그림 화면 정보: 단계·역할에 따라 필요한 것만 (캐릭터 그림은 show 단계의 그리는 사람에게만)
+  async function memoryView(room, all) {
+    const st = room.state, order = st.order || [], rd = st.round, ph = st.phase;
+    const nick = Object.fromEntries(all.map(m => [m.user_id, (m.user || {}).nickname || '']));
+    const activeIds = new Set(all.filter(m => !m.left_at).map(m => m.user_id));
+    // 그림 내용은 맞히기·결과·다시 보기 단계에서만 보냄 (그리는 동안에는 누가 냈는지만)
+    const withImg = ph === 'reveal' || ph === 'guess' || ph === 'result' || room.status !== 'playing';
+    const [rr, pr] = await Promise.all([
+      sb(`/rest/v1/mp_rounds?room_id=eq.${room.id}&select=round,guesser_id,char_id,options,guess_id,correct&order=round.asc`),
+      sb(`/rest/v1/mp_parts?room_id=eq.${room.id}${room.status === 'playing' && ph !== 'reveal' ? '&round=eq.' + rd : ''}&select=round,user_id,part${withImg ? ',image' : ''}`),
+    ]);
+    const rounds = rr.ok ? await rr.json() : [];
+    const parts = pr.ok ? await pr.json() : [];
+    const ids = [...new Set(rounds.flatMap(x => [x.char_id, ...(x.options || [])]))];
+    let chars = {};
+    if (ids.length) {
+      const cr = await sb(`/rest/v1/char_items?id=in.(${ids.map(x => encodeURIComponent('"' + String(x).replace(/"/g, '') + '"')).join(',')})&select=id,label,src`);
+      chars = Object.fromEntries((cr.ok ? await cr.json() : []).map(c => [c.id, { id: c.id, label: c.label || '', src: c.src || '' }]));
+    }
+    const ch = id => chars[id] || { id, label: '?', src: '' };
+    const drawersOf = g => order.filter(u => u !== g);
+    const K = Math.min(4, Math.max(1, order.length - 1));
+    const partOf = (x, u) => { const d = drawersOf(x.guesser_id); const i = d.indexOf(u); return i < 0 ? null : (i + x.round) % K; };
+    const roundParts = x => parts.filter(p => p.round === x.round).sort((a, b) => a.part - b.part).map(p => ({ part: p.part, image: p.image || null, nickname: nick[p.user_id] || '(나간 친구)', mine: p.user_id === me }));
+    if (ph === 'reveal' || room.status !== 'playing') {
+      return { phase: 'reveal', K, kept: parts.length > 0, rounds: rounds.map(x => ({
+        round: x.round, guesser: nick[x.guesser_id] || '(나간 친구)', answer: ch(x.char_id), guess: x.guess_id ? ch(x.guess_id) : null, correct: !!x.correct, parts: roundParts(x),
+      })) };
+    }
+    const x = rounds.find(y => y.round === rd) || {};
+    const role = !order.includes(me) ? 'watch' : x.guesser_id === me ? 'guesser' : 'drawer';
+    const drawers = drawersOf(x.guesser_id).filter(u => activeIds.has(u));
+    const out = {
+      phase: ph, round: rd, rounds: st.rounds, K, role, guesser: nick[x.guesser_id] || '', remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()),
+      my_part: role === 'drawer' ? partOf(x, me) : null,
+      submitted: role === 'drawer' ? parts.some(p => p.round === rd && p.user_id === me) : role === 'guesser' ? !!x.guess_id : false,
+      done: parts.filter(p => p.round === rd && drawers.includes(p.user_id)).length, need: drawers.length,
+    };
+    if (ph === 'show' && role === 'drawer') out.character = ch(x.char_id);
+    if (ph === 'guess' || ph === 'result') out.parts = roundParts(x);
+    if (ph === 'guess' && role === 'guesser') out.options = (x.options || []).map(ch);
+    if (ph === 'result') { out.answer = ch(x.char_id); out.guess = x.guess_id ? ch(x.guess_id) : null; out.correct = !!x.correct; }
+    return out;
+  }
+
   if (request.method === 'GET') {
     const url = new URL(request.url);
     if (url.searchParams.get('games') === '1') {
@@ -143,8 +189,9 @@ export async function onRequest({ request, env }) {
       room = { ...room, status: 'closed', version: room.version + 1 };
     }
     // 그림 릴레이: 마감이 지났으면 다음 단계로 넘기고 다시 읽음 (서버 시간 기준)
-    if (room.game_key === 'draw_relay' && room.status === 'playing' && room.state && room.state.phase === 'play' && Date.parse(room.state.deadline) <= Date.now()) {
-      await rpc(env, 'gd_advance', { p_room: id });
+    const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance' };
+    if (ADV[room.game_key] && room.status === 'playing' && room.state && room.state.deadline && room.state.phase !== 'reveal' && Date.parse(room.state.deadline) <= Date.now()) {
+      await rpc(env, ADV[room.game_key], { p_room: id });
       const again = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players)`);
       room = (again.ok ? await again.json() : [])[0] || room;
     }
@@ -157,9 +204,10 @@ export async function onRequest({ request, env }) {
     }
     const active = all.filter(m => !m.left_at);
     const relay = room.game_key === 'draw_relay' && room.state && room.state.order ? await relayView(room, all) : null;
+    const memory = room.game_key === 'memory_parts' && room.state && room.state.order ? await memoryView(room, all) : null;
     return json({
       id: room.id, version: room.version, status: room.status, code: room.status === 'waiting' ? room.join_code : null,
-      game: room.game, max_players: room.max_players, state: relay ? {} : (room.state || {}), relay, expires_at: room.expires_at,
+      game: room.game, max_players: room.max_players, state: relay || memory ? {} : (room.state || {}), relay, memory, expires_at: room.expires_at,
       started_at: room.started_at, ended_at: room.ended_at,
       my_role: mine.left_at ? null : mine.role, me: who.profile.nickname,
       members: active.map(m => ({ nickname: (m.user || {}).nickname || '', avatar_url: (m.user || {}).avatar_url || null, role: m.role, ready: m.ready, me: m.user_id === me })),
@@ -199,23 +247,29 @@ export async function onRequest({ request, env }) {
     return out(await rpc(env, 'gm_kick', { p_actor: me, p_room: room, p_target: uid }));
   }
   if (a === 'ready') return out(await rpc(env, 'gm_ready', { p_user: me, p_room: room, p_ready: !!b.ready }));
+  // 게임별 DB 함수
+  const FN = { draw_relay: { start: 'gd_start', submit: 'gd_submit', tick: 'gd_advance' }, memory_parts: { start: 'mp_start', submit: 'mp_submit', tick: 'mp_advance' } };
+  const gameOf = async () => { const gr = await sb(`/rest/v1/game_rooms?id=eq.${room}&select=game_key`); return ((gr.ok ? await gr.json() : [])[0] || {}).game_key || null; };
   if (a === 'start') {
-    const gr = await sb(`/rest/v1/game_rooms?id=eq.${room}&select=game_key`);
-    const g = (gr.ok ? await gr.json() : [])[0];
-    if (g && g.game_key === 'draw_relay') return out(await rpc(env, 'gd_start', { p_actor: me, p_room: room }));
-    return out(await rpc(env, 'gm_start', { p_actor: me, p_room: room }));
+    const fn = FN[await gameOf()];
+    return out(await rpc(env, fn ? fn.start : 'gm_start', { p_actor: me, p_room: room }));
   }
   if (a === 'submit') {
-    const step = parseInt(b.step, 10);
+    const fn = FN[await gameOf()];
+    if (!fn) return fail('not_playing');
+    const step = parseInt(b.round != null ? b.round : b.step, 10);
     if (!Number.isInteger(step)) return fail('step_over');
     const image = typeof b.image === 'string' ? b.image : null;
-    const choice = typeof b.choice === 'string' ? b.choice.slice(0, 20) : null;
+    const choice = typeof b.choice === 'string' ? b.choice.slice(0, 40) : null;
     if (image && image.length > 200000) return fail('invalid_image');
-    return out(await rpc(env, 'gd_submit', { p_user: me, p_room: room, p_step: step, p_image: image, p_choice: choice }));
+    const args = fn.submit === 'mp_submit' ? { p_user: me, p_room: room, p_round: step, p_image: image, p_choice: choice } : { p_user: me, p_room: room, p_step: step, p_image: image, p_choice: choice };
+    return out(await rpc(env, fn.submit, args));
   }
   if (a === 'tick') {
-    const r = await rpc(env, 'gd_advance', { p_room: room });
-    return json({ ok: true, advanced: !!(r.data && (r.data.step != null || r.data.ended)) });
+    const fn = FN[await gameOf()];
+    if (!fn) return json({ ok: true, advanced: false });
+    const r = await rpc(env, fn.tick, { p_room: room });
+    return json({ ok: true, advanced: !!(r.data && (r.data.step != null || r.data.round != null || r.data.phase || r.data.ended)) });
   }
   if (a === 'state') {
     const v = parseInt(b.version, 10);
