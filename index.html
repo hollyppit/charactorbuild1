@@ -2392,6 +2392,13 @@ try {
           <button class="btn btn-yellow" type="button" onclick="_showQuizView('intro')">▶ 혼자 하기</button>
           <div id="ghQuizBattle" style="display:flex;flex-direction:column;gap:6px"><div class="gh-note" data-note>확인하는 중...</div><a class="btn btn-purple" data-btn style="display:none;text-decoration:none;text-align:center"></a></div>
         </div>
+        <div class="gh-card" id="ghPuzzle">
+          <h3>🧩 그림 퍼즐</h3>
+          <div class="gh-tags"><span>혼자 · 로그인 없이</span><span class="need">친구 배틀 2~8명 · 로그인 필요</span></div>
+          <p>그림이 직소 퍼즐 조각으로 나뉘어요. 끌어서 맞추거나(직소), 휴대폰에서는 두 조각을 눌러 바꿔요(사각 조각). 최대 120조각!</p>
+          <a class="btn btn-yellow" href="/puzzle" style="text-decoration:none;text-align:center">▶ 혼자 하기</a>
+          <div style="display:flex;flex-direction:column;gap:6px"><div class="gh-note" data-note>확인하는 중...</div><a class="btn btn-purple" data-btn style="display:none;text-decoration:none;text-align:center"></a></div>
+        </div>
         <div class="gh-card" id="ghRelay">
           <h3>🎨 그림 릴레이</h3>
           <div class="gh-tags"><span>친구와 2~8명</span><span class="need">로그인 필요</span></div>
@@ -7189,7 +7196,7 @@ function initQuizPanel() {
 /* 게임 목록: 친구와 하는 게임은 로그인·공개 상태에 따라 안내 */
 async function gameHubLoad() {
   // 친구와 하는 게임 카드: [카드 id, 게임 키]
-  const cards = [['ghRelay', 'draw_relay'], ['ghMemory', 'memory_parts'], ['ghSketch', 'sketch_quiz'], ['ghLiar', 'liar_draw'], ['ghQuizBattle', 'quiz_battle']].map(([id, key]) => ({ key, el: document.getElementById(id) })).filter(c => c.el);
+  const cards = [['ghRelay', 'draw_relay'], ['ghMemory', 'memory_parts'], ['ghSketch', 'sketch_quiz'], ['ghLiar', 'liar_draw'], ['ghQuizBattle', 'quiz_battle'], ['ghPuzzle', 'jigsaw']].map(([id, key]) => ({ key, el: document.getElementById(id) })).filter(c => c.el);
   const show = (c, text, label, href) => { const note = c.el.querySelector('[data-note]'), btn = c.el.querySelector('[data-btn]'); note.textContent = text || ''; btn.style.display = label ? '' : 'none'; if (label) { btn.textContent = label; btn.href = href; } };
   if (!cards.length) return;
   let session = null;
@@ -7198,7 +7205,7 @@ async function gameHubLoad() {
   let mode = 'off', keys = [];
   try { mode = (await (await fetch('/api/config')).json()).games || 'off'; } catch (e) {}
   if (mode !== 'off') { try { keys = ((await BoldAuth.api('/api/game-rooms?games=1')).games || []).map(g => g.key); } catch (e) {} }
-  cards.forEach(c => keys.includes(c.key) ? show(c, '방을 만들어 친구를 초대하거나, 친구에게 받은 입장 코드로 들어가요.', c.key === 'quiz_battle' ? '⚔️ 친구와 배틀' : '👥 친구와 하기', '/games') : show(c, '곧 열려요! 지금은 준비 중이에요.'));
+  cards.forEach(c => keys.includes(c.key) ? show(c, '방을 만들어 친구를 초대하거나, 친구에게 받은 입장 코드로 들어가요.', c.key === 'quiz_battle' || c.key === 'jigsaw' ? '⚔️ 친구와 배틀' : '👥 친구와 하기', '/games') : show(c, '곧 열려요! 지금은 준비 중이에요.'));
 }
 // 주소가 /#game 이면 게임 탭을 바로 연다 (로그인 뒤 돌아올 때 등)
 function _openGameTabFromHash() { if (location.hash === '#game') { const b = document.getElementById('tabGame'); if (b && !b.classList.contains('active')) switchMode('quiz', b); } }

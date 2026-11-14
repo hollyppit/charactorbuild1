@@ -31,6 +31,8 @@
 <script src="/assets/js/games/sketch-quiz.js"></script>
 <script src="/assets/js/games/liar-draw.js"></script>
 <script src="/assets/js/games/quiz-battle.js"></script>
+<script src="/assets/js/jigsaw.js"></script>
+<script src="/assets/js/games/puzzle-battle.js"></script>
 <script>
 (async function () {
   const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id), el = U.el;
@@ -38,7 +40,7 @@
   if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
   const id = new URLSearchParams(location.search).get('id') || '';
   const STATUS = { waiting: '친구를 기다리는 중', playing: '게임 중', ended: '끝났어요', closed: '닫힌 방이에요' };
-  let link = null, R = null, twoLaps = false, liarMode = 'told', liarRounds = 3, quizCount = 10;
+  let link = null, R = null, twoLaps = false, liarMode = 'told', liarRounds = 3, quizCount = 10, pzLevel = 'normal', pzItem = '', pzPics = null;
   const act = async (action, body, confirmMsg) => {
     if (confirmMsg && !confirm(confirmMsg)) return;
     try { await link.send(action, body); } catch (e) { alert(e.message); }
@@ -77,8 +79,18 @@
       if (host) {
         const notReady = d.members.filter(m => m.role !== 'host' && !m.ready).length;
         const enough = d.members.length >= d.game.min_players;
-        const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : d.game.key === 'liar_draw' ? { mode: liarMode, rounds: liarRounds } : d.game.key === 'quiz_battle' ? { count: quizCount } : null), 'btn btn-main'); st.disabled = !!notReady || !enough;
+        const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : d.game.key === 'liar_draw' ? { mode: liarMode, rounds: liarRounds } : d.game.key === 'quiz_battle' ? { count: quizCount } : d.game.key === 'jigsaw' ? { level: pzLevel, item: pzItem || undefined } : null), 'btn btn-main'); st.disabled = !!notReady || !enough;
         acts.append(st);
+        // 그림 퍼즐 배틀: 그림·난이도
+        if (d.game.key === 'jigsaw') {
+          const ps = el('select'); const o0 = el('option', '', '🎲 무작위 그림'); o0.value = ''; ps.append(o0);
+          (pzPics || []).forEach(p => { const o = el('option', '', p.label || '그림'); o.value = p.id; ps.append(o); });
+          ps.value = pzItem; ps.onchange = () => { pzItem = ps.value; };
+          if (!pzPics) fetch('/api/items').then(x => x.json()).then(a => { pzPics = (Array.isArray(a) ? a : []).filter(x => x.category === 'puzzle' && x.src && x.src_back !== 'hidden'); link.refresh(); }).catch(() => { pzPics = []; });
+          const ls = el('select'); Object.entries(window.Jigsaw ? Jigsaw.LEVELS : {}).forEach(([k, L]) => { const o = el('option', '', L.name + ' (' + L.pieces + '조각)'); o.value = k; ls.append(o); });
+          ls.value = pzLevel; ls.onchange = () => { pzLevel = ls.value; };
+          const box = el('div'); box.style.cssText = 'display:flex;flex-direction:column;gap:6px;width:100%'; box.append(el('label', '', '퍼즐 그림'), ps, el('label', '', '난이도'), ls); acts.append(box);
+        }
         // 퀴즈 배틀: 문제 수
         if (d.game.key === 'quiz_battle') {
           const qs = el('select'); [[5, '5문제'], [10, '10문제']].forEach(([v, t]) => { const o = el('option', '', t); o.value = v; qs.append(o); });

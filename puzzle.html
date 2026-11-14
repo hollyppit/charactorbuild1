@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>그림 퍼즐 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+<style>
+  .pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+  .pic{border:3px solid #000;background:#fff;color:#111;padding:4px;cursor:pointer;text-align:center;font-size:.8rem}
+  .pic img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+  .pic.on{border-color:#ff4fa3;box-shadow:0 0 0 3px #ff4fa3}
+  .lv{display:flex;flex-wrap:wrap;gap:6px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .bar b{color:var(--yellow)}
+  #stage{width:100%;overflow:visible}
+</style>
+</head>
+<body>
+<div class="wrap wide" id="root">
+  <div class="top"><a class="brand" href="/">볼드하다</a><a class="chip" href="/#game" style="text-decoration:none">← 게임</a></div>
+  <div class="card" id="pick">
+    <h1>🧩 그림 퍼즐</h1>
+    <p class="sub">그림을 고르고 난이도를 정해요. 조각을 맞추면 완성!</p>
+    <h2>그림 고르기</h2>
+    <div class="pics" id="pics">불러오는 중...</div>
+    <h2>난이도</h2>
+    <div class="lv" id="levels"></div>
+    <h2>방식</h2>
+    <div class="lv" id="modes"></div>
+    <div class="hint" id="modeHint" style="margin-top:6px"></div>
+    <div class="msg" id="pickMsg"></div>
+    <button class="btn btn-main" id="startBtn" type="button" style="margin-top:12px">▶ 시작하기</button>
+  </div>
+  <div class="card" id="play" style="display:none">
+    <div class="bar"><span id="info"></span><span>⏱ <b id="time">0:00</b></span></div>
+    <div class="bar" style="justify-content:flex-start"><button class="chip" id="pvBtn" type="button"></button><button class="chip" id="edgeBtn" type="button">가장자리 조각만</button><button class="chip" id="quitBtn" type="button">그만하기</button></div>
+    <div id="stage"></div>
+  </div>
+</div>
+<script src="/assets/js/jigsaw.js"></script>
+<script>
+(async function () {
+  const $ = id => document.getElementById(id);
+  const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+  let pics = [], pic = null, level = 'easy', mode = Jigsaw.prefersTiles() ? 'tiles' : 'jigsaw', game = null, t0 = 0, timer = null;
+  const fmt = ms => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const bestKey = () => 'bold_puzzle_best_' + pic.id + '_' + level + '_' + mode;
+
+  // 퍼즐 그림 (관리자 모드에서 올린 것, 숨긴 그림 제외)
+  try {
+    const items = await (await fetch('/api/items')).json();
+    pics = (Array.isArray(items) ? items : []).filter(x => x.category === 'puzzle' && x.src && x.src_back !== 'hidden');
+  } catch (e) {}
+  const box = $('pics'); box.innerHTML = '';
+  if (!pics.length) box.append(el('div', 'hint', '아직 퍼즐 그림이 없어요. 관리자 모드에서 그림을 올려 주세요.'));
+  pics.forEach(p => {
+    const c = el('div', 'pic'); const im = el('img'); im.src = p.src; im.alt = ''; im.loading = 'lazy';
+    c.append(im, el('div', '', p.label || '그림')); c.onclick = () => { pic = p; [...box.children].forEach(x => x.classList.toggle('on', x === c)); };
+    box.append(c);
+  });
+  if (pics[0]) box.firstChild.click();
+  Object.entries(Jigsaw.LEVELS).forEach(([k, L]) => {
+    const b = el('button', 'chip' + (k === level ? ' on' : ''), L.name + ' (' + L.pieces + '조각)'); b.type = 'button';
+    b.onclick = () => { level = k; [...$('levels').children].forEach(x => x.classList.toggle('on', x === b)); };
+    $('levels').append(b);
+  });
+  [['jigsaw', '🧩 직소 (끌어서 맞추기)'], ['tiles', '🔲 사각 조각 (두 조각 눌러 바꾸기)']].forEach(([k, t]) => {
+    const b = el('button', 'chip' + (k === mode ? ' on' : ''), t); b.type = 'button';
+    b.onclick = () => { mode = k; [...$('modes').children].forEach(x => x.classList.toggle('on', x === b)); };
+    $('modes').append(b);
+  });
+  $('modeHint').textContent = Jigsaw.prefersTiles() ? '휴대폰·태블릿에서는 사각 조각이 편해요.' : '';
+
+  $('startBtn').onclick = async () => {
+    if (!pic) { $('pickMsg').className = 'msg err'; $('pickMsg').textContent = '그림을 골라 주세요.'; return; }
+    $('pick').style.display = 'none'; $('play').style.display = '';
+    $('stage').textContent = '조각 만드는 중...';
+    try {
+      game = await Jigsaw.start($('stage'), { image: pic.src, level, mode, seed: Math.floor(Math.random() * 1e9),
+        onProgress: (n, total) => { $('info').textContent = (pic.label || '그림') + ' · ' + Jigsaw.LEVELS[level].name + ' · ' + n + '/' + total + '조각'; },
+        onComplete: done });
+    } catch (e) { $('stage').textContent = e.message; return; }
+    $('info').textContent = (pic.label || '그림') + ' · ' + Jigsaw.LEVELS[level].name + ' · ' + game.placed() + '/' + game.total + '조각';
+    const pv = () => { const n = game.previewsLeft(); $('pvBtn').textContent = '👀 원래 그림 보기' + (n === Infinity ? '' : ' (' + n + '번)'); $('pvBtn').disabled = n <= 0; };
+    pv(); $('pvBtn').onclick = () => { game.preview(); pv(); };
+    $('edgeBtn').style.display = game.mode === 'jigsaw' && game.level.edges ? '' : 'none';
+    $('edgeBtn').onclick = () => { const on = game.toggleEdges(); $('edgeBtn').classList.toggle('on', !!on); };
+    t0 = Date.now(); clearInterval(timer); timer = setInterval(() => { $('time').textContent = fmt(Date.now() - t0); }, 500);
+  };
+  $('quitBtn').onclick = () => { if (!confirm('그만할까요?')) return; clearInterval(timer); game && game.destroy(); $('play').style.display = 'none'; $('pick').style.display = ''; };
+
+  function done() {
+    clearInterval(timer);
+    const ms = Date.now() - t0;
+    let best = null; try { best = +localStorage.getItem(bestKey()) || null; } catch (e) {}
+    const isBest = !best || ms < best;
+    if (isBest) { try { localStorage.setItem(bestKey(), String(ms)); } catch (e) {} }
+    const ov = el('div', 'modal-ov'); const b = el('div', 'card modal-box'); b.style.textAlign = 'center';
+    b.append(el('h2', '', '🎉 완성!'), el('p', 'post-body', (pic.label || '그림') + ' · ' + Jigsaw.LEVELS[level].name), el('p', '', '걸린 시간 ' + fmt(ms) + (isBest ? ' — 🏆 이 기기 최고 기록!' : ' (최고 ' + fmt(best) + ')')));
+    const again = el('button', 'btn btn-main', '다른 퍼즐 하기'); again.type = 'button';
+    again.onclick = () => { ov.remove(); game.destroy(); $('play').style.display = 'none'; $('pick').style.display = ''; };
+    b.append(again); ov.append(b); document.body.append(ov);
+  }
+})();
+</script>
+</body>
+</html>

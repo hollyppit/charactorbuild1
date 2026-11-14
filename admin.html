@@ -236,6 +236,65 @@
   async function gapi(body, okText) {
     try { await api('/api/admin/games', body); status(okText || '처리했어요 ✓', 'ok'); return true; } catch (e) { status(e.message, 'err'); alert(e.message); return false; }
   }
+  // 퍼즐 그림: 관리자 이미지 올리기(/api/upload, char-assets/puzzle/) + 아이템(category 'puzzle': label=제목, src=그림, src_back='hidden'이면 숨김)
+  async function itemsCall(method, body) {
+    const res = await fetch('/api/items', { method, headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: body ? JSON.stringify(body) : undefined });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || '요청 실패 (' + res.status + ')');
+    return d;
+  }
+  // 큰 그림은 긴 쪽 1600px JPEG 로 줄여서 올림
+  function shrinkImage(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file); const im = new Image();
+      im.onload = () => {
+        const s = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.88));
+      };
+      im.onerror = () => rej(new Error('그림을 읽지 못했어요.')); im.src = url;
+    });
+  }
+  async function renderPuzzles(box) {
+    box.innerHTML = '';
+    const all = await itemsCall('GET');
+    const puz = (Array.isArray(all) ? all : []).filter(x => x.category === 'puzzle');
+    const file = el('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp';
+    const title = el('input'); title.type = 'text'; title.maxLength = 40; title.placeholder = '그림 제목 (예: 고흐 — 별이 빛나는 밤)';
+    const up = el('button', 'btn btn-main', '퍼즐 그림 올리기'); up.type = 'button';
+    up.onclick = async () => {
+      const f = file.files && file.files[0];
+      if (!f) return status('그림 파일을 골라 주세요', 'err');
+      if (!title.value.trim()) return status('제목을 적어 주세요', 'err');
+      up.disabled = true; status('올리는 중...');
+      try {
+        const data = await shrinkImage(f);
+        const id = 'puzzle_' + Date.now();
+        const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: JSON.stringify({ fileName: 'puzzle/' + id + '.jpg', fileData: data }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.url) throw new Error(j.error === 'file_too_large' ? '그림이 너무 커요 (5MB까지).' : '그림을 올리지 못했어요.');
+        await itemsCall('POST', { id, category: 'puzzle', label: title.value.trim().slice(0, 40), emoji: '🧩', src: j.url, src_back: '', bg_emoji: '', sort_order: 0 });
+        status('올렸어요 ✓', 'ok'); renderPuzzles(box);
+      } catch (e) { status(e.message, 'err'); up.disabled = false; }
+    };
+    box.append(el('label', '', '그림 파일'), file, el('label', '', '제목'), title, up);
+    const grid = el('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:12px';
+    if (!puz.length) grid.append(el('div', 'hint', '아직 퍼즐 그림이 없어요.'));
+    puz.forEach(p => {
+      const hidden = p.src_back === 'hidden';
+      const c = el('div'); c.style.cssText = 'border:2px solid #3a2a3a;padding:6px;font-size:.85rem' + (hidden ? ';opacity:.5' : '');
+      const im = el('img'); im.src = p.src; im.alt = ''; im.loading = 'lazy'; im.style.cssText = 'width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#fff';
+      c.append(im, el('div', '', (p.label || '(제목 없음)') + (hidden ? ' (숨김)' : '')));
+      const acts = el('div', 'acts');
+      const b = (t, fn) => { const x2 = el('button', 'chip', t); x2.type = 'button'; x2.onclick = fn; acts.append(x2); };
+      b(hidden ? '다시 보이기' : '숨기기', async () => { try { await itemsCall('PUT', { id: p.id, src_back: hidden ? '' : 'hidden' }); renderPuzzles(box); } catch (e) { status(e.message, 'err'); } });
+      b('제목 고치기', async () => { const t = ask('제목', p.label || ''); if (!t) return; try { await itemsCall('PUT', { id: p.id, label: t.slice(0, 40) }); renderPuzzles(box); } catch (e) { status(e.message, 'err'); } });
+      b('🗑 지우기', async () => { if (!confirm('"' + (p.label || '그림') + '" 퍼즐 그림을 지울까요?')) return; try { await itemsCall('DELETE', { id: p.id }); renderPuzzles(box); } catch (e) { status(e.message, 'err'); } });
+      c.append(acts); grid.append(c);
+    });
+    box.append(grid);
+  }
   async function renderGames(view, opt) {
     const d = await api('/api/admin/games');
     view.innerHTML = '';
@@ -254,6 +313,12 @@
       row.append(s); view.append(row);
     });
     view.append(el('p', 'hint', '🧩 기억 조각 그림은 제시어 대신 캐릭터 그림(지금 ' + d.characters + '개)을 써요. 캐릭터는 제작 화면 ADMIN의 캐릭터 꾸미기 "캐릭터"에서 추가·관리해요.'));
+
+    // 그림 퍼즐 그림
+    view.append(el('h2', '', '🧩 그림 퍼즐 그림'));
+    view.append(el('p', 'hint', '올린 그림은 자동으로 퍼즐 조각으로 나뉘어요. 볼드하다가 쓸 권리가 있는 그림만 올려 주세요 (직접 그린 그림, 동의 받은 학생 작품, 저작권이 끝난 명화 등). 가로 그림이 퍼즐로 좋아요.'));
+    const puzBox = el('div'); view.append(puzBox);
+    await renderPuzzles(puzBox);
 
     // 제시어 추가
     view.append(el('h2', '', '제시어 추가'));
