@@ -74,7 +74,7 @@
 
   $('startBtn').onclick = async () => {
     if (!pic) { $('pickMsg').className = 'msg err'; $('pickMsg').textContent = '그림을 골라 주세요.'; return; }
-    $('pick').style.display = 'none'; $('play').style.display = '';
+    $('pick').style.display = 'none'; $('play').style.display = ''; $('root').style.maxWidth = '1400px';
     $('stage').textContent = '조각 만드는 중...';
     try {
       game = await Jigsaw.start($('stage'), { image: pic.src, level, mode, seed: Math.floor(Math.random() * 1e9),
@@ -88,7 +88,7 @@
     $('edgeBtn').onclick = () => { const on = game.toggleEdges(); $('edgeBtn').classList.toggle('on', !!on); };
     t0 = Date.now(); clearInterval(timer); timer = setInterval(() => { $('time').textContent = fmt(Date.now() - t0); }, 500);
   };
-  $('quitBtn').onclick = () => { if (!confirm('그만할까요?')) return; clearInterval(timer); game && game.destroy(); $('play').style.display = 'none'; $('pick').style.display = ''; };
+  $('quitBtn').onclick = () => { if (!confirm('그만할까요?')) return; clearInterval(timer); game && game.destroy(); $('play').style.display = 'none'; $('pick').style.display = ''; $('root').style.maxWidth = ''; };
 
   function done() {
     clearInterval(timer);
@@ -99,7 +99,7 @@
     const ov = el('div', 'modal-ov'); const b = el('div', 'card modal-box'); b.style.textAlign = 'center';
     b.append(el('h2', '', '🎉 완성!'), el('p', 'post-body', (pic.label || '그림') + ' · ' + Jigsaw.LEVELS[level].name), el('p', '', '걸린 시간 ' + fmt(ms) + (isBest ? ' — 🏆 이 기기 최고 기록!' : ' (최고 ' + fmt(best) + ')')));
     const again = el('button', 'btn btn-main', '다른 퍼즐 하기'); again.type = 'button';
-    again.onclick = () => { ov.remove(); game.destroy(); $('play').style.display = 'none'; $('pick').style.display = ''; };
+    again.onclick = () => { ov.remove(); game.destroy(); $('play').style.display = 'none'; $('pick').style.display = ''; $('root').style.maxWidth = ''; };
     b.append(again); ov.append(b); document.body.append(ov);
   }
 })();

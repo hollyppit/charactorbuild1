@@ -49,19 +49,36 @@
     const total = cols * rows;
 
     container.innerHTML = '';
-    const W = Math.min(container.clientWidth || 360, 900);
-    const boardW = W * 0.86, boardH = boardW / aspect;
+    // 넓은 화면(웹): 판은 왼쪽, 조각 놓는 곳은 오른쪽 / 좁은 화면: 판 위, 조각 아래
+    const W = Math.min(container.clientWidth || 360, 1400);
+    const side = W >= 820;
+    const maxBH = Math.max(300, (window.innerHeight || 800) * (side ? 0.8 : 0.7));   // 판이 화면 높이를 넘지 않게
+    const boardW = Math.min(W * (side ? 0.55 : 0.86), maxBH * aspect);
+    const boardH = boardW / aspect;
     const pw = boardW / cols, ph = boardH / rows, t = Math.min(pw, ph) * 0.22;
-    const bx = (W - boardW) / 2, by = t + 6;
-    const trayTop = by + boardH + t + 16, trayH = Math.max(boardH * 1.1, Math.ceil(total / Math.floor(W / (pw + t))) * (ph + t) * 0.7 + 40);
-    const H = trayTop + trayH;
+    const cw0 = pw + 2 * t, ch0 = ph + 2 * t;
+    const area = total * cw0 * ch0 * 0.75;   // 조각이 덜 겹치게 필요한 넓이
+    let bx, by = t + 6, tx, ty, tw, th, H;
+    if (side) {
+      bx = t + 6;
+      tx = bx + boardW + t + 24; tw = W - tx; ty = 0;
+      th = Math.max(boardH + 2 * t + 12, area / Math.max(1, tw));
+      H = th;
+    } else {
+      bx = (W - boardW) / 2;
+      tx = 0; tw = W; ty = by + boardH + t + 16;
+      th = Math.max(boardH * 0.8, area / W + 40);
+      H = ty + th;
+    }
     const root = document.createElement('div');
     root.style.cssText = 'position:relative;width:' + W + 'px;height:' + H + 'px;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none';
     const board = document.createElement('div');
     board.style.cssText = 'position:absolute;left:' + bx + 'px;top:' + by + 'px;width:' + boardW + 'px;height:' + boardH + 'px;border:3px dashed #ff4fa3;box-sizing:content-box;margin:-3px;background:rgba(255,255,255,.06)';
     if (L.ghost) { board.style.backgroundImage = 'url("' + opts.image + '")'; board.style.backgroundSize = '100% 100%'; board.style.backgroundBlendMode = 'luminosity'; board.style.opacity = '1'; const veil = document.createElement('div'); veil.style.cssText = 'position:absolute;inset:0;background:rgba(20,0,20,.78)'; board.append(veil); }
     const tray = document.createElement('div');
-    tray.style.cssText = 'position:absolute;left:0;top:' + (trayTop - 8) + 'px;width:' + W + 'px;height:' + (trayH + 8) + 'px;border-top:2px solid #3a2a3a';
+    tray.style.cssText = side
+      ? 'position:absolute;left:' + (tx - 12) + 'px;top:0;width:' + (tw + 12) + 'px;height:' + H + 'px;border-left:2px solid #3a2a3a;background:rgba(255,255,255,.03)'
+      : 'position:absolute;left:0;top:' + (ty - 8) + 'px;width:' + W + 'px;height:' + (th + 8) + 'px;border-top:2px solid #3a2a3a';
     root.append(board, tray);
     container.append(root);
 
@@ -91,7 +108,7 @@
       x.lineWidth = 1; x.strokeStyle = 'rgba(0,0,0,.45)'; piecePath(x, t, t, pw, ph, e, t); x.stroke();
       const p = { el: cv, r, c, edge: !e.top || !e.bottom || !e.left || !e.right, done: false,
         hx: bx + c * pw - t, hy: by + r * ph - t,   // 제자리 (조각 그림 왼쪽 위)
-        x: 4 + R() * Math.max(1, W - cw - 8), y: trayTop + R() * Math.max(1, trayH - ch - 4) };
+        x: tx + R() * Math.max(1, tw - cw), y: ty + R() * Math.max(1, th - ch - 4) };
       cv.style.left = p.x + 'px'; cv.style.top = p.y + 'px'; cv.style.zIndex = String(top++);
       root.append(cv); pieces.push(p);
     }
@@ -166,7 +183,8 @@
     const rows = Math.max(2, Math.round(L.pieces / cols));
     const total = cols * rows;
     container.innerHTML = '';
-    const W = Math.min(container.clientWidth || 360, 900), H = W / aspect;
+    const maxH = Math.max(300, (window.innerHeight || 800) * 0.8);   // 세로로 긴 그림도 화면 안에
+    const W = Math.min(container.clientWidth || 360, 900, maxH * aspect), H = W / aspect;
     const tw = W / cols, th = H / rows;
     const root = document.createElement('div');
     root.style.cssText = 'position:relative;width:' + W + 'px;height:' + H + 'px;margin:0 auto;user-select:none;-webkit-user-select:none;border:3px solid #ff4fa3;box-sizing:content-box';

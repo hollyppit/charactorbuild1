@@ -6,7 +6,9 @@
   const fmt = ms => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   let S = null;
 
-  function stop() { if (S) { clearInterval(S.timer); clearTimeout(S.sendT); S = null; } }
+  // 게임 중에는 방 화면을 넓게 (넓은 화면에서 판 왼쪽·조각 오른쪽)
+  const wide = on => { const r = document.getElementById('root'); if (r) r.style.maxWidth = on ? '1400px' : ''; };
+  function stop() { wide(false); if (S) { clearInterval(S.timer); clearTimeout(S.sendT); S = null; } }
 
   async function startBoard(P) {
     S.stage.textContent = '조각 만드는 중...';
@@ -59,7 +61,7 @@
       box.append(top, S.players, tools, S.msg, S.stage);
       pc.append(box);
       S.timer = setInterval(tick, 500);
-      if (P.role === 'player') startBoard(P); else S.stage.textContent = '이번 게임은 구경하고 있어요.';
+      if (P.role === 'player') { wide(true); startBoard(P); } else S.stage.textContent = '이번 게임은 구경하고 있어요.';
     }
     S.endAt = Date.now() + P.remaining_ms;
     // 친구들 진행 막대
