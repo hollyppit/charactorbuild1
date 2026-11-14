@@ -307,6 +307,170 @@
     });
     box.append(grid);
   }
+  // ── 기억 조각 그림 "닮은꼴 세트": 거의 같은 캐릭터 4장(한두 군데만 다름). char_items category 'memory', id mem_<세트>_<0~3>, label '세트 이름 — 다른 점'
+  const MEM_CHANGES = [
+    ['머리', '가르마 반대쪽', 'Move the hair parting to the opposite side of the head. Only the parting side changes.'],
+    ['머리', '머리 색 바뀜', 'Change the hair color to a clearly different color.'],
+    ['머리', '머리 리본 추가', 'Add one small bow (ribbon) on one side of the hair.'],
+    ['얼굴', '점 반대쪽 볼', 'Move the small black mole from its cheek to the other cheek.'],
+    ['얼굴', '점 없음', 'Remove the small black mole from the cheek.'],
+    ['얼굴', '안경 씀', 'Add simple round glasses.'],
+    ['얼굴', '피부 톤 어둡게', 'Make the skin tone clearly darker (all visible skin).'],
+    ['얼굴', '피부 톤 밝게', 'Make the skin tone clearly lighter (all visible skin).'],
+    ['몸', '옷 무늬 바뀜', 'Change the shirt pattern to a clearly different simple pattern (for example stripes instead of polka dots).'],
+    ['몸', '옷 색 바뀜', 'Change the shirt color to a clearly different color.'],
+    ['몸', '물건 다른 손', 'Move the held item to the other hand. The first hand becomes empty.'],
+    ['다리', '신발 색 바뀜', 'Change the shoes to a clearly different color.'],
+    ['다리', '바지 길이 바뀜', 'Change the length of the pants or skirt (long becomes short, short becomes long).'],
+    ['다리', '줄무늬 양말', 'Add striped socks.'],
+  ];
+  const memClean = v => String(v || '').replace(/[—<>"'`\\]/g, '').trim().slice(0, 30);
+  // data URL 그림을 긴 쪽 max px JPEG 로
+  function shrinkData(src, max) {
+    return new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => {
+        const s = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+        res(c.toDataURL('image/jpeg', 0.9));
+      };
+      im.onerror = () => rej(new Error('그림을 읽지 못했어요.')); im.src = src;
+    });
+  }
+  async function memAi(body) {
+    const r = await fetch('/api/admin/memory-ai', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.image) throw new Error(j.error || 'AI 그림을 만들지 못했어요 (' + r.status + ')');
+    return shrinkData(j.image, 900);
+  }
+  async function renderMemory(box) {
+    box.innerHTML = '';
+    const all = await itemsCall('GET');
+    const mem = (Array.isArray(all) ? all : []).filter(x => x.category === 'memory' && /^mem_[a-z0-9]+_[0-9]+$/.test(x.id));
+
+    // 만들기
+    const slots = [{ img: '' }, { img: '' }, { img: '' }, { img: '' }];
+    let busy = false;
+    const name = el('input'); name.type = 'text'; name.maxLength = 30; name.placeholder = '세트 이름 (예: 모자 쓴 남자아이)';
+    const desc = el('textarea'); desc.rows = 2; desc.maxLength = 200; desc.placeholder = 'AI에게 줄 캐릭터 설명 (비우면 세트 이름으로). 예: 노란 모자를 쓰고 풍선을 든 남자아이';
+    const grid = el('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:10px';
+    // 머리·얼굴·몸/다리에서 하나씩 골라 두기 (어느 부위를 맡아도 중요하게)
+    const byGroup = g => MEM_CHANGES.map((c, i) => [c, i]).filter(([c]) => g.includes(c[0])).map(([, i]) => i);
+    const rnd = a => a[Math.floor(Math.random() * a.length)];
+    const defaults = [rnd(byGroup(['머리'])), rnd(byGroup(['얼굴'])), rnd(byGroup(['몸', '다리']))];
+    slots.forEach((sl, i) => {
+      const c = el('div'); c.style.cssText = 'border:2px solid #3a2a3a;padding:6px;font-size:.85rem;display:flex;flex-direction:column;gap:6px';
+      const im = el('img'); im.alt = ''; im.style.cssText = 'width:100%;aspect-ratio:3/4;object-fit:contain;background:#fff;display:block';
+      const title = i ? '닮은꼴 ' + i : '기본 그림';
+      const head = el('div', '', title); head.style.fontWeight = '800';
+      let sel = null, custom = null;
+      const diff = el('input'); diff.type = 'text'; diff.maxLength = 30; diff.placeholder = '다른 점 (결과 화면에 보임)';
+      diff.value = i ? MEM_CHANGES[defaults[i - 1]][1] : '기본';
+      if (i) {
+        sel = el('select');
+        MEM_CHANGES.forEach((ch, k) => { const o = el('option', '', '[' + ch[0] + '] ' + ch[1]); o.value = String(k); sel.append(o); });
+        const o2 = el('option', '', '✏️ 직접 적기'); o2.value = 'custom'; sel.append(o2);
+        sel.value = String(defaults[i - 1]);
+        custom = el('input'); custom.type = 'text'; custom.maxLength = 120; custom.placeholder = '바꿀 내용 (예: 모자를 빨간색으로)'; custom.style.display = 'none';
+        sel.onchange = () => { custom.style.display = sel.value === 'custom' ? '' : 'none'; if (sel.value !== 'custom') diff.value = MEM_CHANGES[+sel.value][1]; else diff.value = ''; };
+      }
+      const acts = el('div', 'acts');
+      const gen = el('button', 'chip', i ? '🤖 만들기' : '🤖 기본 그림 만들기'); gen.type = 'button';
+      const file = el('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp'; file.style.display = 'none';
+      const upb = el('button', 'chip', '📁 직접 올리기'); upb.type = 'button'; upb.onclick = () => file.click();
+      file.onchange = async () => {
+        const f = file.files && file.files[0]; if (!f) return;
+        try { sl.img = await shrinkData(await shrinkImage(f), 900); im.src = sl.img; } catch (e) { status(e.message, 'err'); }
+        file.value = '';
+      };
+      sl.run = async () => {
+        if (i && !slots[0].img) throw new Error('기본 그림을 먼저 만들어 주세요.');
+        let change = '';
+        if (i) {
+          change = sel.value === 'custom' ? custom.value.trim() : MEM_CHANGES[+sel.value][2];
+          if (!change) throw new Error('닮은꼴 ' + i + ': 바꿀 내용을 적어 주세요.');
+        }
+        gen.disabled = true; head.textContent = title + ' — 만드는 중...';
+        try {
+          sl.img = i ? await memAi({ kind: 'variant', image: slots[0].img, change }) : await memAi({ kind: 'base', desc: desc.value.trim() || name.value.trim() });
+          im.src = sl.img;
+        } finally { gen.disabled = false; head.textContent = title; }
+      };
+      gen.onclick = async () => { if (busy) return; busy = true; try { await sl.run(); } catch (e) { status(e.message, 'err'); } busy = false; };
+      sl.diffEl = diff;
+      acts.append(gen, upb);
+      c.append(head, im);
+      if (sel) c.append(sel, custom);
+      c.append(diff, acts, file);
+      grid.append(c);
+    });
+    const all3 = el('button', 'btn', '🤖 닮은꼴 3장 한꺼번에 만들기'); all3.type = 'button';
+    all3.onclick = async () => {
+      if (busy) return; busy = true; all3.disabled = true;
+      try { for (let i = 1; i < 4; i++) await slots[i].run(); status('3장 만들었어요. 잘 바뀌었는지 확인해 주세요 ✓', 'ok'); } catch (e) { status(e.message, 'err'); }
+      busy = false; all3.disabled = false;
+    };
+    const save = el('button', 'btn btn-main', '세트 저장'); save.type = 'button';
+    save.onclick = async () => {
+      if (busy) return;
+      const nm = memClean(name.value);
+      if (!nm) return status('세트 이름을 적어 주세요', 'err');
+      if (slots.some(s => !s.img)) return status('그림 4장이 모두 있어야 해요', 'err');
+      const diffs = slots.map(s => memClean(s.diffEl.value));
+      if (diffs.some(d => !d)) return status('그림마다 "다른 점"을 적어 주세요', 'err');
+      if (new Set(diffs).size < 4) return status('"다른 점"이 서로 달라야 해요', 'err');
+      busy = true; save.disabled = true; status('저장하는 중...');
+      const set = Date.now().toString(36);
+      try {
+        for (let i = 0; i < 4; i++) {
+          const id = 'mem_' + set + '_' + i;
+          const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: JSON.stringify({ fileName: 'memory/' + id + '.jpg', fileData: slots[i].img }) });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.url) throw new Error('그림을 올리지 못했어요 (' + (i + 1) + '번째).');
+          await itemsCall('POST', { id, category: 'memory', label: nm + ' — ' + diffs[i], emoji: '🧠', src: j.url, src_back: '', bg_emoji: '', sort_order: i });
+        }
+        status('세트를 저장했어요 ✓', 'ok'); renderMemory(box);
+      } catch (e) {
+        status(e.message + ' 저장된 일부는 아래 목록에서 지워 주세요.', 'err'); busy = false; save.disabled = false; renderMemory(box);
+      }
+    };
+    box.append(el('label', '', '세트 이름'), name, el('label', '', '캐릭터 설명 (AI용)'), desc, grid);
+    const bar = el('div', 'acts'); bar.style.marginTop = '8px'; bar.append(all3, save); box.append(bar);
+    box.append(el('p', 'hint', 'AI가 다른 곳까지 바꾸거나 왼쪽·오른쪽을 헷갈릴 때가 있어요. 저장 전에 눈으로 확인하고, 이상한 장은 그 장만 다시 만들어 주세요. 그림 1장 만들 때마다 AI 비용이 들어요.'));
+
+    // 저장된 세트
+    const sets = {};
+    mem.forEach(x => { const s = x.id.split('_')[1]; (sets[s] = sets[s] || []).push(x); });
+    const list = el('div'); list.style.cssText = 'display:flex;flex-direction:column;gap:10px;margin-top:12px';
+    const keys = Object.keys(sets).sort().reverse();
+    if (!keys.length) list.append(el('div', 'hint', '아직 세트가 없어요. 세트가 없을 때는 기본 캐릭터로 게임해요.'));
+    keys.forEach(k => {
+      const items = sets[k].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      const hidden = items.every(x => x.src_back === 'hidden');
+      const nm = String(items[0].label || '').split(' — ')[0];
+      const diffOf = x => String(x.label || '').split(' — ').slice(1).join(' — ') || '기본';
+      const c = el('div'); c.style.cssText = 'border:2px solid #3a2a3a;padding:6px;font-size:.85rem' + (hidden ? ';opacity:.5' : '');
+      c.append(el('div', '', nm + ' (' + items.length + '장)' + (hidden ? ' (숨김)' : '') + (items.length < 4 ? ' — 4장이 안 돼서 게임에 안 나와요' : '')));
+      const row = el('div'); row.style.cssText = 'display:flex;gap:6px;overflow-x:auto;margin:6px 0';
+      items.forEach(x => {
+        const f = el('div'); f.style.cssText = 'width:110px;flex:none;text-align:center';
+        const im = el('img'); im.src = x.src; im.alt = ''; im.loading = 'lazy'; im.style.cssText = 'width:110px;aspect-ratio:3/4;object-fit:contain;background:#fff;display:block';
+        f.append(im, el('div', '', diffOf(x)));
+        row.append(f);
+      });
+      const acts = el('div', 'acts');
+      const b = (t, fn) => { const x2 = el('button', 'chip', t); x2.type = 'button'; x2.onclick = fn; acts.append(x2); };
+      b(hidden ? '다시 보이기' : '숨기기', async () => { try { for (const x of items) await itemsCall('PUT', { id: x.id, src_back: hidden ? '' : 'hidden' }); renderMemory(box); } catch (e) { status(e.message, 'err'); } });
+      b('이름 고치기', async () => {
+        const t = memClean(ask('세트 이름', nm)); if (!t) return;
+        try { for (const x of items) await itemsCall('PUT', { id: x.id, label: t + ' — ' + diffOf(x) }); renderMemory(box); } catch (e) { status(e.message, 'err'); }
+      });
+      b('🗑 지우기', async () => { if (!confirm('"' + nm + '" 세트(' + items.length + '장)를 지울까요?')) return; try { for (const x of items) await itemsCall('DELETE', { id: x.id }); renderMemory(box); } catch (e) { status(e.message, 'err'); } });
+      c.append(row, acts); list.append(c);
+    });
+    box.append(list);
+  }
   async function renderGames(view, opt) {
     const d = await api('/api/admin/games');
     view.innerHTML = '';
@@ -324,7 +488,11 @@
       };
       row.append(s); view.append(row);
     });
-    view.append(el('p', 'hint', '🧩 기억 조각 그림은 제시어 대신 캐릭터 그림(지금 ' + d.characters + '개)을 써요. 캐릭터는 제작 화면 ADMIN의 캐릭터 꾸미기 "캐릭터"에서 추가·관리해요.'));
+    // 기억 조각 그림 닮은꼴 세트
+    view.append(el('h2', '', '🧠 기억 조각 그림 — 닮은꼴 세트'));
+    view.append(el('p', 'hint', '거의 같은 캐릭터 4장을 한 세트로 만들어요. 가르마 방향·점 위치·피부 톤처럼 한두 군데만 달라서, 부위를 맡은 친구들이 잘 기억해 그려야 맞힐 수 있어요. 라운드마다 세트 하나를 쓰고, 세트가 없거나 다 쓰면 기본 캐릭터(지금 ' + d.characters + '개)로 해요.'));
+    const memBox = el('div'); view.append(memBox);
+    await renderMemory(memBox);
 
     // 그림 퍼즐 그림
     view.append(el('h2', '', '🧩 그림 퍼즐 그림'));

@@ -122,8 +122,13 @@ export async function onRequest({ request, env }) {
     const ids = [...new Set(rounds.flatMap(x => [x.char_id, ...(x.options || [])]))];
     let chars = {};
     if (ids.length) {
-      const cr = await sb(`/rest/v1/char_items?id=in.(${ids.map(x => encodeURIComponent('"' + String(x).replace(/"/g, '') + '"')).join(',')})&select=id,label,src`);
-      chars = Object.fromEntries((cr.ok ? await cr.json() : []).map(c => [c.id, { id: c.id, label: c.label || '', src: c.src || '' }]));
+      const cr = await sb(`/rest/v1/char_items?id=in.(${ids.map(x => encodeURIComponent('"' + String(x).replace(/"/g, '') + '"')).join(',')})&select=id,label,src,category`);
+      // 닮은꼴 세트(category memory): label '세트 이름 — 다른 점' → label 은 다른 점, set 은 세트 이름
+      chars = Object.fromEntries((cr.ok ? await cr.json() : []).map(c => {
+        if (c.category !== 'memory') return [c.id, { id: c.id, label: c.label || '', src: c.src || '' }];
+        const [nm, ...rest] = String(c.label || '').split(' — ');
+        return [c.id, { id: c.id, label: rest.join(' — ') || nm || '', set: rest.length ? nm : '', src: c.src || '' }];
+      }));
     }
     const ch = id => chars[id] || { id, label: '?', src: '' };
     const drawersOf = g => order.filter(u => u !== g);
@@ -144,9 +149,10 @@ export async function onRequest({ request, env }) {
       submitted: role === 'drawer' ? parts.some(p => p.round === rd && p.user_id === me) : role === 'guesser' ? !!x.guess_id : false,
       done: parts.filter(p => p.round === rd && drawers.includes(p.user_id)).length, need: drawers.length,
     };
-    if (ph === 'show' && role === 'drawer') out.character = ch(x.char_id);
+    if (ph === 'show' && role === 'drawer') { const c = ch(x.char_id); out.character = { id: c.id, label: '', src: c.src, set: c.set !== undefined }; }
     if (ph === 'guess' || ph === 'result') out.parts = roundParts(x);
-    if (ph === 'guess' && role === 'guesser') out.options = (x.options || []).map(ch);
+    // 세트 보기는 다른 점이 곧 답이라 맞히기 전에는 글을 빼고 그림만
+    if (ph === 'guess' && role === 'guesser') out.options = (x.options || []).map(ch).map(c => c.set !== undefined ? { id: c.id, label: '', src: c.src, set: '' } : c);
     if (ph === 'result') { out.answer = ch(x.char_id); out.guess = x.guess_id ? ch(x.guess_id) : null; out.correct = !!x.correct; }
     return out;
   }

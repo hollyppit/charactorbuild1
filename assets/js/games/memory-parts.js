@@ -30,7 +30,7 @@
   const charCard = (c, size, noLabel) => {
     const box = el('div', 'text-align:center');
     const im = el('img', 'width:' + (size || 110) + 'px;height:' + (size || 110) + 'px;object-fit:contain;background:#fff;border:2px solid #000;display:block;margin:0 auto'); im.src = c.src; im.alt = c.label;
-    box.append(im); if (!noLabel) box.append(el('div', 'font-weight:800;margin-top:4px', c.label));
+    box.append(im); if (!noLabel && c.label) box.append(el('div', 'font-weight:800;margin-top:4px;max-width:' + Math.max(110, size || 110) + 'px;margin-left:auto;margin-right:auto', c.label));
     return box;
   };
 
@@ -52,7 +52,7 @@
     else if (M.phase === 'show') {
       if (M.role === 'drawer' && M.character) {
         const hint = el('div', 'text-align:center;font-weight:800', '👀 잘 기억하세요! 3초 뒤에 사라져요');
-        const card = charCard(M.character, 200, true);   // 이름은 안 보여 줌 (모양을 기억하는 게임)
+        const card = charCard(M.character, M.character.set ? 280 : 200, true);   // 이름은 안 보여 줌 (모양을 기억하는 게임)
         box.append(hint, card);
         S.hide = setTimeout(() => { card.style.visibility = 'hidden'; hint.textContent = '🧠 기억났나요? 곧 그리기 시작!'; }, Math.min(3000, Math.max(0, M.remaining_ms - 500)));
         box.append(el('div', 'text-align:center;font-size:.85rem;opacity:.85', '곧 맡을 부위: ' + partName(M.my_part, M.K)));
@@ -72,7 +72,7 @@
         const opts = el('div', 'display:grid;grid-template-columns:1fr 1fr;gap:8px');
         (M.options || []).forEach(o => {
           const b = el('button', 'padding:8px;background:#fff;color:#111;border:3px solid #000;cursor:pointer'); b.type = 'button';
-          b.append(charCard(o, 90));
+          b.append(charCard(o, o.set !== undefined ? 150 : 90));
           b.onclick = async () => {
             [...opts.children].forEach(x => { x.style.outline = x === b ? '4px solid var(--yellow,#ffd400)' : 'none'; x.disabled = true; });
             try { await link.send('submit', { round: M.round, choice: o.id }); } catch (e) { alert(e.message); [...opts.children].forEach(x => { x.disabled = false; }); }
@@ -86,9 +86,11 @@
       const row = el('div', 'display:flex;gap:12px;justify-content:center;flex-wrap:wrap;align-items:flex-start');
       const left = el('div', 'flex:1;min-width:200px;max-width:320px'); left.append(compose(M.parts, M.K, 320), el('div', 'text-align:center;font-size:.85rem', '친구들이 그린 그림'));
       const right = el('div', 'display:flex;gap:10px');
-      const a = el('div'); a.append(el('div', 'text-align:center;font-size:.8rem', '정답'), charCard(M.answer, 100)); right.append(a);
-      if (M.guess && !M.correct) { const g = el('div'); g.append(el('div', 'text-align:center;font-size:.8rem', '고른 답'), charCard(M.guess, 100)); right.append(g); }
+      const a = el('div'); a.append(el('div', 'text-align:center;font-size:.8rem', '정답'), charCard(M.answer, M.answer.set !== undefined ? 130 : 100)); right.append(a);
+      if (M.guess && !M.correct) { const g = el('div'); g.append(el('div', 'text-align:center;font-size:.8rem', '고른 답'), charCard(M.guess, M.guess.set !== undefined ? 130 : 100)); right.append(g); }
       row.append(left, right); box.append(row);
+      // 닮은꼴 세트: 어디가 달랐는지
+      if (M.answer && M.answer.set !== undefined && M.guess && !M.correct) box.append(el('div', 'text-align:center;font-weight:800;margin-top:6px', '🔎 다른 점 — 정답: ' + (M.answer.label || '기본') + ' / 고른 그림: ' + (M.guess.label || '기본')));
     }
     S.statusEl = el('div', 'text-align:center;font-size:.9rem'); box.append(S.statusEl);
     pc.append(box);
