@@ -97,8 +97,22 @@
     const m = el('a', 'chip', s ? '마이페이지' : '로그인'); m.href = s ? '/me.html' : '/account.html?next=' + encodeURIComponent(location.pathname + location.search); m.style.textDecoration = 'none';
     nav.append(f);
     if (s) { const gl = el('a', 'chip', '그룹'); gl.href = '/groups'; gl.style.textDecoration = 'none'; nav.append(gl); }
+    if (s) gamesLink().then(ok => { if (!ok) return; const gm = el('a', 'chip', '게임'); gm.href = '/games'; gm.style.textDecoration = 'none'; (nav.querySelector('#bellLink') || m).before(gm); }).catch(() => {});
     if (s) { const b = bell(); nav.append(b); }
     nav.append(m); top.append(brand, nav); root.prepend(top);
+  }
+
+  // 게임(5단계) 메뉴를 보여 줄지: 스위치가 on 이면 모두, beta 면 관리자 역할 회원만 (이 탭에서 한 번만 확인)
+  async function gamesLink() {
+    try { const c = sessionStorage.getItem('bold_games_ok'); if (c) return c === '1'; } catch (e) {}
+    let ok = false;
+    try {
+      const cfg = await (await fetch('/api/config')).json();
+      if (cfg.games === 'on') ok = true;
+      else if (cfg.games === 'beta') { try { await api('/api/game-rooms?games=1'); ok = true; } catch (e) { ok = false; } }
+    } catch (e) { return false; }
+    try { sessionStorage.setItem('bold_games_ok', ok ? '1' : '0'); } catch (e) {}
+    return ok;
   }
 
   // 🔔 알림 버튼 (읽지 않은 개수). 로그인했을 때만
@@ -144,6 +158,7 @@
       case 'gs_approved': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '이(가) 승인됐어요! 🎉';
       case 'gs_returned': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '을(를) 다시 고쳐 달래요' + reason + '.';
       case 'group_removed': return '"' + ((n.data && n.data.group_name) || '그룹') + '" 그룹에서 나가게 되었어요.';
+      case 'game_invite': return who + '"' + ((n.data && n.data.game) || '게임') + '" 방에 초대했어요. 🎮';
       case 'gp_consent': return who + '"' + ((n.data && n.data.title) || '그림책') + '"을(를) 게시하자고 해요. 함께 만든 사람으로 동의해 줄래요?';
       case 'gp_declined': return who + '"' + ((n.data && n.data.title) || '그림책') + '" 게시에 동의하지 않았어요. 이번 게시는 취소됐어요.';
       case 'gp_ready': return '"' + ((n.data && n.data.title) || '그림책') + '" 게시에 모두 동의했어요! 작업 화면에서 게시할 수 있어요.';
@@ -155,6 +170,7 @@
   function notiLink(n) {
     if (n.type === 'follow' || n.type === 'follow_accept') return n.actor ? '/u?n=' + encodeURIComponent(n.actor.nickname) : null;
     if (/^gs_/.test(n.type) && n.data && n.data.story_id) return '/group-story?id=' + encodeURIComponent(n.data.story_id);
+    if (n.type === 'game_invite' && n.data && n.data.code) return '/games?code=' + encodeURIComponent(n.data.code);
     if (n.type === 'gp_consent' && n.data && n.data.request_id) return '/group-publish?id=' + encodeURIComponent(n.data.request_id);
     if ((n.type === 'gp_declined' || n.type === 'gp_ready') && n.data && n.data.story_id) return '/group-story?id=' + encodeURIComponent(n.data.story_id);
     if (n.type === 'group_invite' || n.type === 'group_removed') return '/groups';

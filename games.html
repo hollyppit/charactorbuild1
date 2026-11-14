@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>게임 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+<style>
+  .code-in{box-sizing:border-box;width:100%;max-width:100%;font-size:1.4rem;letter-spacing:.3em;text-transform:uppercase;text-align:center;font-weight:800}
+  .g-row{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:2px solid #3a2a3a;padding:12px 0}
+  .tag{font-size:.7rem;border:2px solid var(--yellow);color:var(--yellow);padding:1px 6px;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card" id="joinCard">
+    <h1>🎮 게임</h1>
+    <p class="sub">친구가 알려 준 입장 코드로 들어가거나, 방을 만들어 친구를 초대해요. 채팅은 없어요.</p>
+    <label for="code">입장 코드 (6자리)</label>
+    <input id="code" class="code-in" maxlength="6" autocomplete="off" placeholder="ABC234">
+    <div class="msg" id="joinMsg"></div>
+    <button class="btn btn-main" id="joinBtn" type="button">들어가기</button>
+  </div>
+  <div class="card" id="myCard" style="display:none"><h2>내가 들어가 있는 방</h2><div id="myRooms"></div></div>
+  <div class="card" id="gameCard"><h2>방 만들기</h2><div id="games">불러오는 중...</div></div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script src="/assets/js/noti-toast.js"></script>
+<script src="/assets/js/game-room.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id), el = U.el;
+  await U.header(root);
+  if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+  const go = id => { location.href = '/game-room?id=' + encodeURIComponent(id); };
+
+  // 알림의 초대 링크(/games?code=…)로 왔으면 코드를 채워 둔다 (들어가기는 직접 누르게)
+  const pre = (new URLSearchParams(location.search).get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  if (pre) { $('code').value = pre; $('joinMsg').className = 'msg'; $('joinMsg').textContent = '초대받은 방이에요. "들어가기"를 눌러 주세요.'; }
+  $('code').addEventListener('input', () => { $('code').value = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); });
+  $('joinBtn').onclick = async () => {
+    const c = $('code').value;
+    if (c.length !== 6) { $('joinMsg').className = 'msg err'; $('joinMsg').textContent = '입장 코드 6자리를 적어 주세요.'; return; }
+    $('joinBtn').disabled = true;
+    try { const r = await GameRoom.join(c); go(r.id); }
+    catch (e) { $('joinMsg').className = 'msg err'; $('joinMsg').textContent = e.message; $('joinBtn').disabled = false; }
+  };
+
+  try {
+    const [g, mine] = await Promise.all([U.api('/api/game-rooms?games=1'), U.api('/api/game-rooms')]);
+    if (mine.rooms.length) {
+      $('myCard').style.display = '';
+      mine.rooms.forEach(r => {
+        const row = el('div', 'g-row');
+        row.append(el('div', '', r.game + ' · ' + (r.status === 'playing' ? '진행 중' : '기다리는 중') + (r.code ? ' · 코드 ' + r.code : '')));
+        const b = el('button', 'chip on', '들어가기'); b.type = 'button'; b.onclick = () => go(r.id); row.append(b);
+        $('myRooms').append(row);
+      });
+    }
+    const box = $('games'); box.innerHTML = '';
+    if (!g.games.length) box.append(el('div', 'hint', '아직 할 수 있는 게임이 없어요. 곧 준비할게요!'));
+    g.games.forEach(x => {
+      const row = el('div', 'g-row');
+      const t = el('div'); t.append(el('b', '', x.title)); if (x.status === 'beta') t.append(el('span', 'tag', '시험'));
+      t.append(el('div', 'hint', x.min_players + '~' + x.max_players + '명'));
+      const b = el('button', 'btn btn-main', '방 만들기'); b.type = 'button'; b.style.cssText = 'width:auto;margin:0';
+      b.onclick = async () => { b.disabled = true; try { const r = await GameRoom.create(x.key); go(r.id); } catch (e) { alert(e.message); b.disabled = false; } };
+      row.append(t, b); box.append(row);
+    });
+  } catch (e) {
+    if (e.code === 'games_disabled') { root.innerHTML = ''; await U.header(root); const d = el('div', 'card'); d.append(el('h2', '', '준비 중이에요'), el('p', 'sub', e.message)); root.append(d); return; }
+    $('games').textContent = e.status === 503 ? '게임 기능을 준비하는 중이에요.' : '불러오지 못했어요.';
+  }
+})();
+</script>
+</body>
+</html>

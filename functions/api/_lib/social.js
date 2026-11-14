@@ -18,6 +18,12 @@ export function socialMode(env) {
   return v === 'on' ? 'on' : v === 'beta' ? 'beta' : 'off';
 }
 
+// 5단계 게임 스위치 GAMES_ENABLED: 'on' | 'beta'(관리자 역할 회원만) | 'off' — 소셜 스위치와 따로
+export function gamesMode(env) {
+  const v = String(env.GAMES_ENABLED || '').trim().toLowerCase();
+  return v === 'on' ? 'on' : v === 'beta' ? 'beta' : 'off';
+}
+
 // 요청자 정보: { admin, user, profile, allowed, mode }
 //  allowed = 이 요청자가 지금 소셜 기능(읽기·쓰기)을 쓸 수 있는지
 export async function whoIs(request, env) {

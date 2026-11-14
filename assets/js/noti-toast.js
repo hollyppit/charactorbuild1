@@ -39,6 +39,7 @@
       case 'gs_approved': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '이(가) 승인됐어요! 🎉';
       case 'gs_returned': return '"' + ((n.data && n.data.title) || '그림책') + '"의 ' + (n.data && n.data.k === 'cover' ? '표지' : '장면 ' + ((n.data && n.data.ord) || '')) + '을(를) 다시 고쳐 달래요' + reason + '.';
       case 'group_removed': return '"' + ((n.data && n.data.group_name) || '그룹') + '" 그룹에서 나가게 되었어요.';
+      case 'game_invite': return who + '"' + ((n.data && n.data.game) || '게임') + '" 방에 초대했어요. 🎮';
       case 'gp_consent': return who + '"' + ((n.data && n.data.title) || '그림책') + '"을(를) 게시하자고 해요. 함께 만든 사람으로 동의해 줄래요?';
       case 'gp_declined': return who + '"' + ((n.data && n.data.title) || '그림책') + '" 게시에 동의하지 않았어요. 이번 게시는 취소됐어요.';
       case 'gp_ready': return '"' + ((n.data && n.data.title) || '그림책') + '" 게시에 모두 동의했어요! 작업 화면에서 게시할 수 있어요.';
@@ -50,6 +51,7 @@
   function link(n) {
     if ((n.type === 'follow' || n.type === 'follow_accept') && n.actor) return '/u?n=' + encodeURIComponent(n.actor.nickname);
     if (/^gs_/.test(n.type) && n.data && n.data.story_id) return '/group-story?id=' + encodeURIComponent(n.data.story_id);
+    if (n.type === 'game_invite' && n.data && n.data.code) return '/games?code=' + encodeURIComponent(n.data.code);
     if (n.type === 'gp_consent' && n.data && n.data.request_id) return '/group-publish?id=' + encodeURIComponent(n.data.request_id);
     if ((n.type === 'gp_declined' || n.type === 'gp_ready') && n.data && n.data.story_id) return '/group-story?id=' + encodeURIComponent(n.data.story_id);
     if (n.type === 'group_invite' || n.type === 'group_removed') return '/groups';

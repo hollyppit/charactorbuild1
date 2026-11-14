@@ -5,6 +5,7 @@
 //  - 끝나거나 해제된 이용 제한(경고 포함): 1년
 //  - 지운 그룹 작품·지운 그룹: 30일 뒤 그림 파일·용량과 함께 파기 (장면·버전·기여 기록은 함께 지워짐)
 //  - 답이 끝난 그룹 초대: 90일
+//  - 게임 방(5단계, 0016): 시작 안 한 방 2시간·6시간 넘은 진행 방은 닫고, 끝난 방과 결과는 90일 뒤 삭제 (gm_housekeeping, 0016 전에는 조용히 실패)
 //  (알림 90일·AI 이용 기록 90일은 DB 함수가 따로 정리)
 // Cloudflare Pages 에는 예약 실행이 없으므로 자주 쓰이는 요청에서 가끔(확률) 실행한다. 실패해도 요청에는 영향 없음.
 import { makeSb } from './common.js';
@@ -60,6 +61,7 @@ export async function housekeeping(env, chance = 0.02) {
       del(`/rest/v1/sanctions?kind=eq.warning&created_at=lt.${y1}`),
       del(`/rest/v1/group_invites?status=neq.pending&responded_at=lt.${d90}`),
       purgeGroups(env, d30).catch(() => null),
+      sb('/rest/v1/rpc/gm_housekeeping', { method: 'POST', body: '{}' }).catch(() => null),
     ]);
   } catch (_) { /* 다음 기회에 다시 */ }
   return true;

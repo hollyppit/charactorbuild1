@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>게임 방 · 볼드하다</title>
+<link rel="stylesheet" href="/assets/css/account.css">
+<style>
+  .code-big{font-size:2rem;font-weight:900;letter-spacing:.3em;color:var(--yellow);text-align:center;margin:6px 0}
+  .mem{display:flex;gap:10px;align-items:center;border-top:2px solid #3a2a3a;padding:10px 0}
+  .mem img{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid #000;flex:none}
+  .mem .n{flex:1}
+  .rd{font-size:.8rem;padding:2px 8px;border:2px solid #555;color:#aaa}
+  .rd.on{border-color:var(--green);color:var(--green)}
+  .play{border:3px dashed var(--yellow);padding:16px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="card" id="head">불러오는 중...</div>
+  <div class="card" id="memCard" style="display:none"></div>
+  <div class="card" id="playCard" style="display:none"></div>
+</div>
+<script src="/assets/js/auth-client.js"></script>
+<script src="/assets/js/social-ui.js"></script>
+<script src="/assets/js/noti-toast.js"></script>
+<script src="/assets/js/game-room.js"></script>
+<script>
+(async function () {
+  const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id), el = U.el;
+  await U.header(root);
+  if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+  const id = new URLSearchParams(location.search).get('id') || '';
+  const STATUS = { waiting: '친구를 기다리는 중', playing: '게임 중', ended: '끝났어요', closed: '닫힌 방이에요' };
+  let link = null, R = null;
+  const act = async (action, body, confirmMsg) => {
+    if (confirmMsg && !confirm(confirmMsg)) return;
+    try { await link.send(action, body); } catch (e) { alert(e.message); }
+  };
+  const btn = (t, fn, cls) => { const b = el('button', cls || 'chip', t); b.type = 'button'; b.onclick = fn; return b; };
+
+  function render(d) {
+    R = d;
+    const host = d.my_role === 'host', waiting = d.status === 'waiting';
+    document.title = (d.game.title || '게임') + ' · 볼드하다';
+    const head = $('head'); head.innerHTML = '';
+    const back = el('a', 'hint', '← 게임'); back.href = '/games';
+    head.append(back, el('h1', '', '🎮 ' + d.game.title), el('p', 'sub', STATUS[d.status] + ' · ' + d.members.length + '/' + d.max_players + '명' + (d.my_role ? ' · 내 역할: ' + (host ? '👑 방장' : '참가자') : '')));
+    if (d.code) {
+      head.append(el('div', 'hint', '입장 코드 — 친구에게 알려 주세요 (' + new Date(d.expires_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + '까지)'), el('div', 'code-big', d.code));
+      const cp = btn('코드 복사', async () => { try { await navigator.clipboard.writeText(d.code); cp.textContent = '복사했어요 ✓'; } catch (e) { prompt('입장 코드', d.code); } });
+      head.append(cp);
+    }
+    const row = el('div', 'row2'); row.style.marginTop = '10px';
+    if (d.my_role && (waiting || d.status === 'playing')) row.append(btn('방에서 나가기', () => act('leave', null, '방에서 나갈까요?' + (host ? ' 방장은 다음 친구에게 넘어가요.' : '')).then(() => { location.href = '/games'; }), 'btn btn-sub'));
+    head.append(row);
+
+    // 참가자
+    const mc = $('memCard'); mc.style.display = ''; mc.innerHTML = '';
+    mc.append(el('h2', '', '참가자'));
+    d.members.forEach(m => {
+      const r = el('div', 'mem');
+      const im = el('img'); im.alt = ''; im.src = U.avatar(m.avatar_url);
+      r.append(im, el('span', 'n', m.nickname + (m.role === 'host' ? ' 👑' : '') + (m.me ? ' (나)' : '')));
+      if (waiting && m.role !== 'host') r.append(el('span', 'rd' + (m.ready ? ' on' : ''), m.ready ? '✅ 준비' : '기다리는 중'));
+      if (host && waiting && !m.me) r.append(btn('내보내기', () => act('kick', { nickname: m.nickname }, m.nickname + '님을 내보낼까요? 이 방에는 다시 들어올 수 없어요.')));
+      mc.append(r);
+    });
+    if (waiting && d.my_role) {
+      const acts = el('div', 'row2'); acts.style.marginTop = '10px';
+      if (host) {
+        const notReady = d.members.filter(m => m.role !== 'host' && !m.ready).length;
+        const enough = d.members.length >= d.game.min_players;
+        const st = btn('▶ 게임 시작', () => act('start'), 'btn btn-main'); st.disabled = !!notReady || !enough;
+        acts.append(st);
+        mc.append(acts, el('div', 'hint', !enough ? d.game.min_players + '명 이상 있어야 시작할 수 있어요.' : notReady ? '모두 준비하면 시작할 수 있어요.' : '모두 준비됐어요!'));
+        // 초대: 서로 팔로우하거나 같은 그룹인 친구만
+        const inv = el('div'); inv.style.marginTop = '12px';
+        const q = el('input'); q.type = 'text'; q.placeholder = '초대할 친구 닉네임'; q.maxLength = 20;
+        const sug = el('div', 'chips'); const msg = el('div', 'msg');
+        let t = null;
+        q.oninput = () => { clearTimeout(t); t = setTimeout(async () => {
+          sug.innerHTML = ''; const v = q.value.trim(); if (v.length < 1) return;
+          try { const r = await U.api('/api/users?q=' + encodeURIComponent(v)); r.users.slice(0, 6).forEach(u => sug.append(btn(u.nickname, () => send(u.nickname)))); } catch (e) {}
+        }, 300); };
+        const send = async n => {
+          try { const r = await link.send('invite', { nickname: n }); msg.className = 'msg ok'; msg.textContent = r.already ? n + '님에게 이미 초대를 보냈어요.' : n + '님에게 초대를 보냈어요 🔔'; q.value = ''; sug.innerHTML = ''; }
+          catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+        };
+        inv.append(el('label', '', '친구 초대 (서로 팔로우하거나 같은 그룹인 친구)'), q, sug, msg);
+        mc.append(inv);
+      } else {
+        const me = d.members.find(m => m.me);
+        acts.append(btn(me && me.ready ? '준비 취소' : '✅ 준비 완료', () => act('ready', { ready: !(me && me.ready) }), me && me.ready ? 'btn btn-sub' : 'btn btn-main'));
+        mc.append(acts, el('div', 'hint', '방장이 게임을 시작할 때까지 기다려요.'));
+      }
+    }
+
+    // 게임 화면
+    const pc = $('playCard'); pc.innerHTML = ''; pc.style.display = 'none';
+    if (d.status === 'playing') {
+      pc.style.display = '';
+      const box = el('div', 'play');
+      if (d.game.key === 'ready_check') {
+        box.append(el('h2', '', '🎉 모두 모였어요!'), el('p', 'sub', '이건 방·초대·준비·시작이 잘 되는지 확인하는 시험 게임이에요.'));
+        if (host) box.append(btn('끝내기 (결과 기록)', () => act('end', { results: d.members.map((m, i) => ({ nickname: m.nickname, rank: i + 1, score: d.members.length - i })) }, '시험 게임을 끝낼까요?'), 'btn btn-main'));
+        else box.append(el('div', 'hint', '방장이 끝내기를 누르면 결과가 나와요.'));
+      } else box.append(el('p', 'sub', '이 게임 화면은 아직 준비 중이에요.'));
+      pc.append(box);
+    }
+    if (d.status === 'ended') {
+      pc.style.display = '';
+      pc.append(el('h2', '', '🏁 결과'));
+      if (!d.results.length) pc.append(el('div', 'hint', '기록된 결과가 없어요.'));
+      d.results.forEach(x => pc.append(el('div', 'mem', (x.rank ? x.rank + '등 · ' : '') + x.nickname + (x.me ? ' (나)' : '') + (x.score != null ? ' · ' + x.score + '점' : ''))));
+      const again = el('a', 'btn btn-main', '게임 목록으로'); again.href = '/games'; again.style.cssText = 'text-decoration:none;margin-top:10px'; pc.append(again);
+    }
+    if (d.status === 'closed') { $('memCard').style.display = 'none'; }
+  }
+
+  link = GameRoom.connect(id, {
+    onChange: render,
+    onError: e => {
+      if (e.code === 'games_disabled') { $('head').textContent = e.message; return; }
+      if (e.status === 404) { $('head').textContent = '방을 찾을 수 없어요. 나갔거나 닫힌 방이에요.'; $('memCard').style.display = 'none'; $('playCard').style.display = 'none'; const a = el('a', 'btn btn-main', '게임 목록으로'); a.href = '/games'; a.style.textDecoration = 'none'; $('head').append(a); }
+    },
+  });
+})();
+</script>
+</body>
+</html>

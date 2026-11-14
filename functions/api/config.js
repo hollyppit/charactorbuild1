@@ -1,6 +1,6 @@
 // 브라우저용 공개 설정 (Supabase URL + anon 공개 키). 비밀키는 절대 포함하지 않는다.
 import { corsHeaders, jsonResponder, checkOrigin } from './_lib/common.js';
-import { socialMode } from './_lib/social.js';
+import { socialMode, gamesMode } from './_lib/social.js';
 
 export async function onRequest({ request, env }) {
   const cors = corsHeaders(request, env, 'GET,OPTIONS');
@@ -15,5 +15,7 @@ export async function onRequest({ request, env }) {
     naverEnabled: !!(env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET && env.SUPABASE_SERVICE_KEY),
     // 소셜(게시·둘러보기) 공개 스위치: 'on' | 'beta'(관리자 역할 회원만) | 'off'
     social: socialMode(env),
+    // 게임(5단계) 스위치: 'on' | 'beta' | 'off'
+    games: gamesMode(env),
   });
 }
