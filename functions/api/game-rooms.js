@@ -9,6 +9,7 @@
 //    (그림 릴레이 draw_relay) submit {room_id, step, image|choice} / tick {room_id}  — 진행·점수는 DB 함수(gd_*)가 판단
 //    (기억 조각 그림 memory_parts) submit {room_id, round, image|choice} / tick {room_id} — DB 함수(mp_*)
 //    (쓱싹 퀴즈 sketch_quiz) start {room_id, laps:1|2} / pick {room_id, turn, word} / stroke {room_id, turn, data:[획 조각]} / guess {room_id, turn, text} / tick — DB 함수(qd_*)
+//    (숨은 라이어 그림 liar_draw) start {room_id, mode:'told'|'fool', rounds:1~5} / submit {room_id, round, image | vote(닉네임) | choice} / tick — DB 함수(lr_*)
 //  GET  ?id=&since=n&sk=마지막 획 id   쓱싹 퀴즈는 버전이 같아도 새 획(strokes)을 함께 줌 / ?id=&strokes_turn=t  끝난 뒤 그 차례의 획 전체
 //  GET  /api/game-rooms?records=1         내 기록(게임별 판 수·1등·최고 점수·최근 5판) — 나만 봄
 // 채팅은 없음(학생 보호). 초대는 서로 팔로우하거나 같은 그룹인 사람만(DB 함수에서 확인).
@@ -176,6 +177,38 @@ export async function onRequest({ request, env }) {
     if (ph === 'turn_end') out.word = x.word || null;
     return out;
   }
+  // 숨은 라이어 그림 화면 정보: 각자 자기 제시어만(알려 주는 방식의 라이어는 "라이어"와 분류만), 누가 라이어인지·투표는 결과 때만
+  async function liarView(room, all) {
+    const st = room.state, order = st.order || [], rd = st.round, ph = st.phase, mode = st.mode;
+    const nick = Object.fromEntries(all.map(m => [m.user_id, (m.user || {}).nickname || '']));
+    const activeIds = new Set(all.filter(m => !m.left_at).map(m => m.user_id));
+    const ended = ph === 'reveal' || room.status !== 'playing';
+    const withImg = ended || ph === 'vote' || ph === 'reverse' || ph === 'result';
+    const [rr, dr, vr] = await Promise.all([
+      sb(`/rest/v1/lr_rounds?room_id=eq.${room.id}${ended ? '' : '&round=eq.' + rd}&select=*&order=round.asc`),
+      sb(`/rest/v1/lr_draws?room_id=eq.${room.id}${ended ? '' : '&round=eq.' + rd}&select=round,user_id${withImg ? ',image' : ''}`),
+      sb(`/rest/v1/lr_votes?room_id=eq.${room.id}${ended ? '' : '&round=eq.' + rd}&select=round,voter_id,target_id`),
+    ]);
+    const rounds = rr.ok ? await rr.json() : [], draws = dr.ok ? await dr.json() : [], votes = vr.ok ? await vr.json() : [];
+    const drawsOf = (n, liarId, showLiar) => order.map(u => { const d = draws.find(x => x.round === n && x.user_id === u); return { nickname: nick[u] || '(나간 친구)', mine: u === me, image: d ? d.image || null : null, ...(showLiar ? { liar: u === liarId } : {}) }; });
+    const tally = n => { const t = {}; votes.filter(v => v.round === n).forEach(v => { t[v.target_id] = (t[v.target_id] || 0) + 1; }); return order.map(u => ({ nickname: nick[u] || '', votes: t[u] || 0 })).sort((a, b) => b.votes - a.votes); };
+    const summary = x => ({ round: x.round, liar: nick[x.liar_id] || '(나간 친구)', liar_is_me: x.liar_id === me, category: x.category, word: x.word, liar_word: x.liar_word,
+      caught: !!x.caught, liar_guess: x.liar_guess, liar_won: !!x.liar_won, tally: tally(x.round), my_vote: nick[(votes.find(v => v.round === x.round && v.voter_id === me) || {}).target_id] || null });
+    if (ended) return { phase: 'reveal', mode, rounds: rounds.filter(x => x.liar_won !== null).map(x => ({ ...summary(x), draws: drawsOf(x.round, x.liar_id, true) })) };
+    const x = rounds[0] || {};
+    const isLiar = x.liar_id === me, player = order.includes(me);
+    const out = { phase: ph, round: rd, rounds: st.rounds, mode, role: player ? 'player' : 'watch', remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()),
+      need: order.filter(u => activeIds.has(u)).length };
+    if (player) {
+      if (mode === 'told' && isLiar) out.me_liar = { category: x.category };
+      else out.word = isLiar ? x.liar_word : x.word;
+    }
+    if (ph === 'draw') { out.submitted = draws.some(d => d.user_id === me); out.done = draws.filter(d => activeIds.has(d.user_id)).length; }
+    if (ph === 'vote') { out.draws = drawsOf(rd, null, false); out.my_vote = nick[(votes.find(v => v.voter_id === me) || {}).target_id] || null; out.done = votes.filter(v => activeIds.has(v.voter_id)).length; }
+    if (ph === 'reverse') { out.draws = drawsOf(rd, null, false); out.caught = nick[x.liar_id] || ''; if (isLiar) out.options = x.options || []; }
+    if (ph === 'result') { Object.assign(out, summary(x)); out.draws = drawsOf(rd, x.liar_id, true); }
+    return out;
+  }
   // 획 조각 정리: 선(번호·색·굵기·좌표)과 되돌리기/지우기만 남김 (다른 친구 화면으로 가는 내용이라 형식을 엄격히)
   function cleanStrokes(data) {
     if (!Array.isArray(data) || data.length > 60) return null;
@@ -241,7 +274,7 @@ export async function onRequest({ request, env }) {
       room = { ...room, status: 'closed', version: room.version + 1 };
     }
     // 그림 릴레이: 마감이 지났으면 다음 단계로 넘기고 다시 읽음 (서버 시간 기준)
-    const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance', sketch_quiz: 'qd_advance' };
+    const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance', sketch_quiz: 'qd_advance', liar_draw: 'lr_advance' };
     if (ADV[room.game_key] && room.status === 'playing' && room.state && room.state.deadline && room.state.phase !== 'reveal' && Date.parse(room.state.deadline) <= Date.now()) {
       await rpc(env, ADV[room.game_key], { p_room: id });
       const again = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players)`);
@@ -271,9 +304,10 @@ export async function onRequest({ request, env }) {
     const relay = room.game_key === 'draw_relay' && room.state && room.state.order ? await relayView(room, all) : null;
     const memory = room.game_key === 'memory_parts' && room.state && room.state.order ? await memoryView(room, all) : null;
     const sketch = room.game_key === 'sketch_quiz' && room.state && room.state.order ? await sketchView(room, all) : null;
+    const liar = room.game_key === 'liar_draw' && room.state && room.state.order ? await liarView(room, all) : null;
     return json({
       id: room.id, version: room.version, status: room.status, code: room.status === 'waiting' ? room.join_code : null,
-      game: room.game, max_players: room.max_players, state: relay || memory || sketch ? {} : (room.state || {}), relay, memory, sketch, strokes, expires_at: room.expires_at,
+      game: room.game, max_players: room.max_players, state: relay || memory || sketch || liar ? {} : (room.state || {}), relay, memory, sketch, liar, strokes, expires_at: room.expires_at,
       started_at: room.started_at, ended_at: room.ended_at,
       my_role: mine.left_at ? null : mine.role, me: who.profile.nickname,
       members: active.map(m => ({ nickname: (m.user || {}).nickname || '', avatar_url: (m.user || {}).avatar_url || null, role: m.role, ready: m.ready, me: m.user_id === me })),
@@ -315,11 +349,12 @@ export async function onRequest({ request, env }) {
   if (a === 'ready') return out(await rpc(env, 'gm_ready', { p_user: me, p_room: room, p_ready: !!b.ready }));
   // 게임별 DB 함수
   const FN = { draw_relay: { start: 'gd_start', submit: 'gd_submit', tick: 'gd_advance' }, memory_parts: { start: 'mp_start', submit: 'mp_submit', tick: 'mp_advance' },
-    sketch_quiz: { start: 'qd_start', tick: 'qd_advance' } };
+    sketch_quiz: { start: 'qd_start', tick: 'qd_advance' }, liar_draw: { start: 'lr_start', submit: 'lr_submit', tick: 'lr_advance' } };
   const gameOf = async () => { const gr = await sb(`/rest/v1/game_rooms?id=eq.${room}&select=game_key`); return ((gr.ok ? await gr.json() : [])[0] || {}).game_key || null; };
   if (a === 'start') {
     const fn = FN[await gameOf()];
     if (fn && fn.start === 'qd_start') return out(await rpc(env, 'qd_start', { p_actor: me, p_room: room, p_laps: b.laps === 2 ? 2 : 1 }));
+    if (fn && fn.start === 'lr_start') { const n = parseInt(b.rounds, 10); return out(await rpc(env, 'lr_start', { p_actor: me, p_room: room, p_mode: b.mode === 'fool' ? 'fool' : 'told', p_rounds: n >= 1 && n <= 5 ? n : 3 })); }
     return out(await rpc(env, fn ? fn.start : 'gm_start', { p_actor: me, p_room: room }));
   }
   if (a === 'pick' || a === 'stroke' || a === 'guess') {
@@ -344,6 +379,11 @@ export async function onRequest({ request, env }) {
     const image = typeof b.image === 'string' ? b.image : null;
     const choice = typeof b.choice === 'string' ? b.choice.slice(0, 40) : null;
     if (image && image.length > 200000) return fail('invalid_image');
+    if (fn.submit === 'lr_submit') {
+      let target = null;
+      if (b.vote != null) { target = await idByNick(b.vote); if (!target) return fail('invalid_choice'); }
+      return out(await rpc(env, 'lr_submit', { p_user: me, p_room: room, p_round: step, p_image: image, p_target: target, p_choice: choice }));
+    }
     const args = fn.submit === 'mp_submit' ? { p_user: me, p_room: room, p_round: step, p_image: image, p_choice: choice } : { p_user: me, p_room: room, p_step: step, p_image: image, p_choice: choice };
     return out(await rpc(env, fn.submit, args));
   }

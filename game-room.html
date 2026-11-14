@@ -29,6 +29,7 @@
 <script src="/assets/js/games/draw-relay.js"></script>
 <script src="/assets/js/games/memory-parts.js"></script>
 <script src="/assets/js/games/sketch-quiz.js"></script>
+<script src="/assets/js/games/liar-draw.js"></script>
 <script>
 (async function () {
   const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id), el = U.el;
@@ -36,7 +37,7 @@
   if (!(await U.session())) { location.replace('/account.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
   const id = new URLSearchParams(location.search).get('id') || '';
   const STATUS = { waiting: '친구를 기다리는 중', playing: '게임 중', ended: '끝났어요', closed: '닫힌 방이에요' };
-  let link = null, R = null, twoLaps = false;
+  let link = null, R = null, twoLaps = false, liarMode = 'told', liarRounds = 3;
   const act = async (action, body, confirmMsg) => {
     if (confirmMsg && !confirm(confirmMsg)) return;
     try { await link.send(action, body); } catch (e) { alert(e.message); }
@@ -75,8 +76,17 @@
       if (host) {
         const notReady = d.members.filter(m => m.role !== 'host' && !m.ready).length;
         const enough = d.members.length >= d.game.min_players;
-        const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : null), 'btn btn-main'); st.disabled = !!notReady || !enough;
+        const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : d.game.key === 'liar_draw' ? { mode: liarMode, rounds: liarRounds } : null), 'btn btn-main'); st.disabled = !!notReady || !enough;
         acts.append(st);
+        // 숨은 라이어 그림: 방식·라운드 수
+        if (d.game.key === 'liar_draw') {
+          const ms = el('select'); [['told', '🕵️ 알려 주는 라이어 (라이어는 분류만 봐요)'], ['fool', '🤪 바보 라이어 (라이어도 다른 제시어를 받아 모르고 그려요)']].forEach(([v, t]) => { const o = el('option', '', t); o.value = v; ms.append(o); });
+          ms.value = liarMode; ms.onchange = () => { liarMode = ms.value; };
+          const rs = el('select'); [1, 2, 3, 4, 5].forEach(n => { const o = el('option', '', n + '라운드'); o.value = n; rs.append(o); });
+          rs.value = liarRounds; rs.onchange = () => { liarRounds = +rs.value; };
+          const box = el('div'); box.style.cssText = 'display:flex;flex-direction:column;gap:6px;width:100%';
+          box.append(el('label', '', '게임 방식'), ms, el('label', '', '라운드 수'), rs); acts.append(box);
+        }
         // 쓱싹 퀴즈: 모두 한 번씩(기본) 또는 두 바퀴
         if (d.game.key === 'sketch_quiz') {
           const lab = el('label', ''); lab.style.cssText = 'display:flex;gap:6px;align-items:center;font-weight:400';

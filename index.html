@@ -2405,6 +2405,13 @@ try {
           <div class="gh-note" data-note>확인하는 중...</div>
           <a class="btn btn-purple" data-btn style="display:none;text-decoration:none;text-align:center"></a>
         </div>
+        <div class="gh-card" id="ghLiar">
+          <h3>🎭 숨은 라이어 그림</h3>
+          <div class="gh-tags"><span>친구와 3~8명</span><span class="need">로그인 필요</span></div>
+          <p>모두 같은 제시어를 그리는데 라이어 한 명만 달라요. 그림을 보고 투표로 라이어를 찾아요! (알려 주는 라이어 / 바보 라이어)</p>
+          <div class="gh-note" data-note>확인하는 중...</div>
+          <a class="btn btn-purple" data-btn style="display:none;text-decoration:none;text-align:center"></a>
+        </div>
         <div class="gh-card" id="ghSketch">
           <h3>✏️ 쓱싹 퀴즈</h3>
           <div class="gh-tags"><span>친구와 2~8명</span><span class="need">로그인 필요</span></div>
@@ -7181,7 +7188,7 @@ function initQuizPanel() {
 /* 게임 목록: 친구와 하는 게임은 로그인·공개 상태에 따라 안내 */
 async function gameHubLoad() {
   // 친구와 하는 게임 카드: [카드 id, 게임 키]
-  const cards = [['ghRelay', 'draw_relay'], ['ghMemory', 'memory_parts'], ['ghSketch', 'sketch_quiz']].map(([id, key]) => ({ key, el: document.getElementById(id) })).filter(c => c.el);
+  const cards = [['ghRelay', 'draw_relay'], ['ghMemory', 'memory_parts'], ['ghSketch', 'sketch_quiz'], ['ghLiar', 'liar_draw']].map(([id, key]) => ({ key, el: document.getElementById(id) })).filter(c => c.el);
   const show = (c, text, label, href) => { const note = c.el.querySelector('[data-note]'), btn = c.el.querySelector('[data-btn]'); note.textContent = text || ''; btn.style.display = label ? '' : 'none'; if (label) { btn.textContent = label; btn.href = href; } };
   if (!cards.length) return;
   let session = null;
