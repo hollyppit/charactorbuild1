@@ -308,21 +308,25 @@
     box.append(grid);
   }
   // ── 기억 조각 그림 "닮은꼴 세트": 거의 같은 캐릭터 4장(한두 군데만 다름). char_items category 'memory', id mem_<세트>_<0~3>, label '세트 이름 — 다른 점'
+  // [부위, 이름, AI 지시, 눈에 확 띄는 변화(true 면 기본 선택 후보)]
   const MEM_CHANGES = [
-    ['머리', '가르마 반대쪽', 'Move the hair parting to the opposite side of the head. Only the parting side changes.'],
-    ['머리', '머리 색 바뀜', 'Change the hair color to a clearly different color.'],
-    ['머리', '머리 리본 추가', 'Add one small bow (ribbon) on one side of the hair.'],
-    ['얼굴', '점 반대쪽 볼', 'Move the small black mole from its cheek to the other cheek.'],
-    ['얼굴', '점 없음', 'Remove the small black mole from the cheek.'],
-    ['얼굴', '안경 씀', 'Add simple round glasses.'],
-    ['얼굴', '피부 톤 어둡게', 'Make the skin tone clearly darker (all visible skin).'],
-    ['얼굴', '피부 톤 밝게', 'Make the skin tone clearly lighter (all visible skin).'],
-    ['몸', '옷 무늬 바뀜', 'Change the shirt pattern to a clearly different simple pattern (for example stripes instead of polka dots).'],
-    ['몸', '옷 색 바뀜', 'Change the shirt color to a clearly different color.'],
-    ['몸', '물건 다른 손', 'Move the held item to the other hand. The first hand becomes empty.'],
-    ['다리', '신발 색 바뀜', 'Change the shoes to a clearly different color.'],
-    ['다리', '바지 길이 바뀜', 'Change the length of the pants or skirt (long becomes short, short becomes long).'],
-    ['다리', '줄무늬 양말', 'Add striped socks.'],
+    ['머리', '모자 벗음', 'Remove the hat completely and show the hair underneath.', true],
+    ['머리', '모자 종류 바뀜', 'Replace the hat with a clearly different kind of hat (for example a knitted beanie or a straw hat) in a different color.', true],
+    ['머리', '머리 리본 추가', 'Add one big bow (ribbon) on one side of the head.', false],
+    ['머리', '가르마 반대쪽', 'Move the hair parting to the opposite side of the head. Only the parting side changes.', false],
+    ['얼굴', '선글라스 낌', 'Add big dark sunglasses.', true],
+    ['얼굴', '안경 씀', 'Add big round glasses with thick frames.', true],
+    ['얼굴', '볼에 반창고', 'Add a big bandage (plaster) on one cheek.', true],
+    ['얼굴', '점 반대쪽 볼', 'Move the black mole from its cheek to the other cheek and make it clearly visible.', false],
+    ['얼굴', '피부 톤 어둡게', 'Make the skin tone much darker (all visible skin).', false],
+    ['몸', '든 물건 바뀜', 'Replace the held item with a completely different item (for example an ice cream cone, a book, a flower or a toy car). Same hand.', true],
+    ['몸', '물건 다른 손', 'Move the held item to the other hand. The first hand becomes empty and relaxed.', true],
+    ['몸', '가방 멤', 'Add a big backpack with straps on both shoulders.', true],
+    ['몸', '옷 무늬 바뀜', 'Change the shirt pattern to a clearly different pattern (for example bold stripes instead of polka dots).', false],
+    ['몸', '목도리 함', 'Add a thick scarf around the neck.', true],
+    ['다리', '긴바지↔짧은바지', 'Change the length of the pants: short pants become long pants down to the shoes, or long pants become short pants above the knees.', true],
+    ['다리', '장화 신음', 'Replace the shoes with tall rain boots in a different color.', true],
+    ['다리', '줄무늬 양말', 'Add tall striped socks that are clearly visible.', false],
   ];
   const memClean = v => String(v || '').replace(/[—<>"'`\\]/g, '').trim().slice(0, 30);
   // data URL 그림을 긴 쪽 max px JPEG 로
@@ -358,7 +362,9 @@
     // 머리·얼굴·몸/다리에서 하나씩 골라 두기 (어느 부위를 맡아도 중요하게)
     const byGroup = g => MEM_CHANGES.map((c, i) => [c, i]).filter(([c]) => g.includes(c[0])).map(([, i]) => i);
     const rnd = a => a[Math.floor(Math.random() * a.length)];
-    const defaults = [rnd(byGroup(['머리'])), rnd(byGroup(['얼굴'])), rnd(byGroup(['몸', '다리']))];
+    // 눈에 확 띄는 변화 중에서 머리·얼굴 / 몸 / 다리 하나씩
+    const big = g => byGroup(g).filter(i => MEM_CHANGES[i][3]);
+    const defaults = [rnd(big(['머리', '얼굴'])), rnd(big(['몸'])), rnd(big(['다리']))];
     slots.forEach((sl, i) => {
       const c = el('div'); c.style.cssText = 'border:2px solid #3a2a3a;padding:6px;font-size:.85rem;display:flex;flex-direction:column;gap:6px';
       const im = el('img'); im.alt = ''; im.style.cssText = 'width:100%;aspect-ratio:3/4;object-fit:contain;background:#fff;display:block';
@@ -369,7 +375,7 @@
       diff.value = i ? MEM_CHANGES[defaults[i - 1]][1] : '기본';
       if (i) {
         sel = el('select');
-        MEM_CHANGES.forEach((ch, k) => { const o = el('option', '', '[' + ch[0] + '] ' + ch[1]); o.value = String(k); sel.append(o); });
+        MEM_CHANGES.forEach((ch, k) => { const o = el('option', '', (ch[3] ? '⭐ ' : '') + '[' + ch[0] + '] ' + ch[1]); o.value = String(k); sel.append(o); });
         const o2 = el('option', '', '✏️ 직접 적기'); o2.value = 'custom'; sel.append(o2);
         sel.value = String(defaults[i - 1]);
         custom = el('input'); custom.type = 'text'; custom.maxLength = 120; custom.placeholder = '바꿀 내용 (예: 모자를 빨간색으로)'; custom.style.display = 'none';

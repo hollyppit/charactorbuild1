@@ -21,7 +21,7 @@ STRICT RULES:
 - Flat bright colors with thick clean black outlines. Simple shapes that kids can copy.
 - Make these details large and clearly visible:
   * hair clearly parted on the character's LEFT side (viewer's right),
-  * one small black mole on the character's LEFT cheek (viewer's right),
+  * one clearly visible round black mole (beauty mark) on the character's LEFT cheek (viewer's right),
   * a simple item held in the character's RIGHT hand (viewer's left),
   * a shirt with one simple bold pattern, plain-colored pants or skirt, and colored shoes.
 - No text, no letters, no numbers, no logos.
@@ -32,7 +32,7 @@ const VARIANT = change => `Edit this illustration. Change ONLY this one thing:
 
 STRICT RULES:
 - Keep EVERYTHING else exactly identical: same character, same face, same hairstyle, same colors, same clothes, same pose, same size and position, same white background, same art style and outlines.
-- The requested change must be clearly visible at a glance (not subtle).
+- Make the change BIG and OBVIOUS: a child must notice it at a glance even in a small thumbnail. Never make a subtle or tiny change. If the change adds or replaces an item, draw it large with a strong contrasting color.
 - Do not add or remove anything else. Do not mirror or flip the whole image.
 - No text, no letters. Safe for all ages.`;
 
