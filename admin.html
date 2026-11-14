@@ -28,6 +28,7 @@
       <button class="chip" data-v="rejected" type="button">거절됨</button>
       <button class="chip" data-v="user" type="button">회원 찾기·제재</button>
       <button class="chip" data-v="settings" type="button">설정</button>
+      <button class="chip" data-v="games" type="button">🎮 게임</button>
     </div>
     <div class="card" id="view"></div>
   </div>
@@ -224,8 +225,95 @@
         const save = el('button', 'btn btn-main', '설정 저장'); save.type = 'button'; save.style.marginTop = '14px';
         save.onclick = () => act({ action: 'settings', settings: { require_approval: rc.checked, auto_hide_reports: ah.value, daily_post_limit: dp.value, daily_report_limit: dr.value, ...(hc ? { hourly_comment_limit: hc.value } : {}) } }, '저장했어요');
         view.append(save);
+      } else if (v === 'games') {
+        await renderGames(view, opt || {});
       }
     } catch (e) { view.textContent = e.message; }
+  }
+
+  // ── 🎮 게임: 공개 상태·제시어 관리 ──
+  const GST = { off: '꺼짐 (아무도 못 봄)', beta: '시험 (관리자 역할 계정만)', on: '공개 (로그인한 회원 모두)' };
+  async function gapi(body, okText) {
+    try { await api('/api/admin/games', body); status(okText || '처리했어요 ✓', 'ok'); return true; } catch (e) { status(e.message, 'err'); alert(e.message); return false; }
+  }
+  async function renderGames(view, opt) {
+    const d = await api('/api/admin/games');
+    view.innerHTML = '';
+    const GN = Object.fromEntries(d.word_games.map(g => [g.key, g.title]));
+    // 공개 상태
+    view.append(el('h2', '', '게임 공개 상태'));
+    view.append(el('p', 'sub', '전체 스위치(Cloudflare 환경변수 GAMES_ENABLED)가 켜져 있어야 보여요. 학생들에게 "공개"하기 전에는 개인정보 처리방침 공고가 필요해요.'));
+    d.games.filter(g => g.key !== 'ready_check').forEach(g => {
+      const row = el('div', 'row2'); row.style.cssText = 'align-items:center;margin-bottom:6px';
+      row.append(el('div', 'grow', g.title + ' (' + g.min_players + '~' + g.max_players + '명)'));
+      const s = el('select'); s.style.width = 'auto'; Object.entries(GST).forEach(([k, t]) => { const o = el('option', '', t); o.value = k; s.append(o); }); s.value = g.status;
+      s.onchange = async () => {
+        if (s.value === 'on' && !confirm('"' + g.title + '"을(를) 로그인한 회원 모두에게 공개할까요?\n처리방침 공고가 끝났는지 확인해 주세요.')) { s.value = g.status; return; }
+        if (await gapi({ action: 'game_status', key: g.key, status: s.value }, '바꿨어요')) g.status = s.value; else s.value = g.status;
+      };
+      row.append(s); view.append(row);
+    });
+    view.append(el('p', 'hint', '🧩 기억 조각 그림은 제시어 대신 캐릭터 그림(지금 ' + d.characters + '개)을 써요. 캐릭터는 제작 화면 ADMIN의 캐릭터 꾸미기 "캐릭터"에서 추가·관리해요.'));
+
+    // 제시어 추가
+    view.append(el('h2', '', '제시어 추가'));
+    if (d.warnings.length) d.warnings.forEach(w => view.append(el('div', 'msg err', '⚠ ' + w)));
+    const ta = el('textarea'); ta.placeholder = '낱말을 쉼표나 줄바꿈으로 여러 개 적어요 (예: 판다, 코알라, 하마). 한 낱말 20자까지.'; ta.maxLength = 4000;
+    const catRow = el('div', 'row2');
+    const cat = el('input'); cat.type = 'text'; cat.maxLength = 12; cat.placeholder = '분류 (예: 동물)'; cat.setAttribute('list', 'gwCats');
+    const dl = el('datalist'); dl.id = 'gwCats'; d.categories.forEach(c => { const o = el('option'); o.value = c; dl.append(o); });
+    catRow.append(cat, dl);
+    const gbox = el('div', 'chips');
+    const checks = d.word_games.map(g => { const l = el('label', 'consent'); l.style.margin = '0'; const c = el('input'); c.type = 'checkbox'; c.checked = true; c.value = g.key; l.append(c, el('span', '', g.title)); gbox.append(l); return c; });
+    const add = el('button', 'btn btn-main', '추가하기'); add.type = 'button';
+    add.onclick = async () => {
+      try {
+        const r = await api('/api/admin/games', { action: 'add_words', words: ta.value, category: cat.value, games: checks.filter(c => c.checked).map(c => c.value) });
+        status(r.added + '개 추가했어요' + (r.skipped.length ? ' (이미 있음: ' + r.skipped.join(', ') + ')' : ''), 'ok');
+        renderGames(view, { cat: cat.value });
+      } catch (e) { status(e.message, 'err'); alert(e.message); }
+    };
+    view.append(ta, el('label', '', '분류 — 숨은 라이어 그림은 같은 분류 안에서 라이어 제시어를 골라요 (분류마다 5개 이상 필요)'), catRow,
+      el('label', '', '쓸 게임'), gbox, add);
+
+    // 목록
+    view.append(el('h2', '', '제시어 목록 (' + d.words.length + '개)'));
+    const counts = d.word_games.map(g => g.title + ' ' + d.words.filter(w => w.active && w.games.includes(g.key)).length + '개').join(' · ');
+    view.append(el('p', 'hint', '사용 중: ' + counts));
+    const fRow = el('div', 'row2');
+    const fc = el('select'); fc.style.width = 'auto'; [['', '모든 분류'], ...d.categories.map(c => [c, c])].forEach(([v2, t]) => { const o = el('option', '', t + (v2 ? ' (' + d.words.filter(w => w.category === v2).length + ')' : '')); o.value = v2; fc.append(o); });
+    fc.value = opt.cat || '';
+    const fq = el('input'); fq.type = 'text'; fq.placeholder = '낱말 찾기';
+    fRow.append(fc, fq); view.append(fRow);
+    const list = el('div'); view.append(list);
+    const draw = () => {
+      list.innerHTML = '';
+      const rows = d.words.filter(w => (!fc.value || w.category === fc.value) && (!fq.value.trim() || w.word.includes(fq.value.trim())));
+      if (!rows.length) list.append(el('div', 'empty', '없어요.'));
+      rows.forEach(w => {
+        const row = el('div', 'adm-row'); row.style.alignItems = 'center'; if (!w.active) row.style.opacity = '.5';
+        const g = el('div', 'grow');
+        g.append(el('div', 'post-title', w.word + (w.active ? '' : ' (안 씀)')), el('div', 'post-sub', '분류: ' + (w.category || '-')));
+        const acts = el('div', 'acts');
+        d.word_games.forEach(gm => {
+          const on = w.games.includes(gm.key);
+          const x = el('button', 'chip' + (on ? ' on' : ''), (on ? '✓ ' : '') + gm.title); x.type = 'button';
+          x.onclick = async () => { const games = on ? w.games.filter(k => k !== gm.key) : [...w.games, gm.key]; if (await gapi({ action: 'update_word', id: w.id, games }, '바꿨어요')) { w.games = games; draw(); } };
+          acts.append(x);
+        });
+        const b = (t, fn) => { const x = el('button', 'chip', t); x.type = 'button'; x.onclick = fn; acts.append(x); };
+        b(w.active ? '쓰지 않기' : '다시 쓰기', async () => { if (await gapi({ action: 'update_word', id: w.id, active: !w.active }, '바꿨어요')) { w.active = !w.active; draw(); } });
+        b('고치기', async () => {
+          const nw = ask('낱말', w.word); if (nw == null) return;
+          const nc = ask('분류', w.category || ''); if (nc == null) return;
+          if (await gapi({ action: 'update_word', id: w.id, word: nw, category: nc }, '고쳤어요')) renderGames(view, { cat: fc.value });
+        });
+        b('🗑 지우기', async () => { if (!confirm('"' + w.word + '"을(를) 지울까요?')) return; if (await gapi({ action: 'delete_word', id: w.id }, '지웠어요')) { d.words = d.words.filter(x => x.id !== w.id); draw(); } });
+        g.append(acts); row.append(g); list.append(row);
+      });
+    };
+    fc.onchange = draw; fq.oninput = draw;
+    draw();
   }
 })();
 </script>

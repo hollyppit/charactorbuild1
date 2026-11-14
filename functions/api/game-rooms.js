@@ -10,6 +10,7 @@
 //    (기억 조각 그림 memory_parts) submit {room_id, round, image|choice} / tick {room_id} — DB 함수(mp_*)
 //    (쓱싹 퀴즈 sketch_quiz) start {room_id, laps:1|2} / pick {room_id, turn, word} / stroke {room_id, turn, data:[획 조각]} / guess {room_id, turn, text} / tick — DB 함수(qd_*)
 //    (숨은 라이어 그림 liar_draw) start {room_id, mode:'told'|'fool', rounds:1~5} / submit {room_id, round, image | vote(닉네임) | choice} / tick — DB 함수(lr_*)
+//    (이미지 상식 퀴즈 배틀 quiz_battle) start {room_id, count:5|10} / answer {room_id, q, choice} / tick — DB 함수(qb_*). 맞았는지는 정답 공개 때만
 //  GET  ?id=&since=n&sk=마지막 획 id   쓱싹 퀴즈는 버전이 같아도 새 획(strokes)을 함께 줌 / ?id=&strokes_turn=t  끝난 뒤 그 차례의 획 전체
 //  GET  /api/game-rooms?records=1         내 기록(게임별 판 수·1등·최고 점수·최근 5판) — 나만 봄
 // 채팅은 없음(학생 보호). 초대는 서로 팔로우하거나 같은 그룹인 사람만(DB 함수에서 확인).
@@ -27,7 +28,7 @@ const ERR = {
   user_not_found: '그 닉네임을 찾을 수 없어요.', not_friend: '서로 팔로우하는 친구나 같은 그룹 친구만 초대할 수 있어요.',
   already_member: '이미 방에 있는 친구예요.', not_member: '방에 들어가 있지 않아요.',
   not_enough_players: '사람이 더 필요해요.', not_all_ready: '모두 준비해야 시작할 수 있어요.',
-  not_playing: '진행 중인 게임이 아니에요.', version_conflict: '그사이 바뀐 내용이 있어요. 다시 해 주세요.',
+  not_playing: '진행 중인 게임이 아니에요.', not_enough_quiz: '등록된 퀴즈가 3개 이상 있어야 배틀을 할 수 있어요.', already_answered: '이미 답했어요.', version_conflict: '그사이 바뀐 내용이 있어요. 다시 해 주세요.',
   state_too_large: '게임 정보가 너무 커요.',
   too_fast: '조금 천천히 입력해 주세요.',
   step_over: '이번 차례가 이미 끝났어요.', invalid_image: '그림을 다시 내 주세요.', invalid_choice: '보기 중에서 골라 주세요.', not_player: '이번 게임 참가자가 아니에요.',
@@ -209,6 +210,34 @@ export async function onRequest({ request, env }) {
     if (ph === 'result') { Object.assign(out, summary(x)); out.draws = drawsOf(rd, x.liar_id, true); }
     return out;
   }
+  // 퀴즈 배틀 화면 정보: 문제·보기(정답 번호 없음)·내가 고른 것, 정답 공개 때 정답·맞힌 친구·누적 순위
+  async function quizView(room, all) {
+    const st = room.state, order = st.order || [], qn = st.q, ph = st.phase;
+    const nick = Object.fromEntries(all.map(m => [m.user_id, (m.user || {}).nickname || '']));
+    const activeIds = new Set(all.filter(m => !m.left_at).map(m => m.user_id));
+    const ended = room.status !== 'playing';
+    const [qr, ar] = await Promise.all([
+      sb(`/rest/v1/qb_questions?room_id=eq.${room.id}&q=eq.${qn}&select=q,question,image,options,correct`),
+      sb(`/rest/v1/qb_answers?room_id=eq.${room.id}&select=q,user_id,choice,correct,points`),
+    ]);
+    const x = (qr.ok ? await qr.json() : [])[0] || {};
+    const answers = ar.ok ? await ar.json() : [];
+    const cur = answers.filter(a => a.q === qn);
+    const mine = cur.find(a => a.user_id === me);
+    const totals = order.map(u => ({ nickname: nick[u] || '(나간 친구)', me: u === me, score: answers.filter(a => a.user_id === u).reduce((t, a) => t + a.points, 0) })).sort((a, b) => b.score - a.score);
+    const open = ph === 'reveal' || ended;
+    const out = { phase: ended ? 'ended' : ph, q: qn, total: st.total, role: order.includes(me) ? 'player' : 'watch',
+      remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()),
+      question: x.question || '', image: x.image || '', options: x.options || [],
+      my_choice: mine ? mine.choice : null, done: cur.filter(a => activeIds.has(a.user_id)).length, need: order.filter(u => activeIds.has(u)).length };
+    if (open) {
+      out.correct = x.correct;
+      out.answers = order.map(u => { const a = cur.find(y => y.user_id === u); return { nickname: nick[u] || '', me: u === me, choice: a ? a.choice : null, correct: !!(a && a.correct), points: a ? a.points : 0 }; });
+      out.my_points = mine ? mine.points : 0;
+      out.totals = totals;
+    }
+    return out;
+  }
   // 획 조각 정리: 선(번호·색·굵기·좌표)과 되돌리기/지우기만 남김 (다른 친구 화면으로 가는 내용이라 형식을 엄격히)
   function cleanStrokes(data) {
     if (!Array.isArray(data) || data.length > 60) return null;
@@ -274,7 +303,7 @@ export async function onRequest({ request, env }) {
       room = { ...room, status: 'closed', version: room.version + 1 };
     }
     // 그림 릴레이: 마감이 지났으면 다음 단계로 넘기고 다시 읽음 (서버 시간 기준)
-    const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance', sketch_quiz: 'qd_advance', liar_draw: 'lr_advance' };
+    const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance', sketch_quiz: 'qd_advance', liar_draw: 'lr_advance', quiz_battle: 'qb_advance' };
     if (ADV[room.game_key] && room.status === 'playing' && room.state && room.state.deadline && room.state.phase !== 'reveal' && Date.parse(room.state.deadline) <= Date.now()) {
       await rpc(env, ADV[room.game_key], { p_room: id });
       const again = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players)`);
@@ -305,9 +334,10 @@ export async function onRequest({ request, env }) {
     const memory = room.game_key === 'memory_parts' && room.state && room.state.order ? await memoryView(room, all) : null;
     const sketch = room.game_key === 'sketch_quiz' && room.state && room.state.order ? await sketchView(room, all) : null;
     const liar = room.game_key === 'liar_draw' && room.state && room.state.order ? await liarView(room, all) : null;
+    const quiz = room.game_key === 'quiz_battle' && room.state && room.state.order ? await quizView(room, all) : null;
     return json({
       id: room.id, version: room.version, status: room.status, code: room.status === 'waiting' ? room.join_code : null,
-      game: room.game, max_players: room.max_players, state: relay || memory || sketch || liar ? {} : (room.state || {}), relay, memory, sketch, liar, strokes, expires_at: room.expires_at,
+      game: room.game, max_players: room.max_players, state: relay || memory || sketch || liar || quiz ? {} : (room.state || {}), relay, memory, sketch, liar, quiz, strokes, expires_at: room.expires_at,
       started_at: room.started_at, ended_at: room.ended_at,
       my_role: mine.left_at ? null : mine.role, me: who.profile.nickname,
       members: active.map(m => ({ nickname: (m.user || {}).nickname || '', avatar_url: (m.user || {}).avatar_url || null, role: m.role, ready: m.ready, me: m.user_id === me })),
@@ -349,13 +379,21 @@ export async function onRequest({ request, env }) {
   if (a === 'ready') return out(await rpc(env, 'gm_ready', { p_user: me, p_room: room, p_ready: !!b.ready }));
   // 게임별 DB 함수
   const FN = { draw_relay: { start: 'gd_start', submit: 'gd_submit', tick: 'gd_advance' }, memory_parts: { start: 'mp_start', submit: 'mp_submit', tick: 'mp_advance' },
-    sketch_quiz: { start: 'qd_start', tick: 'qd_advance' }, liar_draw: { start: 'lr_start', submit: 'lr_submit', tick: 'lr_advance' } };
+    sketch_quiz: { start: 'qd_start', tick: 'qd_advance' }, liar_draw: { start: 'lr_start', submit: 'lr_submit', tick: 'lr_advance' }, quiz_battle: { start: 'qb_start', tick: 'qb_advance' } };
   const gameOf = async () => { const gr = await sb(`/rest/v1/game_rooms?id=eq.${room}&select=game_key`); return ((gr.ok ? await gr.json() : [])[0] || {}).game_key || null; };
   if (a === 'start') {
     const fn = FN[await gameOf()];
     if (fn && fn.start === 'qd_start') return out(await rpc(env, 'qd_start', { p_actor: me, p_room: room, p_laps: b.laps === 2 ? 2 : 1 }));
+    if (fn && fn.start === 'qb_start') return out(await rpc(env, 'qb_start', { p_actor: me, p_room: room, p_count: b.count === 5 ? 5 : 10 }));
     if (fn && fn.start === 'lr_start') { const n = parseInt(b.rounds, 10); return out(await rpc(env, 'lr_start', { p_actor: me, p_room: room, p_mode: b.mode === 'fool' ? 'fool' : 'told', p_rounds: n >= 1 && n <= 5 ? n : 3 })); }
     return out(await rpc(env, fn ? fn.start : 'gm_start', { p_actor: me, p_room: room }));
+  }
+  if (a === 'answer') {
+    const qn = parseInt(b.q, 10), choice = parseInt(b.choice, 10);
+    if (!Number.isInteger(qn) || !Number.isInteger(choice)) return fail('invalid_choice');
+    const res = await rpc(env, 'qb_answer', { p_user: me, p_room: room, p_q: qn, p_choice: choice });
+    if (res.data && res.data.ok) return json({ ok: true });   // 맞았는지는 정답 공개 때 (다른 친구에게 알려 주지 못하게)
+    return out(res);
   }
   if (a === 'pick' || a === 'stroke' || a === 'guess') {
     const turn = parseInt(b.turn, 10);
