@@ -1,5 +1,6 @@
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, isAdmin, makeSb, supabaseKey, timingSafeEqual } from './_lib/common.js';
 import { getUser } from './_lib/auth.js';
+import { hasBadWord } from './_lib/words.js';
 
 const MAX_BODY = 80 * 1024 * 1024;
 
@@ -62,9 +63,12 @@ export async function onRequest(context) {
     try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
 
     // password_plain 은 더 이상 저장하지 않는다 (받아도 무시)
-    const { user_name, password_hash, thumbnail, layers, canvas_w, canvas_h } = body;
+    const { password_hash, thumbnail, layers, canvas_w, canvas_h } = body;
+    // 저장 이름은 모두가 보는 목록에 나온다: 앞뒤 공백·제어문자·꺾쇠·따옴표·역슬래시 빼고 20자까지, 나쁜 말 금지
+    const user_name = String(body.user_name || '').replace(/[\u0000-\u001f\u007f<>"'`\\]/g, '').trim().slice(0, 20);
     if (!user_name || !password_hash || !Array.isArray(layers) || !layers.length)
       return json({ error: 'missing_fields' }, 400);
+    if (hasBadWord(user_name)) return json({ error: '고운 말로 다시 써 주세요. 🙂', code: 'bad_word' }, 400);
 
     const saveId = crypto.randomUUID();
 

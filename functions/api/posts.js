@@ -12,6 +12,7 @@
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { signUpload, objectInfo, removeObjects, POST_BUCKET } from './_lib/storage.js';
 import { housekeeping } from './_lib/housekeeping.js';
+import { hasBadWord } from './_lib/words.js';
 import { whoIs, disabledReply, rpc, attachCovers, mediaOf, publicPost, statusText, POST_COLS, UUID, KINDS, MIME_EXT, VIDEO_EXT, AUDIO_EXT,
   blockedIds, followeeIds, followStatus, notInList } from './_lib/social.js';
 
@@ -146,6 +147,7 @@ export async function onRequest({ request, env }) {
     if (!KINDS.includes(kind)) return json({ error: 'invalid_kind' }, 400);
     const isDub = kind === 'dub';
     if (!title) return json({ error: '제목을 적어 주세요.', code: 'title_required' }, 400);
+    if (hasBadWord(title) || hasBadWord(caption) || (Array.isArray(b.media) && b.media.some(m => m && hasBadWord(m.body)))) return json({ error: '고운 말로 다시 써 주세요. 🙂', code: 'bad_word' }, 400);
     const visibility = b.visibility || 'public';
     const cmode = b.comments_mode || 'all';
     if (!VIS.includes(visibility)) return json({ error: '공개 범위를 다시 골라 주세요.', code: 'invalid_visibility' }, 400);
@@ -263,6 +265,7 @@ export async function onRequest({ request, env }) {
     const patch = { updated_at: new Date().toISOString() };
     if ('title' in b) { const t = clean(b.title, 60); if (!t) return json({ error: '제목을 적어 주세요.', code: 'title_required' }, 400); patch.title = t; }
     if ('caption' in b) patch.caption = clean(b.caption, 500) || null;
+    if (hasBadWord(patch.title) || hasBadWord(patch.caption)) return json({ error: '고운 말로 다시 써 주세요. 🙂', code: 'bad_word' }, 400);
     if ('visibility' in b) { if (!VIS.includes(b.visibility)) return json({ error: 'invalid_visibility' }, 400); patch.visibility = b.visibility; }
     if ('comments_mode' in b) { if (!CMODES.includes(b.comments_mode)) return json({ error: 'invalid_comments_mode' }, 400); patch.comments_mode = b.comments_mode; }
     // 승인 모드에서는 제목·소개를 고치면 다시 확인받는다 (공개 범위·댓글 설정만 바꾸면 그대로)

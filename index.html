@@ -8582,10 +8582,10 @@ async function openDrawSavesList() {
         : '';
       const loadBtn = isAdmin
         ? `<button class="ds-btn ds-btn-load" onclick="loadDrawSave('${s.id}')">📂 불러오기</button>`
-        : `<button class="ds-btn ds-btn-load" onclick="confirmLoadDrawSave('${s.id}','${_escHtml(s.user_name)}')">📂 불러오기</button>`;
+        : `<button class="ds-btn ds-btn-load" data-name="${_escHtml(s.user_name)}" onclick="confirmLoadDrawSave('${s.id}',this.dataset.name)">📂 불러오기</button>`;
       const delBtn = isAdmin
-        ? `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',true)">🗑 삭제</button>`
-        : `<button class="ds-btn ds-btn-del" onclick="confirmDeleteDrawSave('${s.id}','${_escHtml(s.user_name)}',false)">🗑 삭제</button>`;
+        ? `<button class="ds-btn ds-btn-del" data-name="${_escHtml(s.user_name)}" onclick="confirmDeleteDrawSave('${s.id}',this.dataset.name,true)">🗑 삭제</button>`
+        : `<button class="ds-btn ds-btn-del" data-name="${_escHtml(s.user_name)}" onclick="confirmDeleteDrawSave('${s.id}',this.dataset.name,false)">🗑 삭제</button>`;
       return `<div class="ds-card">
         <div class="ds-thumb">${thumb}</div>
         <div class="ds-info">

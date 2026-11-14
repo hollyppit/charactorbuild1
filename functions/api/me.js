@@ -3,8 +3,13 @@ import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb, supabaseKey
 import { getUser } from './_lib/auth.js';
 import { removeObjects, POST_BUCKET } from './_lib/storage.js';
 import { purgeGroupStories } from './_lib/housekeeping.js';
+import { hasBadWord } from './_lib/words.js';
 
 const NICK_RE = /^[0-9A-Za-z가-힣_]{2,20}$/;
+// 운영자로 오해할 수 있는 닉네임 금지 (글자만 남겨 비교)
+const RESERVED = ['관리자', '운영자', '운영진', '볼드하다', 'admin', 'administrator', 'operator', 'staff'];
+const reserved = n => { const t = n.toLowerCase().replace(/[_\d]/g, ''); return RESERVED.some(w => t.includes(w)); };
+const BAD = { error: '고운 말로 다시 써 주세요. 🙂', code: 'bad_word' };
 const VISIBILITY = ['public', 'followers', 'private'];
 
 export async function onRequest({ request, env }) {
@@ -42,17 +47,21 @@ export async function onRequest({ request, env }) {
     if ('nickname' in b) {
       const n = String(b.nickname || '').trim();
       if (!NICK_RE.test(n)) return json({ error: 'invalid_nickname' }, 400);
+      if (hasBadWord(n)) return json(BAD, 400);
+      if (reserved(n)) return json({ error: '운영자로 오해할 수 있는 닉네임은 쓸 수 없어요.', code: 'reserved_nickname' }, 400);
       patch.nickname = n;
     }
     if ('bio' in b) {
       const bio = b.bio == null ? null : String(b.bio).trim();
       if (bio && bio.length > 300) return json({ error: 'bio_too_long' }, 400);
+      if (hasBadWord(bio)) return json(BAD, 400);
       patch.bio = bio || null;
     }
     if ('interests' in b) {
       if (!Array.isArray(b.interests) || b.interests.length > 10) return json({ error: 'invalid_interests' }, 400);
       const tags = [...new Set(b.interests.map(t => String(t).trim()).filter(Boolean))];
       if (tags.some(t => t.length > 20)) return json({ error: 'invalid_interests' }, 400);
+      if (tags.some(hasBadWord)) return json(BAD, 400);
       patch.interests = tags;
     }
     if ('visibility' in b) {
