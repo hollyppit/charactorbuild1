@@ -56,8 +56,8 @@
       $('recCard').style.display = '';
       r.records.forEach(x => {
         const box = el('div', 'g-row'); box.style.cssText = 'display:block';
-        box.append(el('b', '', x.title), el('div', 'hint', x.played + '판 · 1등 ' + x.wins + '번' + (x.best != null ? ' · 최고 ' + x.best + '점' : '')));
-        box.append(el('div', 'hint', '최근: ' + x.recent.map(p => (p.rank ? p.rank + '등' : '-') + (p.score != null ? '(' + p.score + '점)' : '')).join(' · ')));
+        box.append(el('b', '', x.title), el('div', 'hint', x.played + '판 · 1등 ' + x.wins + '번' + (x.team_played ? ' · 팀전 ' + x.team_played + '판 ' + x.team_wins + '승' : '') + (x.best != null ? ' · 최고 ' + x.best + '점' : '')));
+        box.append(el('div', 'hint', '최근: ' + x.recent.map(p => (p.team_result ? ({ win: '🏆팀 승', lose: '팀 패', draw: '팀 무' })[p.team_result] + ' ' : '') + (p.rank ? p.rank + '등' : '-') + (p.score != null ? '(' + p.score + '점)' : '')).join(' · ')));
         $('records').append(box);
       });
     }).catch(() => {});

@@ -66,10 +66,21 @@
     S.endAt = Date.now() + P.remaining_ms;
     // 친구들 진행 막대
     S.players.innerHTML = '';
+    if (P.team_progress && window.BoldTeam) {
+      ['red', 'blue'].forEach(t => {
+        const row = el('div', 'display:flex;align-items:center;gap:6px;font-weight:800');
+        row.append(el('span', 'width:90px;color:' + BoldTeam.color(t), BoldTeam.name(t)));
+        const bar = el('div', 'flex:1;height:14px;background:#2d0040;border:2px solid ' + BoldTeam.color(t));
+        bar.append(el('div', 'height:100%;width:' + P.team_progress[t] + '%;background:' + BoldTeam.color(t)));
+        row.append(bar, el('span', 'width:70px;text-align:right', P.team_progress[t] + '%'));
+        S.players.append(row);
+      });
+      S.players.append(el('div', 'font-size:.75rem;opacity:.75', '팀원이 모두 완성한 팀이 먼저 이겨요. (팀 진행 = 팀원 평균)'));
+    }
     P.players.forEach(p => {
       const pct = p.total ? Math.round(100 * p.placed / p.total) : 0;
       const row = el('div', 'display:flex;align-items:center;gap:6px');
-      row.append(el('span', 'width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' + (p.me ? ';color:var(--yellow);font-weight:800' : ''), p.nickname + (p.me ? '(나)' : '')));
+      row.append(el('span', 'width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' + (p.me ? ';color:var(--yellow);font-weight:800' : p.team && window.BoldTeam ? ';color:' + BoldTeam.color(p.team) : ''), (p.team && window.BoldTeam ? BoldTeam.name(p.team).slice(0, 2) + ' ' : '') + p.nickname + (p.me ? '(나)' : '')));
       const bar = el('div', 'flex:1;height:10px;background:#2d0040;border:1px solid #555');
       bar.append(el('div', 'height:100%;width:' + pct + '%;background:' + (p.finished ? '#3c3' : '#ff4fa3')));
       row.append(bar, el('span', 'width:70px;text-align:right', p.finished ? '✅ ' + fmt(p.ms) : pct + '%'));

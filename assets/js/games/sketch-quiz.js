@@ -96,6 +96,7 @@
         }
       }
       if (Q.role === 'guesser') guessBox(Q, link);
+      else if (Q.role === 'rival') S.side.append(el('div', 'text-align:center;font-weight:800;padding:6px 0', '🛡 상대 팀 차례예요. 그림을 보며 기다려요! (맞히기는 같은 팀만)'));
       return;
     }
     if (Q.phase === 'turn_end') {
@@ -147,7 +148,9 @@
     S.endAt = Date.now() + Q.remaining_ms;
     const ph = { pick: '제시어 고르기', draw: '그리기', turn_end: '정답 공개' }[Q.phase] || '';
     S.titleEl.textContent = '✏️ 쓱싹 퀴즈 · ' + (Q.turn + 1) + '/' + Q.turns + '차례 · ' + ph;
-    S.subEl.textContent = Q.role === 'drawer' ? (Q.phase === 'draw' ? '내가 그리는 차례예요!' : '') : '그리는 친구: ' + Q.drawer;
+    const tn = Q.team && window.BoldTeam ? BoldTeam.name(Q.team) + ' 차례 · ' : '';
+    S.subEl.textContent = tn + (Q.role === 'drawer' ? (Q.phase === 'draw' ? '내가 그리는 차례예요!' : '') : '그리는 친구: ' + Q.drawer);
+    S.subEl.style.color = Q.team && window.BoldTeam ? BoldTeam.color(Q.team) : '';
     if (Q.phase === 'draw') S.wordEl.textContent = Q.word ? (Q.role === 'drawer' ? '제시어: ' + Q.word : '정답: ' + Q.word) : (Q.hint || '') + (Q.hint && !Q.hint_first ? '  (' + [...Q.hint.replace(/ /g, '')].length + '글자)' : '');
     else if (Q.phase === 'turn_end') S.wordEl.textContent = '정답: ' + (Q.word || '?');
     else S.wordEl.textContent = '';
@@ -177,7 +180,8 @@
     (async () => {
       for (const t of Q.turns) {
         const card = el('div', 'border:2px solid #3a2a3a;padding:8px');
-        card.append(el('div', 'font-weight:800;margin-bottom:4px', (t.turn + 1) + '. "' + t.word + '" · ' + t.drawer + (t.mine ? ' (나)' : '')));
+        card.append(el('div', 'font-weight:800;margin-bottom:4px', (t.turn + 1) + '. "' + t.word + '" · ' + (t.team && window.BoldTeam ? BoldTeam.name(t.team) + ' ' : '') + t.drawer + (t.mine ? ' (나)' : '')));
+        if (t.team && window.BoldTeam) card.style.borderColor = BoldTeam.color(t.team);
         const v = DrawPad.viewer(card, { instant: true, max: 260 });
         card.append(el('div', 'font-size:.8rem;margin-top:4px', t.hits.length ? '맞힌 친구: ' + t.hits.map(h => h.nickname + ' +' + h.points).join(', ') : '아무도 못 맞혔어요'));
         grid.append(card);

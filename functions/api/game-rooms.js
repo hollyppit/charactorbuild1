@@ -13,7 +13,8 @@
 //    (이미지 상식 퀴즈 배틀 quiz_battle) start {room_id, count:5|10} / answer {room_id, q, choice} / tick — DB 함수(qb_*). 맞았는지는 정답 공개 때만
 //    (그림 퍼즐 배틀 jigsaw) start {room_id, level, item?} / report {room_id, placed, total} / tick — DB 함수(pz_*)
 //  GET  ?id=&since=n&sk=마지막 획 id   쓱싹 퀴즈는 버전이 같아도 새 획(strokes)을 함께 줌 / ?id=&strokes_turn=t  끝난 뒤 그 차례의 획 전체
-//  GET  /api/game-rooms?records=1         내 기록(게임별 판 수·1등·최고 점수·최근 5판) — 나만 봄
+//  GET  /api/game-rooms?records=1         내 기록(게임별 판 수·1등·최고 점수·팀전 승·최근 5판) — 나만 봄
+//  팀전(쓱싹 퀴즈·퀴즈 배틀·퍼즐 배틀): team_mode {room_id, on} (방장) / team_auto {room_id} (방장) / team {room_id, team:'red'|'blue', nickname?(방장이 다른 사람)}
 // 채팅은 없음(학생 보호). 초대는 서로 팔로우하거나 같은 그룹인 사람만(DB 함수에서 확인).
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { whoIs, rpc, UUID, gamesMode } from './_lib/social.js';
@@ -32,6 +33,8 @@ const ERR = {
   not_playing: '진행 중인 게임이 아니에요.', not_enough_quiz: '등록된 퀴즈가 3개 이상 있어야 배틀을 할 수 있어요.', no_puzzle: '퍼즐 그림이 아직 없어요. 관리자 모드에서 올려 주세요.', already_answered: '이미 답했어요.', version_conflict: '그사이 바뀐 내용이 있어요. 다시 해 주세요.',
   state_too_large: '게임 정보가 너무 커요.',
   too_fast: '조금 천천히 입력해 주세요.',
+  no_team_mode: '이 게임은 팀전을 할 수 없어요.', not_team_mode: '팀전 방이 아니에요.', team_full: '한 팀은 4명까지예요.',
+  team_too_small: '팀마다 2명 이상 있어야 시작할 수 있어요.', team_unbalanced: '두 팀 인원 차이가 1명 이하여야 해요.', not_your_team: '상대 팀 차례예요. 응원해 주세요!',
   step_over: '이번 차례가 이미 끝났어요.', invalid_image: '그림을 다시 내 주세요.', invalid_choice: '보기 중에서 골라 주세요.', not_player: '이번 게임 참가자가 아니에요.',
 };
 
@@ -157,6 +160,12 @@ export async function onRequest({ request, env }) {
     return out;
   }
 
+  // 팀별 평균 (팀원 수가 달라도 공평하게) → {red, blue} (소수 첫째 자리)
+  const teamAvg = rows => {
+    const o = {};
+    ['red', 'blue'].forEach(k => { const v = rows.filter(r => r.team === k).map(r => Number(r.v) || 0); o[k] = v.length ? Math.round(10 * v.reduce((a, b) => a + b, 0) / v.length) / 10 : 0; });
+    return o;
+  };
   // 쓱싹 퀴즈 화면 정보: 제시어는 그리는 사람에게만(맞히는 사람은 글자 수·절반 지나면 첫 글자), 차례가 끝나면 모두에게
   async function sketchView(room, all) {
     const st = room.state, order = st.order || [], t = st.turn, ph = st.phase;
@@ -168,11 +177,14 @@ export async function onRequest({ request, env }) {
     const turns = tr.ok ? await tr.json() : [], hits = hr.ok ? await hr.json() : [];
     const hitsOf = n => hits.filter(h => h.turn === n).map(h => ({ nickname: nick[h.user_id] || '(나간 친구)', points: h.points, me: h.user_id === me }));
     if (ph === 'reveal' || room.status !== 'playing') {
-      return { phase: 'reveal', turns: turns.filter(x => x.word).map(x => ({ turn: x.turn, drawer: nick[x.drawer_id] || '(나간 친구)', mine: x.drawer_id === me, word: x.word, hits: hitsOf(x.turn) })) };
+      const tOf = Object.fromEntries(all.map(m => [m.user_id, m.team || null]));
+      return { phase: 'reveal', turns: turns.filter(x => x.word).map(x => ({ turn: x.turn, drawer: nick[x.drawer_id] || '(나간 친구)', mine: x.drawer_id === me, word: x.word, hits: hitsOf(x.turn), team: room.team_mode ? tOf[x.drawer_id] || null : null })) };
     }
     const x = turns.find(y => y.turn === t) || {};
-    const role = x.drawer_id === me ? 'drawer' : order.includes(me) ? 'guesser' : 'watch';
-    const out = { phase: ph, turn: t, turns: st.turns, laps: st.laps, drawer: nick[x.drawer_id] || '', role,
+    const teamOf = Object.fromEntries(all.map(m => [m.user_id, m.team || null]));
+    const tm = !!room.team_mode, dteam = tm ? teamOf[x.drawer_id] || null : null;
+    const role = x.drawer_id === me ? 'drawer' : !order.includes(me) ? 'watch' : tm && teamOf[me] !== dteam ? 'rival' : 'guesser';
+    const out = { phase: ph, turn: t, turns: st.turns, laps: st.laps, drawer: nick[x.drawer_id] || '', role, team: dteam, my_team: tm ? teamOf[me] || null : null,
       remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()), hits: hitsOf(t), my_hit: (hits.find(h => h.turn === t && h.user_id === me) || {}).points || null };
     if (ph === 'pick' && role === 'drawer') out.choices = x.choices || [];
     if (ph === 'draw' && x.word) {
@@ -231,7 +243,8 @@ export async function onRequest({ request, env }) {
     const answers = ar.ok ? await ar.json() : [];
     const cur = answers.filter(a => a.q === qn);
     const mine = cur.find(a => a.user_id === me);
-    const totals = order.map(u => ({ nickname: nick[u] || '(나간 친구)', me: u === me, score: answers.filter(a => a.user_id === u).reduce((t, a) => t + a.points, 0) })).sort((a, b) => b.score - a.score);
+    const teamOf = Object.fromEntries(all.map(m => [m.user_id, m.team || null]));
+    const totals = order.map(u => ({ nickname: nick[u] || '(나간 친구)', me: u === me, team: room.team_mode ? teamOf[u] || null : null, score: answers.filter(a => a.user_id === u).reduce((t, a) => t + a.points, 0) })).sort((a, b) => b.score - a.score);
     const open = ph === 'reveal' || ended;
     const out = { phase: ended ? 'ended' : ph, q: qn, total: st.total, role: order.includes(me) ? 'player' : 'watch',
       remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()),
@@ -242,6 +255,7 @@ export async function onRequest({ request, env }) {
       out.answers = order.map(u => { const a = cur.find(y => y.user_id === u); return { nickname: nick[u] || '', me: u === me, choice: a ? a.choice : null, correct: !!(a && a.correct), points: a ? a.points : 0 }; });
       out.my_points = mine ? mine.points : 0;
       out.totals = totals;
+      if (room.team_mode) out.team_totals = teamAvg(totals.map(t => ({ team: t.team, v: t.score })));
     }
     return out;
   }
@@ -255,10 +269,12 @@ export async function onRequest({ request, env }) {
     ]);
     const g = (gr.ok ? await gr.json() : [])[0] || {};
     const prog = pr.ok ? await pr.json() : [];
-    const players = order.map(u => { const p = prog.find(x => x.user_id === u) || {}; return { nickname: nick[u] || '(나간 친구)', me: u === me, placed: p.placed || 0, total: p.total || 0, finished: !!p.finished_at, ms: p.ms || null }; })
+    const teamOf = Object.fromEntries(all.map(m => [m.user_id, m.team || null]));
+    const players = order.map(u => { const p = prog.find(x => x.user_id === u) || {}; return { nickname: nick[u] || '(나간 친구)', me: u === me, team: room.team_mode ? teamOf[u] || null : null, placed: p.placed || 0, total: p.total || 0, finished: !!p.finished_at, ms: p.ms || null }; })
       .sort((a, b) => (b.finished - a.finished) || ((a.ms || 0) - (b.ms || 0)) || ((b.total ? b.placed / b.total : 0) - (a.total ? a.placed / a.total : 0)));
     return { phase: room.status === 'playing' ? 'play' : 'ended', title: g.title || '', image: g.image || '', level: g.level || 'normal', seed: g.seed || 1,
-      role: order.includes(me) ? 'player' : 'watch', remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()), limit_sec: st.limit_sec, players };
+      role: order.includes(me) ? 'player' : 'watch', remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()), limit_sec: st.limit_sec, players,
+      team_progress: room.team_mode ? teamAvg(players.map(p => ({ team: p.team, v: p.finished ? 100 : p.total ? Math.floor(100 * p.placed / p.total) : 0 }))) : null };
   }
   // 획 조각 정리: 선(번호·색·굵기·좌표)과 되돌리기/지우기만 남김 (다른 친구 화면으로 가는 내용이라 형식을 엄격히)
   function cleanStrokes(data) {
@@ -289,16 +305,17 @@ export async function onRequest({ request, env }) {
       return json({ games: r.ok ? await r.json() : [] });
     }
     if (url.searchParams.get('records') === '1') {
-      const r = await sb(`/rest/v1/game_results?user_id=eq.${me}&select=rank,score,created_at,room:game_rooms(game_key,game:games(title))&order=created_at.desc&limit=500`);
+      const r = await sb(`/rest/v1/game_results?user_id=eq.${me}&select=rank,score,team_result,created_at,room:game_rooms(game_key,game:games(title))&order=created_at.desc&limit=500`);
       if (r.status === 404 || r.status === 400) return json({ error: 'games_not_ready' }, 503);
       const by = {};
       for (const x of (r.ok ? await r.json() : [])) {
         const k = (x.room || {}).game_key; if (!k) continue;
-        const g = by[k] = by[k] || { key: k, title: ((x.room || {}).game || {}).title || k, played: 0, wins: 0, best: null, recent: [] };
+        const g = by[k] = by[k] || { key: k, title: ((x.room || {}).game || {}).title || k, played: 0, wins: 0, best: null, team_played: 0, team_wins: 0, recent: [] };
         g.played++; if (x.rank === 1) g.wins++;
+        if (x.team_result) { g.team_played++; if (x.team_result === 'win') g.team_wins++; }
         const sc = x.score == null ? null : Number(x.score);
         if (sc != null && (g.best == null || sc > g.best)) g.best = sc;
-        if (g.recent.length < 5) g.recent.push({ at: x.created_at, rank: x.rank, score: sc });
+        if (g.recent.length < 5) g.recent.push({ at: x.created_at, rank: x.rank, score: sc, team_result: x.team_result || null });
       }
       return json({ records: Object.values(by) });
     }
@@ -311,11 +328,11 @@ export async function onRequest({ request, env }) {
       return json({ rooms: rooms.map(x => ({ id: x.id, status: x.status, code: x.join_code, game: (x.game || {}).title || '', expires_at: x.expires_at })) });
     }
     if (!UUID.test(id)) return fail('room_not_found', 404);
-    const rr = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players)`);
+    const rr = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players,teams)`);
     if (rr.status === 404 || rr.status === 400) return json({ error: 'games_not_ready' }, 503);
     let room = (rr.ok ? await rr.json() : [])[0];
     if (!room) return fail('room_not_found', 404);
-    const mr = await sb(`/rest/v1/game_room_members?room_id=eq.${id}&select=user_id,role,ready,left_at,joined_at,user:profiles(nickname,avatar_url)&order=joined_at.asc`);
+    const mr = await sb(`/rest/v1/game_room_members?room_id=eq.${id}&select=user_id,role,ready,left_at,joined_at,team,user:profiles(nickname,avatar_url)&order=joined_at.asc`);
     const all = mr.ok ? await mr.json() : [];
     const mine = all.find(m => m.user_id === me);
     // 지금 들어가 있는 사람만 볼 수 있음. 끝난 방은 참가했던 사람이 결과를 볼 수 있음
@@ -328,7 +345,7 @@ export async function onRequest({ request, env }) {
     const ADV = { draw_relay: 'gd_advance', memory_parts: 'mp_advance', sketch_quiz: 'qd_advance', liar_draw: 'lr_advance', quiz_battle: 'qb_advance', jigsaw: 'pz_advance' };
     if (ADV[room.game_key] && room.status === 'playing' && room.state && room.state.deadline && room.state.phase !== 'reveal' && Date.parse(room.state.deadline) <= Date.now()) {
       await rpc(env, ADV[room.game_key], { p_room: id });
-      const again = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players)`);
+      const again = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players,teams)`);
       room = (again.ok ? await again.json() : [])[0] || room;
     }
     if (room.game_key === 'sketch_quiz' && url.searchParams.get('strokes_turn') != null) {
@@ -348,8 +365,14 @@ export async function onRequest({ request, env }) {
     if (since === room.version) return json({ unchanged: true, version: room.version, strokes });
     let results = [];
     if (room.status === 'ended') {
-      const xr = await sb(`/rest/v1/game_results?room_id=eq.${id}&select=user_id,rank,score,user:profiles(nickname)&order=rank.asc.nullslast`);
-      results = (xr.ok ? await xr.json() : []).map(x => ({ nickname: (x.user || {}).nickname || '', rank: x.rank, score: x.score == null ? null : Number(x.score), me: x.user_id === me }));
+      const xr = await sb(`/rest/v1/game_results?room_id=eq.${id}&select=user_id,rank,score,team,team_result,user:profiles(nickname)&order=rank.asc.nullslast`);
+      results = (xr.ok ? await xr.json() : []).map(x => ({ nickname: (x.user || {}).nickname || '', rank: x.rank, score: x.score == null ? null : Number(x.score), me: x.user_id === me, team: x.team || null, team_result: x.team_result || null }));
+    }
+    // 팀전 결과: 팀 평균 점수와 이긴 팀
+    let team_summary = null;
+    if (room.status === 'ended' && room.team_mode && results.some(x => x.team)) {
+      const avg = teamAvg(results.map(x => ({ team: x.team, v: x.score })));
+      team_summary = { ...avg, winner: avg.red > avg.blue ? 'red' : avg.blue > avg.red ? 'blue' : null };
     }
     const active = all.filter(m => !m.left_at);
     const relay = room.game_key === 'draw_relay' && room.state && room.state.order ? await relayView(room, all) : null;
@@ -361,9 +384,9 @@ export async function onRequest({ request, env }) {
     return json({
       id: room.id, version: room.version, status: room.status, code: room.status === 'waiting' ? room.join_code : null,
       game: room.game, max_players: room.max_players, state: relay || memory || sketch || liar || quiz || puzzle ? {} : (room.state || {}), relay, memory, sketch, liar, quiz, puzzle, strokes, expires_at: room.expires_at,
-      started_at: room.started_at, ended_at: room.ended_at,
+      started_at: room.started_at, ended_at: room.ended_at, team_mode: !!room.team_mode, teams_ok: !!(room.game && room.game.teams), team_summary,
       my_role: mine.left_at ? null : mine.role, me: who.profile.nickname,
-      members: active.map(m => ({ nickname: (m.user || {}).nickname || '', avatar_url: (m.user || {}).avatar_url || null, role: m.role, ready: m.ready, me: m.user_id === me })),
+      members: active.map(m => ({ nickname: (m.user || {}).nickname || '', avatar_url: (m.user || {}).avatar_url || null, role: m.role, ready: m.ready, me: m.user_id === me, team: room.team_mode ? m.team || null : null })),
       results,
     });
   }
@@ -400,6 +423,14 @@ export async function onRequest({ request, env }) {
     return out(await rpc(env, 'gm_kick', { p_actor: me, p_room: room, p_target: uid }));
   }
   if (a === 'ready') return out(await rpc(env, 'gm_ready', { p_user: me, p_room: room, p_ready: !!b.ready }));
+  if (a === 'team_mode') return out(await rpc(env, 'gm_team_mode', { p_actor: me, p_room: room, p_on: !!b.on }));
+  if (a === 'team_auto') return out(await rpc(env, 'gm_team_auto', { p_actor: me, p_room: room }));
+  if (a === 'team') {
+    if (b.team !== 'red' && b.team !== 'blue') return fail('invalid_choice');
+    const target = b.nickname ? await idByNick(b.nickname) : me;
+    if (!target) return fail('not_member');
+    return out(await rpc(env, 'gm_team_set', { p_actor: me, p_room: room, p_target: target, p_team: b.team }));
+  }
   // 게임별 DB 함수
   const FN = { draw_relay: { start: 'gd_start', submit: 'gd_submit', tick: 'gd_advance' }, memory_parts: { start: 'mp_start', submit: 'mp_submit', tick: 'mp_advance' },
     sketch_quiz: { start: 'qd_start', tick: 'qd_advance' }, liar_draw: { start: 'lr_start', submit: 'lr_submit', tick: 'lr_advance' }, quiz_battle: { start: 'qb_start', tick: 'qb_advance' }, jigsaw: { start: 'pz_start', tick: 'pz_advance' } };

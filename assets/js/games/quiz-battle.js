@@ -48,7 +48,8 @@
       box.append(el('div', 'text-align:center;font-size:.9rem', hit.length ? '맞힌 친구: ' + hit.map(a => a.nickname + (a.me ? '(나)' : '') + ' +' + a.points).join(' · ') : '아무도 못 맞혔어요'));
       const rank = el('div', 'border-top:2px solid #3a2a3a;padding-top:8px');
       rank.append(el('div', 'font-weight:800;margin-bottom:4px', '지금 순위'));
-      Q.totals.forEach((t, i) => rank.append(el('div', 'font-size:.9rem' + (t.me ? ';color:var(--yellow);font-weight:800' : ''), (i + 1) + '. ' + t.nickname + (t.me ? ' (나)' : '') + ' — ' + t.score + '점')));
+      if (Q.team_totals && window.BoldTeam) rank.append(el('div', 'font-weight:900;margin-bottom:4px', BoldTeam.name('red') + ' 평균 ' + Q.team_totals.red + '점  vs  ' + BoldTeam.name('blue') + ' 평균 ' + Q.team_totals.blue + '점'));
+      Q.totals.forEach((t, i) => { const r = el('div', 'font-size:.9rem' + (t.me ? ';color:var(--yellow);font-weight:800' : ''), (i + 1) + '. ' + (t.team && window.BoldTeam ? BoldTeam.name(t.team).slice(0, 2) + ' ' : '') + t.nickname + (t.me ? ' (나)' : '') + ' — ' + t.score + '점'); rank.append(r); });
       box.append(rank);
     }
     S.statusEl = el('div', 'text-align:center;font-size:.9rem'); box.append(S.statusEl);

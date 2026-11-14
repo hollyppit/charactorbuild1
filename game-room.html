@@ -13,6 +13,12 @@
   .rd{font-size:.8rem;padding:2px 8px;border:2px solid #555;color:#aaa}
   .rd.on{border-color:var(--green);color:var(--green)}
   .play{border:3px dashed var(--yellow);padding:16px;text-align:center}
+  .tm{font-size:.8rem;font-weight:800;padding:2px 8px;border:2px solid currentColor;flex:none}
+  .tm.red{color:#ff6b6b}.tm.blue{color:#5ab0ff}
+  .tbox{border:3px solid #3a2a3a;padding:8px 10px;margin-top:8px}
+  .tbox.red{border-color:#ff6b6b}.tbox.blue{border-color:#5ab0ff}
+  .tbox h3{margin:0 0 4px;font-size:1rem}
+  .twin{font-size:1.5rem;font-weight:900;text-align:center;margin:6px 0 10px}
 </style>
 </head>
 <body>
@@ -46,6 +52,9 @@
     try { await link.send(action, body); } catch (e) { alert(e.message); }
   };
   const btn = (t, fn, cls) => { const b = el('button', cls || 'chip', t); b.type = 'button'; b.onclick = fn; return b; };
+  // 팀전: 🔴 빨강팀 vs 🔵 파랑팀
+  const TEAM = { red: '🔴 빨강팀', blue: '🔵 파랑팀' };
+  window.BoldTeam = { name: t => TEAM[t] || '', color: t => t === 'red' ? '#ff6b6b' : t === 'blue' ? '#5ab0ff' : '' };
 
   function render(d) {
     R = d;
@@ -65,21 +74,44 @@
 
     // 참가자
     const mc = $('memCard'); mc.style.display = ''; mc.innerHTML = '';
-    mc.append(el('h2', '', '참가자'));
-    d.members.forEach(m => {
+    mc.append(el('h2', '', '참가자' + (d.team_mode ? ' · 👥 팀전' : '')));
+    // 팀전 켜기 (방장, 대기 중, 팀전 되는 게임)
+    if (host && waiting && d.teams_ok) {
+      const lab = el('label', ''); lab.style.cssText = 'display:flex;gap:6px;align-items:center;font-weight:400;margin-bottom:6px';
+      const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!d.team_mode; cb.style.width = 'auto';
+      cb.onchange = () => act('team_mode', { on: cb.checked });
+      lab.append(cb, el('span', '', '👥 팀전 (🔴 빨강팀 vs 🔵 파랑팀 · 4명 이상, 팀 점수는 팀원 평균)'));
+      mc.append(lab);
+    }
+    const memRow = m => {
       const r = el('div', 'mem');
       const im = el('img'); im.alt = ''; im.src = U.avatar(m.avatar_url);
       r.append(im, el('span', 'n', m.nickname + (m.role === 'host' ? ' 👑' : '') + (m.me ? ' (나)' : '')));
       if (waiting && m.role !== 'host') r.append(el('span', 'rd' + (m.ready ? ' on' : ''), m.ready ? '✅ 준비' : '기다리는 중'));
+      if (waiting && d.team_mode && host && !m.me) r.append(btn('팀 바꾸기', () => act('team', { nickname: m.nickname, team: m.team === 'red' ? 'blue' : 'red' })));
       if (host && waiting && !m.me) r.append(btn('내보내기', () => act('kick', { nickname: m.nickname }, m.nickname + '님을 내보낼까요? 이 방에는 다시 들어올 수 없어요.')));
-      mc.append(r);
-    });
+      return r;
+    };
+    if (d.team_mode) {
+      const myTeam = (d.members.find(m => m.me) || {}).team;
+      ['red', 'blue'].forEach(t => {
+        const list = d.members.filter(m => m.team === t);
+        const bx = el('div', 'tbox ' + t); bx.append(el('h3', '', TEAM[t] + ' (' + list.length + '명)'));
+        list.forEach(m => bx.append(memRow(m)));
+        if (waiting && d.my_role && myTeam !== t) bx.append(btn(TEAM[t] + '으로 가기', () => act('team', { team: t })));
+        mc.append(bx);
+      });
+      const none = d.members.filter(m => !m.team); none.forEach(m => mc.append(memRow(m)));
+      if (host && waiting) mc.append(btn('🎲 자동으로 나누기', () => act('team_auto')));
+    } else d.members.forEach(m => mc.append(memRow(m)));
     if (waiting && d.my_role) {
       const acts = el('div', 'row2'); acts.style.marginTop = '10px';
       if (host) {
         const notReady = d.members.filter(m => m.role !== 'host' && !m.ready).length;
         const enough = d.members.length >= d.game.min_players;
-        const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : d.game.key === 'liar_draw' ? { mode: liarMode, rounds: liarRounds } : d.game.key === 'quiz_battle' ? { count: quizCount } : d.game.key === 'jigsaw' ? { level: pzLevel, item: pzItem || undefined } : null), 'btn btn-main'); st.disabled = !!notReady || !enough;
+        const nR = d.members.filter(m => m.team === 'red').length, nB = d.members.filter(m => m.team === 'blue').length;
+        const teamBad = d.team_mode ? (Math.min(nR, nB) < 2 ? '팀마다 2명 이상 있어야 시작할 수 있어요.' : Math.abs(nR - nB) > 1 ? '두 팀 인원 차이가 1명 이하여야 해요.' : '') : '';
+        const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : d.game.key === 'liar_draw' ? { mode: liarMode, rounds: liarRounds } : d.game.key === 'quiz_battle' ? { count: quizCount } : d.game.key === 'jigsaw' ? { level: pzLevel, item: pzItem || undefined } : null), 'btn btn-main'); st.disabled = !!notReady || !enough || !!teamBad;
         acts.append(st);
         // 그림 퍼즐 배틀: 그림·난이도
         if (d.game.key === 'jigsaw') {
@@ -112,7 +144,7 @@
           const cb = el('input'); cb.type = 'checkbox'; cb.checked = twoLaps; cb.style.width = 'auto'; cb.onchange = () => { twoLaps = cb.checked; };
           lab.append(cb, el('span', '', '두 바퀴 하기 (모두 두 번씩 그려요)')); acts.append(lab);
         }
-        mc.append(acts, el('div', 'hint', !enough ? d.game.min_players + '명 이상 있어야 시작할 수 있어요.' : notReady ? '모두 준비하면 시작할 수 있어요.' : '모두 준비됐어요!'));
+        mc.append(acts, el('div', 'hint', !enough ? d.game.min_players + '명 이상 있어야 시작할 수 있어요.' : notReady ? '모두 준비하면 시작할 수 있어요.' : teamBad || '모두 준비됐어요!'));
         // 초대: 서로 팔로우하거나 같은 그룹인 친구만
         const inv = el('div'); inv.style.marginTop = '12px';
         const q = el('input'); q.type = 'text'; q.placeholder = '초대할 친구 닉네임'; q.maxLength = 20;
@@ -157,7 +189,18 @@
       pc.style.display = '';
       pc.append(el('h2', '', '🏁 결과'));
       if (!d.results.length) pc.append(el('div', 'hint', '기록된 결과가 없어요.'));
-      d.results.forEach(x => pc.append(el('div', 'mem', (x.rank ? x.rank + '등 · ' : '') + x.nickname + (x.me ? ' (나)' : '') + (x.score != null ? ' · ' + x.score + '점' : ''))));
+      const TS = d.team_summary;
+      if (TS) {
+        pc.append(el('div', 'twin', TS.winner ? '🏆 ' + TEAM[TS.winner] + ' 승리!' : '🤝 무승부!'));
+        const row = el('div', 'row2');
+        ['red', 'blue'].forEach(t => { const bx = el('div', 'tbox ' + t); bx.style.flex = '1'; bx.append(el('h3', '', TEAM[t]), el('div', '', '팀 평균 ' + TS[t] + '점')); row.append(bx); });
+        pc.append(row);
+      }
+      d.results.forEach(x => {
+        const r = el('div', 'mem', (x.rank ? x.rank + '등 · ' : '') + x.nickname + (x.me ? ' (나)' : '') + (x.score != null ? ' · ' + x.score + '점' : ''));
+        if (x.team) { const c = el('span', 'tm ' + x.team, TEAM[x.team]); r.prepend(c); }
+        pc.append(r);
+      });
       if (G && G.reveal) G.reveal(pc, d);
       const again = el('a', 'btn btn-main', '게임 목록으로'); again.href = '/games'; again.style.cssText = 'text-decoration:none;margin-top:10px'; pc.append(again);
     }
