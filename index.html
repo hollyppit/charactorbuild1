@@ -188,6 +188,17 @@ body.admin .add-btn{display:flex}
 #panel-quiz.active{display:flex;justify-content:center}
 .quiz-col{display:flex;flex-direction:column;align-items:center;width:100%;max-width:640px;gap:14px}
 .quiz-view{display:flex;flex-direction:column;align-items:center;width:100%;gap:14px}
+/* 게임 탭: 게임 목록 */
+.gh-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;width:100%}
+.gh-card{border:3px solid #000;background:#fff;color:#111;padding:16px;box-shadow:5px 5px 0 #000;display:flex;flex-direction:column;gap:8px;text-align:left}
+.gh-card h3{margin:0;font-size:1.15rem}
+.gh-card p{margin:0;font-size:.9rem;line-height:1.5;color:#333}
+.gh-tags{display:flex;flex-wrap:wrap;gap:4px}
+.gh-tags span{font-size:.72rem;border:2px solid #111;padding:1px 6px;background:#f6f0ff}
+.gh-tags span.need{background:#fff4c2}
+.gh-note{font-size:.82rem;color:#7a5a00}
+.gh-card.soon{opacity:.55}
+.gh-card .btn{margin-top:auto}
 .quiz-title{font-family:var(--f-display-kr);font-size:26px;color:var(--c-yellow);text-align:center;letter-spacing:.02em;margin:0}
 .quiz-desc{font-family:var(--f-ui);font-size:13px;color:#ccc;text-align:center;line-height:1.7;margin:0}
 .quiz-highscore{font-family:var(--f-display-kr);font-size:18px;color:var(--c-white);text-align:center;min-height:28px}
@@ -1760,7 +1771,7 @@ try {
   <button class="mode-tab" onclick="switchMode('draw',this)">✏️ 직접 그리기</button>
   <button class="mode-tab" onclick="switchMode('storyboard',this)">🎬 스토리보드</button>
   <button class="mode-tab" onclick="switchMode('story',this)">📖 스토리 만들기</button>
-  <button class="mode-tab" onclick="switchMode('quiz',this)">🧠 이미지 상식 퀴즈</button>
+  <button class="mode-tab" id="tabGame" onclick="switchMode('quiz',this)">🎮 게임</button>
   <button class="mode-tab" onclick="switchMode('dub',this)">📚 그림책 더빙</button>
 </div>
 
@@ -2369,14 +2380,48 @@ try {
 ══════════════════════════════ -->
 <div class="mode-panel" id="panel-quiz">
   <div class="quiz-col">
+    <!-- 게임 목록 (게임 탭 첫 화면) -->
+    <div id="gameHub" class="quiz-view">
+      <h2 class="quiz-title">🎮 게임</h2>
+      <p class="quiz-desc">혼자 하는 게임과 친구와 함께 하는 그림 게임이 있어요.</p>
+      <div class="gh-list">
+        <div class="gh-card">
+          <h3>🧠 이미지 상식 퀴즈</h3>
+          <div class="gh-tags"><span>혼자</span><span>로그인 없이</span></div>
+          <p>이미지를 보고 정답을 골라요. 정답 갯수와 걸린 시간으로 점수가 나와요.</p>
+          <button class="btn btn-yellow" type="button" onclick="_showQuizView('intro')">▶ 시작하기</button>
+        </div>
+        <div class="gh-card" id="ghRelay">
+          <h3>🎨 그림 릴레이</h3>
+          <div class="gh-tags"><span>친구와 2~8명</span><span class="need">로그인 필요</span></div>
+          <p>제시어를 그림으로만 전달해요. 앞 친구 그림만 보고 다시 그리고, 마지막 친구가 처음 제시어를 맞혀요.</p>
+          <div class="gh-note" id="ghRelayNote">확인하는 중...</div>
+          <a class="btn btn-purple" id="ghRelayBtn" style="display:none;text-decoration:none;text-align:center"></a>
+        </div>
+        <div class="gh-card soon">
+          <h3>🧩 기억 조각 그림</h3>
+          <div class="gh-tags"><span>친구와 함께</span><span class="need">로그인 필요</span></div>
+          <p>캐릭터를 3초 동안 보고, 부위를 나눠 그린 뒤 어떤 캐릭터인지 맞혀요.</p>
+          <div class="gh-note">곧 나와요!</div>
+        </div>
+        <div class="gh-card soon">
+          <h3>✏️ 쓱싹 퀴즈</h3>
+          <div class="gh-tags"><span>친구와 함께</span><span class="need">로그인 필요</span></div>
+          <p>한 친구가 제시어를 그리면 다른 친구들이 맞혀요.</p>
+          <div class="gh-note">곧 나와요!</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 시작 화면 -->
-    <div id="quizIntro" class="quiz-view quiz-intro">
+    <div id="quizIntro" class="quiz-view quiz-intro" style="display:none">
       <h2 class="quiz-title">🧠 이미지 상식 퀴즈</h2>
       <p class="quiz-desc">이미지를 보고 정답을 골라 보세요!<br>정답 갯수와 걸린 시간으로 점수가 계산됩니다.</p>
       <div class="quiz-highscore" id="quizHighScore"></div>
       <div class="quiz-intro-btns">
         <button class="btn btn-yellow quiz-big-btn" onclick="startQuiz()">🎮 게임 시작하기</button>
         <button class="btn btn-purple lc-admin-only" onclick="openQuizManager()">⚙ 퀴즈 관리 (관리자)</button>
+        <button class="btn" type="button" onclick="_showQuizView('hub')">← 게임 목록</button>
       </div>
     </div>
 
@@ -7128,8 +7173,30 @@ async function saveQuizToDB(quiz) {
 
 function initQuizPanel() {
   _renderQuizHighScore();
-  if (!quizSession) _showQuizView('intro');
+  if (!quizSession) _showQuizView('hub');
 }
+
+/* 게임 목록: 친구와 하는 게임은 로그인·공개 상태에 따라 안내 */
+async function gameHubLoad() {
+  const note = document.getElementById('ghRelayNote'), btn = document.getElementById('ghRelayBtn');
+  if (!note || !btn) return;
+  const show = (text, label, href) => { note.textContent = text || ''; btn.style.display = label ? '' : 'none'; if (label) { btn.textContent = label; btn.href = href; } };
+  let session = null;
+  try { session = window.BoldAuth ? await BoldAuth.session() : null; } catch (e) {}
+  if (!session) { show('친구와 함께 하는 게임이라 로그인이 필요해요. (만 14세 이상)', '🔑 로그인하고 하기', '/account.html?next=' + encodeURIComponent('/#game')); return; }
+  let mode = 'off';
+  try { mode = (await (await fetch('/api/config')).json()).games || 'off'; } catch (e) {}
+  if (mode === 'off') { show('곧 열려요! 지금은 준비 중이에요.'); return; }
+  try {
+    const d = await BoldAuth.api('/api/game-rooms?games=1');
+    if ((d.games || []).some(g => g.key === 'draw_relay')) { show('방을 만들어 친구를 초대하거나, 친구에게 받은 입장 코드로 들어가요.', '👥 친구와 하기', '/games'); return; }
+  } catch (e) {}
+  show('곧 열려요! 지금은 준비 중이에요.');
+}
+// 주소가 /#game 이면 게임 탭을 바로 연다 (로그인 뒤 돌아올 때 등)
+function _openGameTabFromHash() { if (location.hash === '#game') { const b = document.getElementById('tabGame'); if (b && !b.classList.contains('active')) switchMode('quiz', b); } }
+if (document.readyState === 'complete') setTimeout(_openGameTabFromHash, 0); else window.addEventListener('load', _openGameTabFromHash);
+window.addEventListener('hashchange', _openGameTabFromHash);
 
 function _renderQuizHighScore() {
   const score = load('quiz_highscore') || 0;
@@ -7142,6 +7209,9 @@ function _showQuizView(view) {
   const play = document.getElementById('quizPlay');
   const result = document.getElementById('quizResult');
   if (!intro || !play || !result) return;
+  const hub = document.getElementById('gameHub');
+  if (hub) hub.style.display = view === 'hub' ? 'flex' : 'none';
+  if (view === 'hub') gameHubLoad();
   intro.style.display = view === 'intro' ? 'flex' : 'none';
   play.style.display = view === 'play' ? 'flex' : 'none';
   result.style.display = view === 'result' ? 'flex' : 'none';
