@@ -6,6 +6,8 @@
 //  POST /api/game-rooms {action, ...}
 //    create {game, max_players?} / join {code} / invite {room_id, nickname} / leave {room_id} / kick {room_id, nickname}
 //    ready {room_id, ready} / start {room_id} / state {room_id, state, version} / end {room_id, results:[{nickname, rank?, score?}]}
+//    (그림 릴레이 draw_relay) submit {room_id, step, image|choice} / tick {room_id}  — 진행·점수는 DB 함수(gd_*)가 판단
+//  GET  /api/game-rooms?records=1         내 기록(게임별 판 수·1등·최고 점수·최근 5판) — 나만 봄
 // 채팅은 없음(학생 보호). 초대는 서로 팔로우하거나 같은 그룹인 사람만(DB 함수에서 확인).
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb } from './_lib/common.js';
 import { whoIs, rpc, UUID, gamesMode } from './_lib/social.js';
@@ -22,13 +24,14 @@ const ERR = {
   not_enough_players: '사람이 더 필요해요.', not_all_ready: '모두 준비해야 시작할 수 있어요.',
   not_playing: '진행 중인 게임이 아니에요.', version_conflict: '그사이 바뀐 내용이 있어요. 다시 해 주세요.',
   state_too_large: '게임 정보가 너무 커요.',
+  step_over: '이번 차례가 이미 끝났어요.', invalid_image: '그림을 다시 내 주세요.', invalid_choice: '보기 중에서 골라 주세요.', not_player: '이번 게임 참가자가 아니에요.',
 };
 
 export async function onRequest({ request, env }) {
   const cors = corsHeaders(request, env, 'GET,POST,OPTIONS');
   const json = jsonResponder(cors);
   if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
-  const bad = checkOrigin(request, env, cors) || checkSize(request, 32 * 1024, cors);
+  const bad = checkOrigin(request, env, cors) || checkSize(request, 256 * 1024, cors);
   if (bad) return bad;
   if (!env.SUPABASE_SERVICE_KEY) return json({ error: 'not_configured' }, 503);
 
@@ -54,6 +57,47 @@ export async function onRequest({ request, env }) {
     return ((r.ok ? await r.json() : [])[0] || {}).id || null;
   };
 
+  // 그림 릴레이 화면 정보: 진행 중에는 내 차례 것만(제시어·앞 그림·보기), 끝나면 줄마다 바뀐 과정 전체
+  async function relayView(room, all) {
+    const st = room.state, order = st.order || [], n = st.steps, s = st.step;
+    const nick = Object.fromEntries(all.map(m => [m.user_id, (m.user || {}).nickname || '']));
+    if (st.phase === 'play' && room.status === 'playing') {
+      const u = order.indexOf(me);
+      const c = u < 0 ? null : ((u - s) % n + n) % n;
+      const kind = s < n - 1 ? 'draw' : 'guess';
+      const activeIds = new Set(all.filter(m => !m.left_at).map(m => m.user_id));
+      const [er, cr, pr] = await Promise.all([
+        sb(`/rest/v1/gd_entries?room_id=eq.${room.id}&step=eq.${s}&select=chain,user_id`),
+        c == null ? null : sb(`/rest/v1/gd_chains?room_id=eq.${room.id}&chain=eq.${c}&select=word,options`),
+        c == null || s === 0 ? null : sb(`/rest/v1/gd_entries?room_id=eq.${room.id}&chain=eq.${c}&step=lt.${s}&image=not.is.null&select=image,step&order=step.desc&limit=1`),
+      ]);
+      const done = er && er.ok ? await er.json() : [];
+      const ch = cr && cr.ok ? (await cr.json())[0] || {} : {};
+      const prev = pr && pr.ok ? (await pr.json())[0] || null : null;
+      return {
+        phase: 'play', step: s, steps: n, kind, remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()),
+        playing: u >= 0, submitted: done.some(x => x.user_id === me),
+        done: done.filter(x => activeIds.has(x.user_id)).length, need: order.filter(x => activeIds.has(x)).length,
+        word: s === 0 && kind === 'draw' ? ch.word || null : null,
+        prev_image: s > 0 ? (prev ? prev.image : null) : null,
+        options: kind === 'guess' ? ch.options || [] : null,
+      };
+    }
+    const [cr, er] = await Promise.all([
+      sb(`/rest/v1/gd_chains?room_id=eq.${room.id}&select=chain,word&order=chain.asc`),
+      sb(`/rest/v1/gd_entries?room_id=eq.${room.id}&select=chain,step,user_id,kind,image,choice&order=step.asc`),
+    ]);
+    const chains = cr.ok ? await cr.json() : [], entries = er.ok ? await er.json() : [];
+    return {
+      phase: 'reveal', steps: n, kept: entries.length > 0,
+      chains: chains.map(c => {
+        const items = entries.filter(e => e.chain === c.chain).map(e => ({ step: e.step, nickname: nick[e.user_id] || '(나간 친구)', mine: e.user_id === me, kind: e.kind, image: e.image || null, choice: e.choice || null }));
+        const g = items.find(x => x.kind === 'guess');
+        return { word: c.word, starter: nick[order[c.chain]] || '', items, correct: !!(g && g.choice === c.word) };
+      }),
+    };
+  }
+
   if (request.method === 'GET') {
     const url = new URL(request.url);
     if (url.searchParams.get('games') === '1') {
@@ -61,6 +105,20 @@ export async function onRequest({ request, env }) {
       const r = await sb(`/rest/v1/games?status=in.(${isAdminRole || who.admin ? 'beta,on' : 'on'})&select=key,title,status,min_players,max_players&order=sort.asc`);
       if (r.status === 404 || r.status === 400) return json({ error: 'games_not_ready' }, 503);
       return json({ games: r.ok ? await r.json() : [] });
+    }
+    if (url.searchParams.get('records') === '1') {
+      const r = await sb(`/rest/v1/game_results?user_id=eq.${me}&select=rank,score,created_at,room:game_rooms(game_key,game:games(title))&order=created_at.desc&limit=500`);
+      if (r.status === 404 || r.status === 400) return json({ error: 'games_not_ready' }, 503);
+      const by = {};
+      for (const x of (r.ok ? await r.json() : [])) {
+        const k = (x.room || {}).game_key; if (!k) continue;
+        const g = by[k] = by[k] || { key: k, title: ((x.room || {}).game || {}).title || k, played: 0, wins: 0, best: null, recent: [] };
+        g.played++; if (x.rank === 1) g.wins++;
+        const sc = x.score == null ? null : Number(x.score);
+        if (sc != null && (g.best == null || sc > g.best)) g.best = sc;
+        if (g.recent.length < 5) g.recent.push({ at: x.created_at, rank: x.rank, score: sc });
+      }
+      return json({ records: Object.values(by) });
     }
     const id = url.searchParams.get('id');
     if (!id) {
@@ -84,6 +142,12 @@ export async function onRequest({ request, env }) {
       await rpc(env, 'gm_expire', { p_room: id });
       room = { ...room, status: 'closed', version: room.version + 1 };
     }
+    // 그림 릴레이: 마감이 지났으면 다음 단계로 넘기고 다시 읽음 (서버 시간 기준)
+    if (room.game_key === 'draw_relay' && room.status === 'playing' && room.state && room.state.phase === 'play' && Date.parse(room.state.deadline) <= Date.now()) {
+      await rpc(env, 'gd_advance', { p_room: id });
+      const again = await sb(`/rest/v1/game_rooms?id=eq.${id}&select=*,game:games(key,title,min_players,max_players)`);
+      room = (again.ok ? await again.json() : [])[0] || room;
+    }
     const since = parseInt(url.searchParams.get('since') || '', 10);
     if (since === room.version) return json({ unchanged: true, version: room.version });
     let results = [];
@@ -92,9 +156,10 @@ export async function onRequest({ request, env }) {
       results = (xr.ok ? await xr.json() : []).map(x => ({ nickname: (x.user || {}).nickname || '', rank: x.rank, score: x.score == null ? null : Number(x.score), me: x.user_id === me }));
     }
     const active = all.filter(m => !m.left_at);
+    const relay = room.game_key === 'draw_relay' && room.state && room.state.order ? await relayView(room, all) : null;
     return json({
       id: room.id, version: room.version, status: room.status, code: room.status === 'waiting' ? room.join_code : null,
-      game: room.game, max_players: room.max_players, state: room.state || {}, expires_at: room.expires_at,
+      game: room.game, max_players: room.max_players, state: relay ? {} : (room.state || {}), relay, expires_at: room.expires_at,
       started_at: room.started_at, ended_at: room.ended_at,
       my_role: mine.left_at ? null : mine.role, me: who.profile.nickname,
       members: active.map(m => ({ nickname: (m.user || {}).nickname || '', avatar_url: (m.user || {}).avatar_url || null, role: m.role, ready: m.ready, me: m.user_id === me })),
@@ -134,7 +199,24 @@ export async function onRequest({ request, env }) {
     return out(await rpc(env, 'gm_kick', { p_actor: me, p_room: room, p_target: uid }));
   }
   if (a === 'ready') return out(await rpc(env, 'gm_ready', { p_user: me, p_room: room, p_ready: !!b.ready }));
-  if (a === 'start') return out(await rpc(env, 'gm_start', { p_actor: me, p_room: room }));
+  if (a === 'start') {
+    const gr = await sb(`/rest/v1/game_rooms?id=eq.${room}&select=game_key`);
+    const g = (gr.ok ? await gr.json() : [])[0];
+    if (g && g.game_key === 'draw_relay') return out(await rpc(env, 'gd_start', { p_actor: me, p_room: room }));
+    return out(await rpc(env, 'gm_start', { p_actor: me, p_room: room }));
+  }
+  if (a === 'submit') {
+    const step = parseInt(b.step, 10);
+    if (!Number.isInteger(step)) return fail('step_over');
+    const image = typeof b.image === 'string' ? b.image : null;
+    const choice = typeof b.choice === 'string' ? b.choice.slice(0, 20) : null;
+    if (image && image.length > 200000) return fail('invalid_image');
+    return out(await rpc(env, 'gd_submit', { p_user: me, p_room: room, p_step: step, p_image: image, p_choice: choice }));
+  }
+  if (a === 'tick') {
+    const r = await rpc(env, 'gd_advance', { p_room: room });
+    return json({ ok: true, advanced: !!(r.data && (r.data.step != null || r.data.ended)) });
+  }
   if (a === 'state') {
     const v = parseInt(b.version, 10);
     if (!b.state || typeof b.state !== 'object' || Array.isArray(b.state) || !Number.isInteger(v)) return json({ error: 'invalid_state' }, 400);

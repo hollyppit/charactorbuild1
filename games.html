@@ -23,6 +23,7 @@
   </div>
   <div class="card" id="myCard" style="display:none"><h2>내가 들어가 있는 방</h2><div id="myRooms"></div></div>
   <div class="card" id="gameCard"><h2>방 만들기</h2><div id="games">불러오는 중...</div></div>
+  <div class="card" id="recCard" style="display:none"><h2>🏅 내 기록</h2><p class="hint">내 기록은 나만 볼 수 있어요.</p><div id="records"></div></div>
 </div>
 <script src="/assets/js/auth-client.js"></script>
 <script src="/assets/js/social-ui.js"></script>
@@ -49,6 +50,17 @@
 
   try {
     const [g, mine] = await Promise.all([U.api('/api/game-rooms?games=1'), U.api('/api/game-rooms')]);
+    // 내 기록 (게임별 판 수·1등·최고 점수·최근 5판)
+    U.api('/api/game-rooms?records=1').then(r => {
+      if (!r.records.length) return;
+      $('recCard').style.display = '';
+      r.records.forEach(x => {
+        const box = el('div', 'g-row'); box.style.cssText = 'display:block';
+        box.append(el('b', '', x.title), el('div', 'hint', x.played + '판 · 1등 ' + x.wins + '번' + (x.best != null ? ' · 최고 ' + x.best + '점' : '')));
+        box.append(el('div', 'hint', '최근: ' + x.recent.map(p => (p.rank ? p.rank + '등' : '-') + (p.score != null ? '(' + p.score + '점)' : '')).join(' · ')));
+        $('records').append(box);
+      });
+    }).catch(() => {});
     if (mine.rooms.length) {
       $('myCard').style.display = '';
       mine.rooms.forEach(r => {

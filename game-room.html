@@ -25,6 +25,8 @@
 <script src="/assets/js/social-ui.js"></script>
 <script src="/assets/js/noti-toast.js"></script>
 <script src="/assets/js/game-room.js"></script>
+<script src="/assets/js/draw-pad.js"></script>
+<script src="/assets/js/games/draw-relay.js"></script>
 <script>
 (async function () {
   const U = SocialUI, root = document.getElementById('root'), $ = id => document.getElementById(id), el = U.el;
@@ -96,8 +98,14 @@
       }
     }
 
-    // 게임 화면
-    const pc = $('playCard'); pc.innerHTML = ''; pc.style.display = 'none';
+    // 게임 화면: 게임별 화면(BoldGames[키])이 있으면 그쪽이 그린다 (진행 중에는 그림판이 지워지지 않게 게임 화면이 직접 관리)
+    const pc = $('playCard'), G = window.BoldGames && window.BoldGames[d.game.key];
+    // 게임 중·끝난 뒤에는 게임 칸을 참가자 칸 위로 (휴대폰에서 바로 그릴 수 있게)
+    if (d.status === 'playing' || d.status === 'ended') { if (pc.nextElementSibling !== $('memCard')) $('memCard').before(pc); }
+    else if ($('memCard').nextElementSibling !== pc) $('memCard').after(pc);
+    if (d.status === 'playing' && G) { pc.style.display = ''; G.render(pc, d, link); return; }
+    if (G && G.stop) G.stop();
+    pc.innerHTML = ''; pc.style.display = 'none';
     if (d.status === 'playing') {
       pc.style.display = '';
       const box = el('div', 'play');
@@ -113,6 +121,7 @@
       pc.append(el('h2', '', '🏁 결과'));
       if (!d.results.length) pc.append(el('div', 'hint', '기록된 결과가 없어요.'));
       d.results.forEach(x => pc.append(el('div', 'mem', (x.rank ? x.rank + '등 · ' : '') + x.nickname + (x.me ? ' (나)' : '') + (x.score != null ? ' · ' + x.score + '점' : ''))));
+      if (G && G.reveal) G.reveal(pc, d);
       const again = el('a', 'btn btn-main', '게임 목록으로'); again.href = '/games'; again.style.cssText = 'text-decoration:none;margin-top:10px'; pc.append(again);
     }
     if (d.status === 'closed') { $('memCard').style.display = 'none'; }
