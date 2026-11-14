@@ -1713,7 +1713,7 @@ body.st-active .st-fab{display:block}
 })();
 </script>
 
-<div class="admin-bar">🔧 관리자 모드 — 스테이지 레이어를 드래그해 배치하고 ✏️ 로 이미지를 교체하세요 &nbsp;|&nbsp; <button onclick="openAdminAiPwModal()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">⚙ AI 비밀번호</button></div>
+<div class="admin-bar">🔧 관리자 모드 — 스테이지 레이어를 드래그해 배치하고 ✏️ 로 이미지를 교체하세요 &nbsp;|&nbsp; <button onclick="openAdminAiPwModal()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">⚙ AI 비밀번호</button> <button onclick="openGameAdmin()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">🎮 게임 관리</button></div>
 
 <div class="header">
   <div class="header-left">
@@ -2384,6 +2384,7 @@ try {
     <div id="gameHub" class="quiz-view">
       <h2 class="quiz-title">🎮 게임</h2>
       <p class="quiz-desc">혼자 하는 게임과 친구와 함께 하는 그림 게임이 있어요.</p>
+      <button class="btn btn-purple lc-admin-only" type="button" onclick="openGameAdmin()">⚙ 게임 관리 (퍼즐 그림·제시어·공개 상태)</button>
       <div class="gh-list">
         <div class="gh-card">
           <h3>🧠 이미지 상식 퀴즈</h3>
@@ -3265,6 +3266,17 @@ const STORAGE_KEY = 'charmaker_v4';
 // AI 접근 비밀번호도 서버가 검증하며, 확인된 값을 X-AI-Pw 헤더로 자동 첨부한다.
 window._adminHash = '';
 window._aiPwEntered = '';
+// 🎮 게임 관리: 관리자 페이지(/admin)의 게임 탭을 새 창으로 연다. 새 창이 요청하면 같은 사이트 창에만 관리자 확인값을 건넨다(저장하지 않음)
+let _gameAdminWin = null;
+function openGameAdmin() {
+  if (!window._adminHash) { alert('관리자 로그인이 필요해요.'); return; }
+  _gameAdminWin = window.open('/admin#games', '_blank');
+  if (!_gameAdminWin) location.href = '/admin#games';
+}
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !_gameAdminWin || e.source !== _gameAdminWin) return;
+  if (e.data && e.data.type === 'bold-admin-hash-request' && window._adminHash) _gameAdminWin.postMessage({ type: 'bold-admin-hash', hash: window._adminHash }, location.origin);
+});
 (function () {
   const origFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
