@@ -10971,7 +10971,7 @@ const stS = { cur:'short', proj:{}, hints:{}, loaded:false, batch:false, cancel:
 
 function stNewProj(mode){
   return {
-    title:'', logline:'', styleText:'', durDefault:0, coverDur:2.5, charRef:'', charDesc:'', charPrev:'', charEdit:'', charBusy:false, charErr:'', aspect:'4:3', size:{ w:210, h:297, unit:'mm' }, style:'storybook', answers:{},
+    title:'', logline:'', styleText:'', durDefault:0, coverDur:2.5, charRef:'', charDesc:'', charPrev:'', charEdit:'', charBusy:false, charErr:'', aspect:'custom', size:{ w:165, h:165, unit:'mm' }, style:'storybook', answers:{},
     direct:{ plan:null, hist:[], narr:true, voice:'Sulafat', bgmOn:true, bgm:'auto' },
     cover: stNewScene('cover'),
     scenes: ST_PLANS[mode].scenes.map(s => stNewScene(s.k))
@@ -11076,8 +11076,8 @@ function stRestoreProj(m, sp){
   const np = stNewProj(m);
   Object.assign(np, {
     title:str(sp.title), logline:str(sp.logline), charRef:img(sp.charRef), charDesc:str(sp.charDesc), charPrev:img(sp.charPrev),
-    aspect:(ST_ASPECT[sp.aspect] || (sp.aspect === 'custom' && sp.size)) ? sp.aspect : '4:3',
-    size:sp.size && ST_SIZE_LIMIT[sp.size.unit] && num(sp.size.w) && num(sp.size.h) ? { w:sp.size.w, h:sp.size.h, unit:sp.size.unit } : { w:210, h:297, unit:'mm' },
+    aspect:(ST_ASPECT[sp.aspect] || (sp.aspect === 'custom' && sp.size)) ? sp.aspect : 'custom',
+    size:sp.size && ST_SIZE_LIMIT[sp.size.unit] && num(sp.size.w) && num(sp.size.h) ? { w:sp.size.w, h:sp.size.h, unit:sp.size.unit } : { w:165, h:165, unit:'mm' },
     style:str(sp.style) || 'storybook', styleText:str(sp.styleText), durDefault:num(sp.durDefault) || 0, coverDur:num(sp.coverDur) || 2.5,
     answers:(sp.answers && typeof sp.answers === 'object') ? Object.fromEntries(Object.entries(sp.answers).filter(([, v]) => typeof v === 'string')) : {}
   });
@@ -11178,7 +11178,7 @@ async function stStyleRef(p, i){
 function storySetAspect(a){
   const p = stP();
   p.aspect = a;
-  if (a === 'custom' && !p.size) p.size = { w:210, h:297, unit:'mm' };
+  if (a === 'custom' && !p.size) p.size = { w:165, h:165, unit:'mm' };
   document.querySelectorAll('.st-sizes button[data-asp]').forEach(b => b.classList.toggle('active', b.dataset.asp === a));
   stRenderCustomSize();
   p.scenes.forEach((_, i) => { const box = stEl('stImg' + i); if (box) box.style.aspectRatio = stA(p).css; }); { const cb = stEl('stImgCover'); if (cb) cb.style.aspectRatio = stA(p).css; }
