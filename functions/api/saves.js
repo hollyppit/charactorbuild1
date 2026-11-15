@@ -53,8 +53,16 @@ export async function onRequest(context) {
     const cols = admin
       ? 'id,user_name,password_plain,thumbnail_url,layer_count,canvas_w,canvas_h,created_at'
       : 'id,user_name,thumbnail_url,layer_count,canvas_w,canvas_h,created_at';
-    const res = await sb(`/rest/v1/draw_saves?select=${cols}&order=created_at.desc`);
-    return json(await res.json());
+    // DB 는 한 번에 1,000개까지만 주므로 끝까지 나눠 받기 (최대 20,000개)
+    const PAGE = 1000, all = [];
+    for (let off = 0; off < 20000; off += PAGE) {
+      const res = await sb(`/rest/v1/draw_saves?select=${cols}&order=created_at.desc,id.desc&limit=${PAGE}&offset=${off}`);
+      const rows = await res.json();
+      if (!res.ok || !Array.isArray(rows)) return json(rows, res.status);
+      all.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    return json(all);
   }
 
   // ── POST: 새 저장 ────────────────────────────────────────

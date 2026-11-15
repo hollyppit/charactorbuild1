@@ -8683,7 +8683,7 @@ async function openDrawSavesList() {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
       });
       const thumb = s.thumbnail_url
-        ? `<img src="${s.thumbnail_url}" alt="">`
+        ? `<img src="${s.thumbnail_url}" alt="" loading="lazy">`
         : `<span class="ds-thumb-empty">🖼️</span>`;
       const pwBadge = isAdmin && s.password_plain
         ? `<span style="font-family:var(--f-ui);font-size:11px;color:#aaa">🔑 <b style="color:var(--c-yellow)">${_escHtml(s.password_plain)}</b></span>`
