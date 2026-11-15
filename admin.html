@@ -110,7 +110,15 @@
   };
   $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
   // 제작 화면의 '🎮 게임 관리' 버튼으로 열렸으면: 연 창(같은 사이트)에게 관리자 확인값을 받아 서버에서 다시 확인한 뒤 게임 탭을 바로 연다
-  if (/^#(games|content|settings)/.test(location.hash) && window.opener) {
+  // 제작 화면이 이 창에서 이동해 왔으면(새 창이 막힌 경우) 한 번만 넘긴 확인값을 바로 지우고 서버에서 다시 확인
+  (async () => {
+    let h = ''; try { h = sessionStorage.getItem('bold_admin_handoff') || ''; sessionStorage.removeItem('bold_admin_handoff'); } catch (e) {}
+    if (!/^[0-9a-f]{64}$/.test(h) || HASH) return;
+    const r3 = await fetch('/api/admin-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hash: h }) });
+    if (!r3.ok) return;
+    HASH = h; $('login').style.display = 'none'; $('main').style.display = ''; show(startView()); loadBadges();
+  })();
+  if (window.opener) {
     window.addEventListener('message', async e => {
       if (e.origin !== location.origin || e.source !== window.opener || !e.data || e.data.type !== 'bold-admin-hash') return;
       const h = String(e.data.hash || '');

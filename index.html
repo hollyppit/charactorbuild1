@@ -3272,9 +3272,13 @@ let _gameAdminWin = null;
 function openGameAdmin(sub) { openAdminPage('games' + (sub ? '/' + sub : '')); }
 function openAdminPage(path) {
   if (!window._adminHash) { alert('관리자 로그인이 필요해요.'); return; }
-  const url = '/admin#' + (path || 'games');
+  const url = path ? '/admin#' + path : '/admin';
   _gameAdminWin = window.open(url, '_blank');
-  if (!_gameAdminWin) location.href = url;
+  if (!_gameAdminWin) {
+    // 새 창이 막혔으면 이 창에서 이동: 관리자 확인값을 한 번만 넘기고(관리자 페이지가 읽자마자 지움) 서버에서 다시 확인
+    try { sessionStorage.setItem('bold_admin_handoff', window._adminHash); } catch (e) {}
+    location.href = url;
+  }
 }
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || !_gameAdminWin || e.source !== _gameAdminWin) return;
@@ -8380,6 +8384,7 @@ async function checkPw(){
       window._adminHash=hash;
       errEl.textContent='';
       closeModal('pwModal');enterAdmin();
+      openAdminPage('');   // 관리자 모드로 바꾸면 관리자 페이지를 바로 연다 (제작 화면은 무대 위치 조정·더빙 편집용으로 관리자 모드 유지)
     }else if(res.status===503){
       errEl.textContent='관리자 기능이 아직 설정되지 않았어요.';
     }else{
