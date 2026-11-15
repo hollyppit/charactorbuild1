@@ -34,7 +34,7 @@ const ERR = {
   state_too_large: '게임 정보가 너무 커요.',
   too_fast: '조금 천천히 입력해 주세요.',
   no_team_mode: '이 게임은 팀전을 할 수 없어요.', not_team_mode: '팀전 방이 아니에요.', team_full: '한 팀은 4명까지예요.',
-  team_too_small: '팀마다 2명 이상 있어야 시작할 수 있어요.', team_unbalanced: '두 팀 인원 차이가 1명 이하여야 해요.', not_your_team: '상대 팀 차례예요. 응원해 주세요!',
+  team_too_small: '팀마다 2명 이상 있어야 시작할 수 있어요.', team_equal_needed: '그림 릴레이 팀전은 두 팀 인원이 같아야 해요.', team_unbalanced: '두 팀 인원 차이가 1명 이하여야 해요.', not_your_team: '상대 팀 차례예요. 응원해 주세요!',
   step_over: '이번 차례가 이미 끝났어요.', invalid_image: '그림을 다시 내 주세요.', invalid_choice: '보기 중에서 골라 주세요.', not_player: '이번 게임 참가자가 아니에요.',
 };
 
@@ -74,7 +74,7 @@ export async function onRequest({ request, env }) {
     const nick = Object.fromEntries(all.map(m => [m.user_id, (m.user || {}).nickname || '']));
     if (st.phase === 'play' && room.status === 'playing') {
       const u = order.indexOf(me);
-      const c = u < 0 ? null : ((u - s) % n + n) % n;
+      const c = u < 0 ? null : st.team_k ? Math.floor(u / n) * n + (((u % n) - s) % n + n) % n : ((u - s) % n + n) % n;
       const kind = s < n - 1 ? 'draw' : 'guess';
       const activeIds = new Set(all.filter(m => !m.left_at).map(m => m.user_id));
       const [er, cr, pr] = await Promise.all([
@@ -100,11 +100,11 @@ export async function onRequest({ request, env }) {
     ]);
     const chains = cr.ok ? await cr.json() : [], entries = er.ok ? await er.json() : [];
     return {
-      phase: 'reveal', steps: n, kept: entries.length > 0,
+      phase: 'reveal', steps: n, kept: entries.length > 0, team_k: st.team_k || null,
       chains: chains.map(c => {
         const items = entries.filter(e => e.chain === c.chain).map(e => ({ step: e.step, nickname: nick[e.user_id] || '(나간 친구)', mine: e.user_id === me, kind: e.kind, image: e.image || null, choice: e.choice || null }));
         const g = items.find(x => x.kind === 'guess');
-        return { word: c.word, starter: nick[order[c.chain]] || '', items, correct: !!(g && g.choice === c.word) };
+        return { word: c.word, starter: nick[order[c.chain]] || '', items, correct: !!(g && g.choice === c.word), team: st.team_k ? (c.chain < st.team_k ? 'red' : 'blue') : null, pair: st.team_k ? c.chain % st.team_k : null };
       }),
     };
   }
@@ -134,20 +134,22 @@ export async function onRequest({ request, env }) {
       }));
     }
     const ch = id => chars[id] || { id, label: '?', src: '' };
-    const drawersOf = g => order.filter(u => u !== g);
-    const K = Math.min(4, Math.max(1, order.length - 1));
-    const partOf = (x, u) => { const d = drawersOf(x.guesser_id); const i = d.indexOf(u); return i < 0 ? null : (i + x.round) % K; };
+    const tm = !!room.team_mode, teamOf = Object.fromEntries(all.map(m => [m.user_id, m.team || null]));
+    const drawersOf = g => order.filter(u => u !== g && (!tm || teamOf[u] === teamOf[g]));
+    const Kof = g => Math.min(4, Math.max(1, drawersOf(g).length));
+    const K = tm ? Kof((rounds.find(y => y.round === rd) || {}).guesser_id) : Math.min(4, Math.max(1, order.length - 1));
+    const partOf = (x, u) => { const d = drawersOf(x.guesser_id); const i = d.indexOf(u); return i < 0 ? null : (i + x.round) % Kof(x.guesser_id); };
     const roundParts = x => parts.filter(p => p.round === x.round).sort((a, b) => a.part - b.part).map(p => ({ part: p.part, image: p.image || null, nickname: nick[p.user_id] || '(나간 친구)', mine: p.user_id === me }));
     if (ph === 'reveal' || room.status !== 'playing') {
       return { phase: 'reveal', K, kept: parts.length > 0, rounds: rounds.map(x => ({
-        round: x.round, guesser: nick[x.guesser_id] || '(나간 친구)', answer: ch(x.char_id), guess: x.guess_id ? ch(x.guess_id) : null, correct: !!x.correct, parts: roundParts(x),
+        round: x.round, K: Kof(x.guesser_id), team: tm ? teamOf[x.guesser_id] || null : null, guesser: nick[x.guesser_id] || '(나간 친구)', answer: ch(x.char_id), guess: x.guess_id ? ch(x.guess_id) : null, correct: !!x.correct, parts: roundParts(x),
       })) };
     }
     const x = rounds.find(y => y.round === rd) || {};
-    const role = !order.includes(me) ? 'watch' : x.guesser_id === me ? 'guesser' : 'drawer';
+    const role = !order.includes(me) ? 'watch' : x.guesser_id === me ? 'guesser' : tm && teamOf[me] !== teamOf[x.guesser_id] ? 'rival' : 'drawer';
     const drawers = drawersOf(x.guesser_id).filter(u => activeIds.has(u));
     const out = {
-      phase: ph, round: rd, rounds: st.rounds, K, role, guesser: nick[x.guesser_id] || '', remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()),
+      phase: ph, round: rd, rounds: st.rounds, K, role, team: tm ? teamOf[x.guesser_id] || null : null, my_team: tm ? teamOf[me] || null : null, guesser: nick[x.guesser_id] || '', remaining_ms: Math.max(0, Date.parse(st.deadline) - Date.now()),
       my_part: role === 'drawer' ? partOf(x, me) : null,
       submitted: role === 'drawer' ? parts.some(p => p.round === rd && p.user_id === me) : role === 'guesser' ? !!x.guess_id : false,
       done: parts.filter(p => p.round === rd && drawers.includes(p.user_id)).length, need: drawers.length,

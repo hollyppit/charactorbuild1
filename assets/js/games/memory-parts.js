@@ -46,9 +46,12 @@
     const title = { show: '캐릭터 기억하기', draw: '부위 그리기', guess: '맞히기', result: '정답 공개' }[M.phase] || '';
     top.append(el('b', '', '🧩 기억 조각 그림 · ' + (M.round + 1) + '/' + M.rounds + '라운드 · ' + title));
     S.timerEl = el('b', 'font-size:1.3rem;color:var(--yellow)'); top.append(S.timerEl);
-    box.append(top, el('div', 'font-size:.85rem;opacity:.85', '이번 라운드 맞히는 사람: ' + (M.guesser || '?') + (M.role === 'guesser' ? ' (나)' : '')));
+    const tmLine = el('div', 'font-size:.85rem;opacity:.85', (M.team && window.BoldTeam ? BoldTeam.name(M.team) + ' 차례 · ' : '') + '이번 라운드 맞히는 사람: ' + (M.guesser || '?') + (M.role === 'guesser' ? ' (나)' : ''));
+    if (M.team && window.BoldTeam) { tmLine.style.color = BoldTeam.color(M.team); tmLine.style.opacity = '1'; tmLine.style.fontWeight = '800'; }
+    box.append(top, tmLine);
 
     if (M.role === 'watch') box.append(el('p', '', '이번 게임은 구경하고 있어요.'));
+    else if (M.role === 'rival' && (M.phase === 'show' || M.phase === 'draw')) box.append(el('div', 'text-align:center;padding:24px 0;font-weight:800', '🛡 상대 팀 차례예요. 맞히기 때 그림을 같이 봐요!'));
     else if (M.phase === 'show') {
       if (M.role === 'drawer' && M.character) {
         const hint = el('div', 'text-align:center;font-weight:800', '👀 잘 기억하세요! 3초 뒤에 사라져요');
@@ -136,14 +139,14 @@
     else pc.append(el('div', 'font-size:.85rem;opacity:.8;margin-bottom:8px', '그림은 1일 동안만 남아요. 내 부위 그림은 "내 기기에 저장"을 눌러 주세요.'));
     M.rounds.forEach(x => {
       const card = el('div', 'border-top:2px solid #3a2a3a;padding:12px 0');
-      card.append(el('div', 'font-weight:800;margin-bottom:6px', (x.round + 1) + '라운드 · 맞히는 사람 ' + x.guesser + ' · ' + (x.correct ? '✅ 정답' : '❌ 아쉬워요')));
+      card.append(el('div', 'font-weight:800;margin-bottom:6px', (x.round + 1) + '라운드 · ' + (x.team && window.BoldTeam ? BoldTeam.name(x.team) + ' · ' : '') + '맞히는 사람 ' + x.guesser + ' · ' + (x.correct ? '✅ 정답' : '❌ 아쉬워요')));
       const row = el('div', 'display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start');
-      if (M.kept) { const l = el('div', 'flex:1;min-width:180px;max-width:280px'); l.append(compose(x.parts, M.K, 280)); row.append(l); }
+      if (M.kept) { const l = el('div', 'flex:1;min-width:180px;max-width:280px'); l.append(compose(x.parts, x.K || M.K, 280)); row.append(l); }
       const a = el('div'); a.append(el('div', 'text-align:center;font-size:.8rem', '정답'), charCard(x.answer, 80)); row.append(a);
       if (x.guess && !x.correct) { const g = el('div'); g.append(el('div', 'text-align:center;font-size:.8rem', '고른 답'), charCard(x.guess, 80)); row.append(g); }
       card.append(row);
       const who = el('div', 'font-size:.8rem;opacity:.85;margin-top:6px');
-      who.textContent = '그린 친구: ' + (x.parts.map(p => partName(p.part, M.K) + ' ' + p.nickname + (p.mine ? '(나)' : '')).join(' · ') || '없음');
+      who.textContent = '그린 친구: ' + (x.parts.map(p => partName(p.part, x.K || M.K) + ' ' + p.nickname + (p.mine ? '(나)' : '')).join(' · ') || '없음');
       card.append(who);
       x.parts.filter(p => p.mine && p.image).forEach(p => { const dl = el('a', 'font-size:.75rem;margin-right:8px', '내 그림 저장'); dl.href = p.image; dl.download = '기억조각-' + (x.round + 1) + '라운드.' + (p.image.startsWith('data:image/png') ? 'png' : p.image.startsWith('data:image/jpeg') ? 'jpg' : 'webp'); card.append(dl); });
       pc.append(card);

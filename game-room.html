@@ -110,7 +110,7 @@
         const notReady = d.members.filter(m => m.role !== 'host' && !m.ready).length;
         const enough = d.members.length >= d.game.min_players;
         const nR = d.members.filter(m => m.team === 'red').length, nB = d.members.filter(m => m.team === 'blue').length;
-        const teamBad = d.team_mode ? (Math.min(nR, nB) < 2 ? '팀마다 2명 이상 있어야 시작할 수 있어요.' : Math.abs(nR - nB) > 1 ? '두 팀 인원 차이가 1명 이하여야 해요.' : '') : '';
+        const teamBad = d.team_mode ? (Math.min(nR, nB) < 2 ? '팀마다 2명 이상 있어야 시작할 수 있어요.' : Math.abs(nR - nB) > 1 ? '두 팀 인원 차이가 1명 이하여야 해요.' : d.game.key === 'draw_relay' && nR !== nB ? '그림 릴레이 팀전은 두 팀 인원이 같아야 해요.' : '') : '';
         const st = btn('▶ 게임 시작', () => act('start', d.game.key === 'sketch_quiz' ? { laps: twoLaps ? 2 : 1 } : d.game.key === 'liar_draw' ? { mode: liarMode, rounds: liarRounds } : d.game.key === 'quiz_battle' ? { count: quizCount } : d.game.key === 'jigsaw' ? { level: pzLevel, item: pzItem || undefined } : null), 'btn btn-main'); st.disabled = !!notReady || !enough || !!teamBad;
         acts.append(st);
         // 그림 퍼즐 배틀: 그림·난이도

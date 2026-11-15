@@ -95,9 +95,16 @@
     pc.append(el('h2', '', '🖼 릴레이 다시 보기'));
     if (!R.kept) { pc.append(el('div', 'opacity:.8', '그림은 게임이 끝나고 1일 뒤 지워졌어요.')); return; }
     pc.append(el('div', 'font-size:.85rem;opacity:.8;margin-bottom:8px', '그림은 1일 동안만 남아요. 마음에 드는 내 그림은 "내 기기에 저장"을 눌러 주세요.'));
-    R.chains.forEach(c => {
+    // 팀전: 같은 제시어끼리 빨강·파랑을 나란히 (두 팀 그림 비교)
+    const chains = R.team_k ? [...R.chains].sort((a, b) => (a.pair - b.pair) || (a.team === 'red' ? -1 : 1)) : R.chains;
+    if (R.team_k && window.BoldTeam) {
+      const ok = t => R.chains.filter(c => c.team === t && c.correct).length;
+      pc.append(el('div', 'font-weight:900;margin-bottom:6px', '전달 성공 — ' + BoldTeam.name('red') + ' ' + ok('red') + '/' + R.team_k + ' · ' + BoldTeam.name('blue') + ' ' + ok('blue') + '/' + R.team_k));
+    }
+    chains.forEach(c => {
       const card = el('div', 'border-top:2px solid #3a2a3a;padding:12px 0');
-      card.append(el('div', 'font-weight:800;margin-bottom:6px', '제시어 "' + c.word + '" ' + (c.correct ? '✅ 전달 성공!' : '❌ 전달 실패')));
+      if (c.team && window.BoldTeam) card.style.borderTopColor = BoldTeam.color(c.team);
+      card.append(el('div', 'font-weight:800;margin-bottom:6px', (c.team && window.BoldTeam ? BoldTeam.name(c.team) + ' · ' : '') + '제시어 "' + c.word + '" ' + (c.correct ? '✅ 전달 성공!' : '❌ 전달 실패')));
       const row = el('div', 'display:flex;gap:8px;overflow-x:auto;padding-bottom:6px');
       c.items.forEach(x => {
         const cell = el('div', 'flex:none;width:150px;font-size:.8rem');
