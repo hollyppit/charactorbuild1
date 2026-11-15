@@ -1713,7 +1713,7 @@ body.st-active .st-fab{display:block}
 })();
 </script>
 
-<div class="admin-bar">🔧 관리자 모드 — 스테이지 레이어를 드래그해 배치하고 ✏️ 로 이미지를 교체하세요 &nbsp;|&nbsp; <button onclick="openAdminAiPwModal()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">⚙ AI 비밀번호</button> <button onclick="openGameAdmin()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">🎮 게임 관리</button></div>
+<div class="admin-bar">🔧 관리자 모드 — 스테이지 레이어를 드래그해 배치하고 ✏️ 로 이미지를 교체하세요 &nbsp;|&nbsp; <button onclick="openAdminAiPwModal()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">⚙ AI 비밀번호</button> <button onclick="openAdminPage('games')" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;font-family:var(--f-ui);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.03em">🛠 관리자 페이지</button></div>
 
 <div class="header">
   <div class="header-left">
@@ -3268,10 +3268,13 @@ window._adminHash = '';
 window._aiPwEntered = '';
 // 🎮 게임 관리: 관리자 페이지(/admin)의 게임 탭을 새 창으로 연다. 새 창이 요청하면 같은 사이트 창에만 관리자 확인값을 건넨다(저장하지 않음)
 let _gameAdminWin = null;
-function openGameAdmin() {
+// 관리자 페이지 열기 (path 예: 'games', 'games/quiz', 'content/templates')
+function openGameAdmin(sub) { openAdminPage('games' + (sub ? '/' + sub : '')); }
+function openAdminPage(path) {
   if (!window._adminHash) { alert('관리자 로그인이 필요해요.'); return; }
-  _gameAdminWin = window.open('/admin#games', '_blank');
-  if (!_gameAdminWin) location.href = '/admin#games';
+  const url = '/admin#' + (path || 'games');
+  _gameAdminWin = window.open(url, '_blank');
+  if (!_gameAdminWin) location.href = url;
 }
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || !_gameAdminWin || e.source !== _gameAdminWin) return;
@@ -5672,8 +5675,10 @@ async function openDrawTemplatePicker() {
   openModal('drawTemplateModal');
 }
 
+// 템플릿 관리는 관리자 페이지(🎨 콘텐츠 → 🖼 그리기 템플릿)로 옮김
 async function openDrawTemplateManager() {
   if (!isAdmin) { alert('관리자 모드에서만 사용할 수 있어요.'); return; }
+  if (window._adminHash) { openAdminPage('content/templates'); return; }
   document.getElementById('drawTemplateModalTitle').textContent = '⚙ 템플릿 관리 (관리자)';
   const hint = document.getElementById('drawTemplateHint');
   if (hint) hint.textContent = '드래그로 순서 변경, 폴더에 올려놓으면 이동, 이미지/폴더 사이에 놓으면 순서 변경됩니다';
@@ -7380,8 +7385,10 @@ function exitQuiz() {
 }
 
 /* ── 관리자 UI ── */
+// 퀴즈 관리는 관리자 페이지(🎮 게임 → ❓ 상식 퀴즈)로 옮김
 async function openQuizManager() {
   if (!isAdmin) { alert('관리자 모드에서만 사용 가능합니다.'); return; }
+  if (window._adminHash) { openGameAdmin('quiz'); return; }
   resetQzForm();
   await _refreshQuizAdmin();
   openModal('quizAdminModal');

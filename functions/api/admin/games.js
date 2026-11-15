@@ -41,7 +41,7 @@ export async function onRequest({ request, env }) {
   if (request.method === 'GET') {
     const [words, gr, cr] = await Promise.all([
       allWords(),
-      sb('/rest/v1/games?select=key,title,status,min_players,max_players&order=sort.asc'),
+      sb('/rest/v1/games?select=key,title,status,min_players,max_players,teams&order=sort.asc'),
       sb('/rest/v1/char_items?category=eq.character&select=id'),
     ]);
     if (!words) return json({ error: 'DB(0021)가 아직 적용되지 않았어요.', code: 'not_ready' }, 503);

@@ -6,6 +6,52 @@
 <meta name="robots" content="noindex">
 <title>관리자 · 볼드하다</title>
 <link rel="stylesheet" href="/assets/css/account.css">
+<style>
+  .adm-nav{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px}
+  .adm-nav button{padding:12px 6px;border:3px solid var(--purple);background:transparent;color:var(--text);font:inherit;font-weight:800;font-size:1rem;cursor:pointer;position:relative}
+  .adm-nav button.on{background:var(--purple)}
+  .badge{display:inline-block;min-width:20px;padding:1px 6px;margin-left:4px;background:#ff4f7a;color:#fff;font-size:.75rem;font-weight:900;border-radius:10px}
+  .adm-sub{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:8px;border:2px solid #3a2a3a;background:rgba(255,255,255,.03)}
+  .adm-sub:empty{display:none}
+  .adm-sub .chip{padding:6px 12px}
+  .sec-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .sec-head h2{margin:0}
+  details.box{border:2px solid #3a2a3a;padding:8px 12px;margin:8px 0 14px}
+  details.box>summary{cursor:pointer;font-weight:800;color:var(--yellow);padding:4px 0}
+  details.box[open]>summary{margin-bottom:8px}
+  .gtable{width:100%;border-collapse:collapse;font-size:.9rem}
+  .gtable td,.gtable th{border-bottom:1px solid #3a2a3a;padding:8px 6px;text-align:left;vertical-align:middle}
+  .gtable th{font-size:.8rem;opacity:.75;font-weight:700}
+  .gtable select{width:auto;max-width:100%}
+  .need-ok{color:#5ad17a;font-weight:700}.need-bad{color:#ff7a8a;font-weight:700}
+  .linkbtn{background:none;border:0;color:var(--yellow);text-decoration:underline;cursor:pointer;font:inherit;padding:0}
+  .catbar{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  .catbar .chip{padding:4px 10px;font-size:.8rem}
+  .wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+  .wcard{border:2px solid #3a2a3a;padding:6px 8px;display:flex;flex-direction:column;gap:4px}
+  .wcard.off{opacity:.45}
+  .wcard .w{font-weight:800;display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+  .wcard .w small{font-weight:400;opacity:.7;font-size:.75rem}
+  .wcard .tg{display:flex;gap:4px;flex-wrap:wrap}
+  .tg button,.mini{padding:2px 7px;font-size:.75rem;border:2px solid var(--purple);background:transparent;color:var(--text);cursor:pointer;font-family:inherit}
+  .tg button.on{background:var(--purple)}
+  .mini.danger{border-color:#ff4f7a}
+  .igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .icard{border:2px solid #3a2a3a;padding:6px;font-size:.85rem;display:flex;flex-direction:column;gap:5px}
+  .icard.off{opacity:.45}
+  .icard img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#fff;display:block}
+  .icard .row{display:flex;gap:4px;flex-wrap:wrap}
+  .setgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+  .setcard{border:2px solid #3a2a3a;padding:8px;font-size:.85rem}
+  .setcard.off{opacity:.45}
+  .setcard .thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:6px 0}
+  .setcard .thumbs img{width:100%;aspect-ratio:3/4;object-fit:contain;background:#fff;display:block}
+  .setcard .thumbs div{font-size:.7rem;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qopt{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .qopt input[type=text]{flex:1;margin:0}
+  .qopt input[type=radio]{width:auto;margin:0}
+  @media (max-width:560px){.adm-nav{grid-template-columns:repeat(3,1fr)}.adm-nav button{font-size:.85rem;padding:10px 2px}}
+</style>
 </head>
 <body>
 <div class="wrap wide">
@@ -20,16 +66,9 @@
   </div>
 
   <div id="main" style="display:none">
-    <div class="tabs" id="tabs">
-      <button class="chip on" data-v="pending" type="button">승인 대기</button>
-      <button class="chip" data-v="reports" type="button">신고</button>
-      <button class="chip" data-v="hidden" type="button">가려진 게시물</button>
-      <button class="chip" data-v="published" type="button">공개 중</button>
-      <button class="chip" data-v="rejected" type="button">거절됨</button>
-      <button class="chip" data-v="user" type="button">회원 찾기·제재</button>
-      <button class="chip" data-v="settings" type="button">설정</button>
-      <button class="chip" data-v="games" type="button">🎮 게임</button>
-    </div>
+    <!-- 큰 메뉴(게시물·회원·게임·설정) → 아래 작은 메뉴 -->
+    <div class="adm-nav" id="groups"></div>
+    <div class="adm-sub" id="tabs"></div>
     <div class="card" id="view"></div>
   </div>
 </div>
@@ -53,7 +92,7 @@
     return d;
   }
   async function act(body, okText) {
-    try { await api('/api/admin/social', body); status(okText || '처리했어요 ✓', 'ok'); show(cur); } catch (e) { status(e.message, 'err'); }
+    try { await api('/api/admin/social', body); status(okText || '처리했어요 ✓', 'ok'); show(cur); loadBadges(); } catch (e) { status(e.message, 'err'); }
   }
   const ask = (q, def) => { const v = prompt(q, def || ''); return v == null ? null : v.trim(); };
 
@@ -67,24 +106,60 @@
     const h = await sha256hex(pw);
     const r = await fetch('/api/admin-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hash: h }) });
     if (!r.ok) { $('loginMsg').className = 'msg err'; $('loginMsg').textContent = r.status === 503 ? '관리자 기능이 설정되지 않았어요.' : '비밀번호가 틀렸어요.'; return; }
-    HASH = h; $('pw').value = ''; $('login').style.display = 'none'; $('main').style.display = ''; show(location.hash === '#games' ? 'games' : 'pending');
+    HASH = h; $('pw').value = ''; $('login').style.display = 'none'; $('main').style.display = ''; show(startView()); loadBadges();
   };
   $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
   // 제작 화면의 '🎮 게임 관리' 버튼으로 열렸으면: 연 창(같은 사이트)에게 관리자 확인값을 받아 서버에서 다시 확인한 뒤 게임 탭을 바로 연다
-  if (location.hash === '#games' && window.opener) {
+  if (/^#(games|content|settings)/.test(location.hash) && window.opener) {
     window.addEventListener('message', async e => {
       if (e.origin !== location.origin || e.source !== window.opener || !e.data || e.data.type !== 'bold-admin-hash') return;
       const h = String(e.data.hash || '');
       if (!/^[0-9a-f]{64}$/.test(h) || HASH) return;
       const r2 = await fetch('/api/admin-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hash: h }) });
       if (!r2.ok) return;
-      HASH = h; $('login').style.display = 'none'; $('main').style.display = ''; show('games');
+      HASH = h; $('login').style.display = 'none'; $('main').style.display = ''; show(startView()); loadBadges();
     });
     try { window.opener.postMessage({ type: 'bold-admin-hash-request' }, location.origin); } catch (e) {}
   }
 
   let cur = 'pending';
-  $('tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; show(b.dataset.v); };
+  // 큰 메뉴 → 작은 메뉴 [키, 이름]
+  const NAV = [
+    ['posts', '📋 게시물', [['pending', '승인 대기'], ['reports', '🚩 신고'], ['hidden', '가려진 게시물'], ['published', '공개 중'], ['rejected', '거절됨']]],
+    ['users', '👤 회원', [['user', '회원 찾기·제재']]],
+    ['games', '🎮 게임', [['games', '📊 현황·공개'], ['g_words', '🔤 제시어'], ['g_memory', '🧠 닮은꼴 세트'], ['g_puzzle', '🧩 퍼즐 그림'], ['g_quiz', '❓ 상식 퀴즈']]],
+    ['content', '🎨 콘텐츠', [['c_decor', '🧍 꾸미기 요소'], ['c_tpl', '🖼 그리기 템플릿']]],
+    ['settings', '⚙ 설정', [['settings', '게시 설정'], ['s_aipw', '🔑 AI 비밀번호'], ['s_aiuse', '📊 AI 사용량·한도']]],
+  ];
+  const HASHV = { c_decor: '#content/decor', c_tpl: '#content/templates', s_aipw: '#settings/ai-password', s_aiuse: '#settings/ai-usage', games: '#games', g_words: '#games/words', g_memory: '#games/memory', g_puzzle: '#games/puzzle', g_quiz: '#games/quiz' };
+  const lastSub = {};
+  const badge = { pending: 0, reports: 0 };
+  const groupOf = v => NAV.find(g => g[2].some(t => t[0] === v)) || NAV[0];
+  function startView() { const h = location.hash; const hit = Object.entries(HASHV).find(([, x]) => x === h); return hit ? hit[0] : h.startsWith('#games') ? 'games' : h.startsWith('#content') ? 'c_decor' : 'pending'; }
+  function drawNav(v) {
+    const grp = groupOf(v); lastSub[grp[0]] = v;
+    const G = $('groups'); G.innerHTML = '';
+    NAV.forEach(g => {
+      const b = el('button', g === grp ? 'on' : '', g[1]); b.type = 'button';
+      const n = g[0] === 'posts' ? badge.pending + badge.reports : 0;
+      if (n) b.append(el('span', 'badge', String(n)));
+      b.onclick = () => show(lastSub[g[0]] || g[2][0][0]);
+      G.append(b);
+    });
+    const T = $('tabs'); T.innerHTML = '';
+    if (grp[2].length > 1) grp[2].forEach(([k, t]) => {
+      const b = el('button', 'chip' + (k === v ? ' on' : ''), t); b.type = 'button';
+      if (badge[k]) b.append(el('span', 'badge', String(badge[k])));
+      b.onclick = () => show(k); T.append(b);
+    });
+    try { history.replaceState(null, '', location.pathname + (HASHV[v] || '')); } catch (e) {}
+  }
+  async function loadBadges() {
+    try {
+      const [p, r] = await Promise.all([api('/api/admin/social?view=pending'), api('/api/admin/social?view=reports')]);
+      badge.pending = (p.posts || []).length; badge.reports = (r.reports || []).length; drawNav(cur);
+    } catch (e) {}
+  }
 
   // 게시물 그림 전체 보기
   async function viewMedia(post) {
@@ -156,7 +231,7 @@
 
   async function show(v, opt) {
     cur = v;
-    document.querySelectorAll('#tabs .chip').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+    drawNav(v);
     const view = $('view'); view.innerHTML = '불러오는 중...';
     try {
       if (['pending', 'hidden', 'published', 'rejected'].includes(v)) {
@@ -237,9 +312,15 @@
         const save = el('button', 'btn btn-main', '설정 저장'); save.type = 'button'; save.style.marginTop = '14px';
         save.onclick = () => act({ action: 'settings', settings: { require_approval: rc.checked, auto_hide_reports: ah.value, daily_post_limit: dp.value, daily_report_limit: dr.value, ...(hc ? { hourly_comment_limit: hc.value } : {}) } }, '저장했어요');
         view.append(save);
-      } else if (v === 'games') {
-        await renderGames(view, opt || {});
-      }
+      } else if (v === 'games') await renderGameOverview(view);
+      else if (v === 'g_words') await renderWords(view, opt || {});
+      else if (v === 'g_memory') await renderMemoryTab(view);
+      else if (v === 'g_puzzle') await renderPuzzleTab(view);
+      else if (v === 'g_quiz') await renderQuiz(view);
+      else if (v === 'c_decor') await renderDecor(view, opt || {});
+      else if (v === 'c_tpl') await renderTemplates(view, opt || {});
+      else if (v === 's_aipw') await renderAiPw(view);
+      else if (v === 's_aiuse') await renderAiUsage(view);
     } catch (e) { view.textContent = e.message; }
   }
 
@@ -290,16 +371,18 @@
         status('올렸어요 ✓', 'ok'); renderPuzzles(box);
       } catch (e) { status(e.message, 'err'); up.disabled = false; }
     };
-    box.append(el('label', '', '그림 파일'), file, el('label', '', '제목'), title, up);
-    const grid = el('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:12px';
+    const mk = el('details', 'box'); mk.open = !puz.length;
+    mk.append(el('summary', '', '➕ 퍼즐 그림 올리기'), el('label', '', '그림 파일'), file, el('label', '', '제목'), title, up);
+    box.append(mk);
+    const grid = el('div', 'igrid');
     if (!puz.length) grid.append(el('div', 'hint', '아직 퍼즐 그림이 없어요.'));
     puz.forEach(p => {
       const hidden = p.src_back === 'hidden';
-      const c = el('div'); c.style.cssText = 'border:2px solid #3a2a3a;padding:6px;font-size:.85rem' + (hidden ? ';opacity:.5' : '');
-      const im = el('img'); im.src = p.src; im.alt = ''; im.loading = 'lazy'; im.style.cssText = 'width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#fff';
-      c.append(im, el('div', '', (p.label || '(제목 없음)') + (hidden ? ' (숨김)' : '')));
-      const acts = el('div', 'acts');
-      const b = (t, fn) => { const x2 = el('button', 'chip', t); x2.type = 'button'; x2.onclick = fn; acts.append(x2); };
+      const c = el('div', 'icard' + (hidden ? ' off' : ''));
+      const im = el('img'); im.src = p.src; im.alt = ''; im.loading = 'lazy';
+      c.append(im, el('b', '', (p.label || '(제목 없음)') + (hidden ? ' (숨김)' : '')));
+      const acts = el('div', 'row');
+      const b = (t, fn) => { const x2 = el('button', 'mini' + (t.includes('지우기') ? ' danger' : ''), t); x2.type = 'button'; x2.onclick = fn; acts.append(x2); };
       b(hidden ? '다시 보이기' : '숨기기', async () => { try { await itemsCall('PUT', { id: p.id, src_back: hidden ? '' : 'hidden' }); renderPuzzles(box); } catch (e) { status(e.message, 'err'); } });
       b('제목 고치기', async () => { const t = ask('제목', p.label || ''); if (!t) return; try { await itemsCall('PUT', { id: p.id, label: t.slice(0, 40) }); renderPuzzles(box); } catch (e) { status(e.message, 'err'); } });
       b('🗑 지우기', async () => { if (!confirm('"' + (p.label || '그림') + '" 퍼즐 그림을 지울까요?')) return; try { await itemsCall('DELETE', { id: p.id }); renderPuzzles(box); } catch (e) { status(e.message, 'err'); } });
@@ -478,14 +561,17 @@
         status(e.message + ' 저장된 일부는 아래 목록에서 지워 주세요.', 'err'); busy = false; save.disabled = false; renderMemory(box);
       }
     };
-    box.append(el('label', '', '세트 이름'), name, el('label', '', '캐릭터 설명 (AI용)'), desc, grid);
-    const bar = el('div', 'acts'); bar.style.marginTop = '8px'; bar.append(auto, all3, save); box.append(bar, autoMsg);
-    box.append(el('p', 'hint', 'AI가 다른 곳까지 바꾸거나 왼쪽·오른쪽을 헷갈릴 때가 있어요. 저장 전에 눈으로 확인하고, 이상한 장은 그 장만 다시 만들어 주세요. 그림 1장 만들 때마다 AI 비용이 들어요.'));
+    const mk = el('details', 'box'); mk.open = !mem.length;
+    mk.append(el('summary', '', '➕ 새 세트 만들기 (AI가 알아서 / 직접)'));
+    mk.append(el('label', '', '세트 이름'), name, el('label', '', '캐릭터 설명 (AI용)'), desc, grid);
+    const bar = el('div', 'acts'); bar.style.marginTop = '8px'; bar.append(auto, all3, save); mk.append(bar, autoMsg);
+    box.append(mk);
+    mk.append(el('p', 'hint', 'AI가 다른 곳까지 바꾸거나 왼쪽·오른쪽을 헷갈릴 때가 있어요. 저장 전에 눈으로 확인하고, 이상한 장은 그 장만 다시 만들어 주세요. 그림 1장 만들 때마다 AI 비용이 들어요.'));
 
     // 저장된 세트
     const sets = {};
     mem.forEach(x => { const s = x.id.split('_')[1]; (sets[s] = sets[s] || []).push(x); });
-    const list = el('div'); list.style.cssText = 'display:flex;flex-direction:column;gap:10px;margin-top:12px';
+    const list = el('div', 'setgrid');
     const keys = Object.keys(sets).sort().reverse();
     if (!keys.length) list.append(el('div', 'hint', '아직 세트가 없어요. 세트가 없을 때는 기본 캐릭터로 게임해요.'));
     keys.forEach(k => {
@@ -493,17 +579,17 @@
       const hidden = items.every(x => x.src_back === 'hidden');
       const nm = String(items[0].label || '').split(' — ')[0];
       const diffOf = x => String(x.label || '').split(' — ').slice(1).join(' — ') || '기본';
-      const c = el('div'); c.style.cssText = 'border:2px solid #3a2a3a;padding:6px;font-size:.85rem' + (hidden ? ';opacity:.5' : '');
-      c.append(el('div', '', nm + ' (' + items.length + '장)' + (hidden ? ' (숨김)' : '') + (items.length < 4 ? ' — 4장이 안 돼서 게임에 안 나와요' : '')));
-      const row = el('div'); row.style.cssText = 'display:flex;gap:6px;overflow-x:auto;margin:6px 0';
+      const c = el('div', 'setcard' + (hidden ? ' off' : ''));
+      c.append(el('b', '', nm + ' (' + items.length + '장)' + (hidden ? ' (숨김)' : '') + (items.length < 4 ? ' — 4장이 안 돼서 게임에 안 나와요' : '')));
+      const row = el('div', 'thumbs');
       items.forEach(x => {
-        const f = el('div'); f.style.cssText = 'width:110px;flex:none;text-align:center';
-        const im = el('img'); im.src = x.src; im.alt = ''; im.loading = 'lazy'; im.style.cssText = 'width:110px;aspect-ratio:3/4;object-fit:contain;background:#fff;display:block';
+        const f = el('div');
+        const im = el('img'); im.src = x.src; im.alt = ''; im.loading = 'lazy'; im.title = diffOf(x);
         f.append(im, el('div', '', diffOf(x)));
         row.append(f);
       });
       const acts = el('div', 'acts');
-      const b = (t, fn) => { const x2 = el('button', 'chip', t); x2.type = 'button'; x2.onclick = fn; acts.append(x2); };
+      const b = (t, fn) => { const x2 = el('button', 'mini' + (t.includes('지우기') ? ' danger' : ''), t); x2.type = 'button'; x2.onclick = fn; acts.append(x2); };
       b(hidden ? '다시 보이기' : '숨기기', async () => { try { for (const x of items) await itemsCall('PUT', { id: x.id, src_back: hidden ? '' : 'hidden' }); renderMemory(box); } catch (e) { status(e.message, 'err'); } });
       b('이름 고치기', async () => {
         const t = memClean(ask('세트 이름', nm)); if (!t) return;
@@ -514,43 +600,297 @@
     });
     box.append(list);
   }
-  async function renderGames(view, opt) {
-    const d = await api('/api/admin/games');
+  // ── 🎨 콘텐츠: 공통 도우미 ──
+  // 투명 배경을 살리려고 PNG 그대로(4MB 넘으면 긴 쪽 1600px PNG 로 줄임)
+  function readImage(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const data = String(r.result || '');
+        if (data.length < 5.5e6) return res(data);
+        const im = new Image();
+        im.onload = () => {
+          const s = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+          const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/png'));
+        };
+        im.onerror = () => rej(new Error('그림을 읽지 못했어요.')); im.src = data;
+      };
+      r.onerror = () => rej(new Error('그림을 읽지 못했어요.')); r.readAsDataURL(file);
+    });
+  }
+  async function uploadData(dataUrl, path) {
+    const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: JSON.stringify({ fileName: path, fileData: dataUrl }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.url) throw new Error(j.error === 'file_too_large' ? '그림이 너무 커요 (5MB까지).' : j.error === 'invalid_file_type' ? 'PNG·JPG·WEBP 그림만 올릴 수 있어요.' : '그림을 올리지 못했어요.');
+    return j.url;
+  }
+  const extOf = d => d.startsWith('data:image/jpeg') ? 'jpg' : d.startsWith('data:image/webp') ? 'webp' : 'png';
+  const pickFile = () => new Promise(res => { const f = el('input'); f.type = 'file'; f.accept = 'image/png,image/jpeg,image/webp'; f.onchange = () => res(f.files && f.files[0]); f.click(); });
+  const miniBtn = (t, fn, cls) => { const x = el('button', 'mini' + (cls ? ' ' + cls : ''), t); x.type = 'button'; x.onclick = fn; return x; };
+
+  // ── 🧍 캐릭터 꾸미기 요소 (char_items: bg·character·effect·prop) ──
+  const DECOR = [['bg', '🌄 배경'], ['character', '🧍 캐릭터'], ['effect', '✨ 효과'], ['prop', '🎒 소품']];
+  async function renderDecor(view, opt) {
+    const all = await itemsCall('GET');
+    const items = Array.isArray(all) ? all : [];
+    let cat = opt.cat && DECOR.some(d => d[0] === opt.cat) ? opt.cat : 'character';
     view.innerHTML = '';
-    const GN = Object.fromEntries(d.word_games.map(g => [g.key, g.title]));
-    // 공개 상태
-    view.append(el('h2', '', '게임 공개 상태'));
-    view.append(el('p', 'sub', '전체 스위치(Cloudflare 환경변수 GAMES_ENABLED)가 켜져 있어야 보여요. 학생들에게 "공개"하기 전에는 개인정보 처리방침 공고가 필요해요.'));
+    const head = el('div', 'sec-head'); head.append(el('h2', '', '🧍 캐릭터 꾸미기 요소')); view.append(head);
+    view.append(el('p', 'hint', '제작 화면 "캐릭터 꾸미기"에서 고르는 배경·캐릭터·효과·소품이에요. 투명 배경 PNG가 좋아요. 무대 위 크기·위치 조정은 제작 화면 ADMIN 모드에서 그림을 놓고 "✅ DB저장"으로 해요.'));
+    const bar = el('div', 'catbar'); view.append(bar);
+    const body = el('div'); view.append(body);
+    const draw = () => {
+      bar.innerHTML = '';
+      DECOR.forEach(([k, t]) => { const b = el('button', 'chip' + (k === cat ? ' on' : ''), t + ' ' + items.filter(x => x.category === k).length); b.type = 'button'; b.onclick = () => { cat = k; draw(); }; bar.append(b); });
+      body.innerHTML = '';
+      const list = items.filter(x => x.category === cat);
+      // 추가
+      const mk = el('details', 'box'); mk.open = !list.length;
+      mk.append(el('summary', '', '➕ ' + DECOR.find(d => d[0] === cat)[1].slice(2) + ' 추가'));
+      const file = el('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp';
+      const prev = el('img'); prev.alt = ''; prev.style.cssText = 'max-width:200px;max-height:160px;display:none;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/16px 16px;margin:6px 0';
+      let data = '';
+      file.onchange = async () => { const f = file.files && file.files[0]; if (!f) return; try { data = await readImage(f); prev.src = data; prev.style.display = 'block'; } catch (e) { status(e.message, 'err'); } };
+      const nm = el('input'); nm.type = 'text'; nm.maxLength = 30; nm.placeholder = '이름 (예: 우주 배경)';
+      const em = el('input'); em.type = 'text'; em.maxLength = 4; em.placeholder = '아이콘 이모지 (선택, 예: 🚀)';
+      const be = cat === 'bg' ? el('input') : null; if (be) { be.type = 'text'; be.maxLength = 4; be.placeholder = '배경 미리보기 이모지 (선택)'; }
+      const save = el('button', 'btn btn-main', '추가하기'); save.type = 'button';
+      save.onclick = async () => {
+        if (!nm.value.trim()) return status('이름을 적어 주세요', 'err');
+        if (!data) return status('그림을 골라 주세요', 'err');
+        save.disabled = true; status('올리는 중...');
+        try {
+          const id = 'custom_' + Date.now();
+          const src = await uploadData(data, cat + '/' + id + '_front.' + extOf(data));
+          await itemsCall('POST', { id, category: cat, label: nm.value.trim().slice(0, 30), emoji: em.value.trim() || '🖼️', src, src_back: '', bg_emoji: be ? be.value.trim() : '', sort_order: 0 });
+          items.push({ id, category: cat, label: nm.value.trim(), emoji: em.value.trim() || '🖼️', src, bg_emoji: be ? be.value.trim() : '' });
+          status('추가했어요 ✓', 'ok'); draw();
+        } catch (e) { status(e.message, 'err'); save.disabled = false; }
+      };
+      mk.append(el('label', '', '그림'), file, prev, el('label', '', '이름'), nm, em);
+      if (be) mk.append(be);
+      mk.append(save);
+      body.append(mk);
+      const grid = el('div', 'igrid'); body.append(grid);
+      if (!list.length) grid.append(el('div', 'empty', '아직 없어요.'));
+      list.forEach(x => {
+        const c = el('div', 'icard');
+        const im = el('img'); im.src = x.src || ''; im.alt = ''; im.loading = 'lazy'; im.style.background = 'repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/16px 16px';
+        c.append(im, el('b', '', (x.emoji ? x.emoji + ' ' : '') + (x.label || '(이름 없음)')));
+        const row = el('div', 'row');
+        row.append(miniBtn('✏️ 이름', async () => {
+          const t = ask('이름', x.label || ''); if (!t) return;
+          const e2 = ask('아이콘 이모지', x.emoji || ''); if (e2 == null) return;
+          try { await itemsCall('PUT', { id: x.id, label: t.slice(0, 30), emoji: e2 || '🖼️' }); x.label = t; x.emoji = e2 || '🖼️'; status('고쳤어요', 'ok'); draw(); } catch (e) { status(e.message, 'err'); }
+        }));
+        row.append(miniBtn('🖼 그림 바꾸기', async () => {
+          const f = await pickFile(); if (!f) return;
+          try { status('올리는 중...'); const d2 = await readImage(f); const src = await uploadData(d2, cat + '/' + x.id + '_front_' + Date.now() + '.' + extOf(d2)); await itemsCall('PUT', { id: x.id, src }); x.src = src; status('바꿨어요 ✓', 'ok'); draw(); } catch (e) { status(e.message, 'err'); }
+        }));
+        row.append(miniBtn('🗑', async () => {
+          if (!confirm('"' + (x.label || '') + '"을(를) 지울까요? 제작 화면에서 더 고를 수 없어요.')) return;
+          try { await itemsCall('DELETE', { id: x.id }); items.splice(items.indexOf(x), 1); status('지웠어요', 'ok'); draw(); } catch (e) { status(e.message, 'err'); }
+        }, 'danger'));
+        c.append(row); grid.append(c);
+      });
+    };
+    draw();
+  }
+
+  // ── 🖼 직접 그리기 템플릿 (char_items draw_template: bg_emoji 'folder'=폴더, src_back=부모 폴더 id, sort_order=순서) ──
+  async function renderTemplates(view, opt) {
+    const all = await itemsCall('GET');
+    const T = (Array.isArray(all) ? all : []).filter(r => r.category === 'draw_template')
+      .map(r => ({ id: r.id, label: r.label || '템플릿', src: r.src || '', kind: r.bg_emoji === 'folder' ? 'folder' : 'image', parent: r.src_back || null, sort: typeof r.sort_order === 'number' ? r.sort_order : 0 }));
+    let curF = opt.folder && T.some(t => t.id === opt.folder && t.kind === 'folder') ? opt.folder : null;
+    const byId = id => T.find(t => t.id === id);
+    const kids = p => T.filter(t => (t.parent || null) === p).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1) || a.sort - b.sort);
+    const descendants = id => { const out = []; const walk = p => T.filter(t => t.parent === p).forEach(t => { out.push(t); walk(t.id); }); walk(id); return out; };
+    const pathOf = id => { const p = []; let c = byId(id); const seen = new Set(); while (c && !seen.has(c.id)) { seen.add(c.id); p.unshift(c); c = c.parent ? byId(c.parent) : null; } return p; };
+    view.innerHTML = '';
+    const head = el('div', 'sec-head'); head.append(el('h2', '', '🖼 직접 그리기 템플릿 (' + T.filter(t => t.kind === 'image').length + '개)')); view.append(head);
+    view.append(el('p', 'hint', '제작 화면 "직접 그리기"의 템플릿 창에 보여요. 폴더로 묶을 수 있어요.'));
+    const crumbs = el('div', 'catbar'); const tools = el('div', 'acts'); const grid = el('div', 'igrid'); grid.style.marginTop = '8px';
+    view.append(crumbs, tools, grid);
+    const draw = () => {
+      crumbs.innerHTML = '';
+      const home = el('button', 'chip' + (curF ? '' : ' on'), '🏠 처음'); home.type = 'button'; home.onclick = () => { curF = null; draw(); }; crumbs.append(home);
+      if (curF) pathOf(curF).forEach(f => { const b = el('button', 'chip' + (f.id === curF ? ' on' : ''), '📁 ' + f.label); b.type = 'button'; b.onclick = () => { curF = f.id; draw(); }; crumbs.append(b); });
+      tools.innerHTML = '';
+      const nextSort = () => Math.max(0, ...kids(curF).map(k => k.sort)) + 1;
+      tools.append(miniBtn('📁 새 폴더', async () => {
+        const n = ask('폴더 이름'); if (!n) return;
+        const row = { id: 'dtpl_f_' + Date.now(), label: n.slice(0, 30), kind: 'folder', parent: curF, sort: nextSort(), src: '' };
+        try { await itemsCall('POST', { id: row.id, category: 'draw_template', label: row.label, emoji: '📁', src: '', src_back: curF || '', bg_emoji: 'folder', sort_order: row.sort }); T.push(row); draw(); } catch (e) { status(e.message, 'err'); }
+      }));
+      tools.append(miniBtn('➕ 그림 올리기 (여러 장 가능)', async () => {
+        const f = el('input'); f.type = 'file'; f.accept = 'image/png,image/jpeg,image/webp'; f.multiple = true;
+        f.onchange = async () => {
+          const files = [...(f.files || [])]; if (!files.length) return;
+          let s = nextSort(), ok = 0;
+          for (const file of files) {
+            try {
+              status('올리는 중... ' + (ok + 1) + '/' + files.length);
+              const d2 = await readImage(file);
+              const id = 'dtpl_' + Date.now() + '_' + ok;
+              const src = await uploadData(d2, 'draw_template_' + Date.now() + '_' + ok + '.' + extOf(d2));
+              const label = file.name.replace(/\.[^.]+$/, '').slice(0, 30) || '템플릿';
+              await itemsCall('POST', { id, category: 'draw_template', label, emoji: '🖼️', src, src_back: curF || '', bg_emoji: '', sort_order: s });
+              T.push({ id, label, src, kind: 'image', parent: curF, sort: s }); s++; ok++;
+            } catch (e) { status(file.name + ': ' + e.message, 'err'); }
+          }
+          status(ok + '장 올렸어요 ✓ (이름은 파일 이름 — 바꿀 수 있어요)', 'ok'); draw();
+        };
+        f.click();
+      }));
+      grid.innerHTML = '';
+      const list = kids(curF);
+      if (!list.length) grid.append(el('div', 'empty', '비어 있어요.'));
+      list.forEach((t, i) => {
+        const c = el('div', 'icard');
+        if (t.kind === 'folder') {
+          const fb = el('button', '', '📁'); fb.type = 'button'; fb.style.cssText = 'font-size:3rem;background:#2d0040;border:0;aspect-ratio:4/3;cursor:pointer;color:#fff';
+          fb.onclick = () => { curF = t.id; draw(); }; c.append(fb, el('b', '', t.label + ' (' + descendants(t.id).filter(x => x.kind === 'image').length + ')'));
+        } else { const im = el('img'); im.src = t.src; im.alt = ''; im.loading = 'lazy'; c.append(im, el('b', '', t.label)); }
+        const row = el('div', 'row');
+        const swap = async j => {
+          const o = list[j]; if (!o || o.kind !== t.kind) return;
+          const a = t.sort, b2 = o.sort === a ? a + (j > i ? 1 : -1) : o.sort;
+          try { await itemsCall('PUT', { id: t.id, sort_order: b2 }); await itemsCall('PUT', { id: o.id, sort_order: a }); t.sort = b2; o.sort = a; draw(); } catch (e) { status(e.message, 'err'); }
+        };
+        row.append(miniBtn('◀', () => swap(i - 1)), miniBtn('▶', () => swap(i + 1)));
+        row.append(miniBtn('✏️', async () => { const n = ask('이름', t.label); if (!n) return; try { await itemsCall('PUT', { id: t.id, label: n.slice(0, 30) }); t.label = n; draw(); } catch (e) { status(e.message, 'err'); } }));
+        // 옮기기: 폴더 고르기 (자기 자신·하위 폴더 빼고)
+        row.append(miniBtn('📂 옮기기', async () => {
+          const bad = new Set([t.id, ...descendants(t.id).map(x => x.id)]);
+          const folders = T.filter(x => x.kind === 'folder' && !bad.has(x.id));
+          const names = ['0. 🏠 처음', ...folders.map((x, k) => (k + 1) + '. ' + pathOf(x.id).map(p => p.label).join(' / '))].join('\n');
+          const pick = ask('어디로 옮길까요? 번호를 적어 주세요\n' + names); if (pick == null || pick === '') return;
+          const k = parseInt(pick, 10); if (!(k >= 0 && k <= folders.length)) return status('번호를 확인해 주세요', 'err');
+          const dest = k === 0 ? null : folders[k - 1].id;
+          try { await itemsCall('PUT', { id: t.id, src_back: dest || '' }); t.parent = dest; status('옮겼어요', 'ok'); draw(); } catch (e) { status(e.message, 'err'); }
+        }));
+        row.append(miniBtn('🗑', async () => {
+          const ds = descendants(t.id);
+          if (!confirm(t.kind === 'folder' ? '"' + t.label + '" 폴더' + (ds.length ? '와 안의 ' + ds.length + '개' : '') + '를 지울까요?' : '"' + t.label + '" 템플릿을 지울까요?')) return;
+          try { for (const d2 of ds) await itemsCall('DELETE', { id: d2.id }); await itemsCall('DELETE', { id: t.id }); [t, ...ds].forEach(x => T.splice(T.indexOf(x), 1)); status('지웠어요', 'ok'); draw(); } catch (e) { status(e.message, 'err'); }
+        }, 'danger'));
+        c.append(row); grid.append(c);
+      });
+    };
+    draw();
+  }
+
+  // ── 🔑 AI 비밀번호 (비회원이 AI를 쓸 때 묻는 값. 회원은 묻지 않음) ──
+  async function renderAiPw(view) {
+    const all = await itemsCall('GET');
+    const row = (Array.isArray(all) ? all : []).find(r => r.category === '__app_settings' && r.id === 'ai_access_pw');
+    const cur = row ? row.label || '' : '';
+    view.innerHTML = '';
+    view.append(el('h2', '', '🔑 AI 비밀번호'));
+    view.append(el('p', 'hint', '로그인하지 않은 사람이 AI 기능을 쓸 때 물어보는 비밀번호예요. 로그인한 회원은 묻지 않고 하루 한도로 관리해요. 비우면 비회원도 비밀번호 없이 써요(비회원 하루 한도는 그대로).'));
+    view.append(el('p', '', '지금: ' + (cur ? '"' + cur + '"' : '없음 (비밀번호 없이 사용)')));
+    const inp = el('input'); inp.type = 'text'; inp.maxLength = 40; inp.value = cur; inp.placeholder = '새 비밀번호 (비우면 해제)';
+    const save = el('button', 'btn btn-main', '저장'); save.type = 'button';
+    save.onclick = async () => {
+      try { await itemsCall('POST', { id: 'ai_access_pw', category: '__app_settings', label: inp.value.trim(), sort_order: 0 }); status('저장했어요 ✓', 'ok'); renderAiPw(view); } catch (e) { status(e.message, 'err'); }
+    };
+    view.append(inp, save);
+  }
+
+  // ── 📊 AI 사용량·하루 한도 ──
+  async function renderAiUsage(view) {
+    const r = await fetch('/api/ai-usage?admin=1&days=14', { headers: { 'X-Admin-Hash': HASH } });
+    const d = await r.json().catch(() => ({}));
+    view.innerHTML = '';
+    view.append(el('h2', '', '📊 AI 사용량·하루 한도'));
+    if (!r.ok) { view.append(el('div', 'msg err', d.error === 'usage_not_ready' ? 'AI 사용 기록 기능이 아직 설치되지 않았어요.' : '불러오지 못했어요 (' + (d.error || r.status) + ')')); return; }
+    const L = d.limits || {}, cost = L.cost || {};
+    view.append(el('p', 'hint', '점수: 그림 ' + (cost.image ?? '-') + ' · 목소리 ' + (cost.tts ?? '-') + ' · 글 ' + (cost.text ?? '-') + ' (실패한 호출은 점수에서 빠져요)'));
+    const num = (label, v) => { const l = el('label', '', label); const i = el('input'); i.type = 'number'; i.min = '0'; i.value = v ?? ''; view.append(l, i); return i; };
+    const a = num('회원 1인 하루 한도', L.member_daily), b = num('비회원 같은 인터넷 주소 하루 한도', L.guest_ip_daily), c = num('비회원 전체 하루 한도', L.guest_total_daily);
+    const save = el('button', 'btn btn-main', '한도 저장'); save.type = 'button';
+    save.onclick = async () => {
+      const body = { member_daily: parseInt(a.value, 10), guest_ip_daily: parseInt(b.value, 10), guest_total_daily: parseInt(c.value, 10) };
+      if (Object.values(body).some(x => !Number.isInteger(x) || x < 0)) return status('0 이상의 숫자를 넣어 주세요', 'err');
+      const r2 = await fetch('/api/ai-usage?action=limits', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: JSON.stringify(body) });
+      status(r2.ok ? '저장했어요 ✓' : '저장하지 못했어요', r2.ok ? 'ok' : 'err');
+    };
+    view.append(save);
+    const tbl = (title, heads, rows) => {
+      view.append(el('h2', '', title));
+      const t = el('table', 'gtable'); const hr = el('tr'); heads.forEach(h => hr.append(el('th', '', h))); t.append(hr);
+      if (!rows.length) { const tr = el('tr'); const td = el('td', '', '아직 기록이 없어요'); td.colSpan = heads.length; tr.append(td); t.append(tr); }
+      rows.forEach(cells => { const tr = el('tr'); cells.forEach(x => tr.append(el('td', '', String(x)))); t.append(tr); });
+      const w = el('div'); w.style.overflowX = 'auto'; w.append(t); view.append(w);
+    };
+    const n = v => Number(v || 0).toLocaleString('ko-KR');
+    tbl('최근 14일', ['날짜', '점수', '회원', '비회원', '그림', '호출'], (d.days || []).map(x => [x.day, n(x.credits), n(x.member_credits), n(x.guest_credits), n(x.images), n(x.calls) + (x.failed ? ' (실패 ' + n(x.failed) + ')' : '')]));
+    tbl('최근 7일 많이 쓴 회원', ['닉네임', '점수', '호출'], (d.top || []).map(x => [x.nickname || '(이름 없음)', n(x.credits), n(x.calls)]));
+  }
+
+  // ── 🎮 게임: 현황·공개 (게임마다 공개 상태와 필요한 준비물을 한눈에) ──
+  async function renderGameOverview(view) {
+    const [d, all, cfg] = await Promise.all([api('/api/admin/games'), itemsCall('GET'), fetch('/api/config').then(r => r.json()).catch(() => ({}))]);
+    const items = Array.isArray(all) ? all : [];
+    const quizN = items.filter(x => x.category === 'quiz' && x.src && x.src_back !== 'hidden').length;
+    const puzN = items.filter(x => x.category === 'puzzle' && x.src && x.src_back !== 'hidden').length;
+    const sets = {}; items.filter(x => x.category === 'memory' && /^mem_[a-z0-9]+_[0-9]+$/.test(x.id) && x.src_back !== 'hidden').forEach(x => { const k = x.id.split('_')[1]; sets[k] = (sets[k] || 0) + 1; });
+    const setN = Object.values(sets).filter(n => n >= 4).length;
+    const wn = k => d.words.filter(w => w.active && w.games.includes(k)).length;
+    // 게임마다 준비물: [설명, 충분한지, 이동할 메뉴]
+    const NEED = {
+      draw_relay: () => ['제시어 ' + wn('draw_relay') + '개 (11개 이상)', wn('draw_relay') >= 11, 'g_words'],
+      sketch_quiz: () => ['제시어 ' + wn('sketch_quiz') + '개 (19개 이상)', wn('sketch_quiz') >= 19, 'g_words'],
+      liar_draw: () => ['제시어 ' + wn('liar_draw') + '개 (분류마다 5개 이상)', !d.warnings.some(w => w.includes('라이어')), 'g_words'],
+      memory_parts: () => ['닮은꼴 세트 ' + setN + '개 · 기본 캐릭터 ' + d.characters + '개', setN > 0 || d.characters >= 4, 'g_memory'],
+      quiz_battle: () => ['상식 퀴즈 ' + quizN + '개 (3개 이상)', quizN >= 3, 'g_quiz'],
+      jigsaw: () => ['퍼즐 그림 ' + puzN + '개 (1개 이상)', puzN >= 1, 'g_puzzle'],
+    };
+    view.innerHTML = '';
+    const mode = cfg.games || '?';
+    view.append(el('div', 'sec-head', null));
+    view.lastChild.append(el('h2', '', '🎮 게임 현황'), el('span', mode === 'on' ? 'need-ok' : 'need-bad', '전체 스위치 GAMES_ENABLED: ' + mode + (mode === 'on' ? ' (모두에게 열림)' : mode === 'beta' ? ' (관리자 역할만)' : ' (꺼짐)')));
+    view.append(el('p', 'hint', '게임마다 공개 상태를 바꾸고, 준비물이 모자라면 오른쪽 링크로 바로 가서 채워요. 전체 스위치는 Cloudflare 환경 변수에서 바꿔요.'));
+    const t = el('table', 'gtable');
+    const hr = el('tr'); ['게임', '인원', '팀전', '공개 상태', '준비물'].forEach(h => hr.append(el('th', '', h))); t.append(hr);
     d.games.filter(g => g.key !== 'ready_check').forEach(g => {
-      const row = el('div', 'row2'); row.style.cssText = 'align-items:center;margin-bottom:6px';
-      row.append(el('div', 'grow', g.title + ' (' + g.min_players + '~' + g.max_players + '명)'));
-      const s = el('select'); s.style.width = 'auto'; Object.entries(GST).forEach(([k, t]) => { const o = el('option', '', t); o.value = k; s.append(o); }); s.value = g.status;
+      const tr = el('tr');
+      tr.append(el('td', '', g.title), el('td', '', g.min_players + '~' + g.max_players + '명'), el('td', '', g.teams ? '👥' : '-'));
+      const td = el('td'); const s = el('select');
+      Object.entries(GST).forEach(([k, tt]) => { const o = el('option', '', tt); o.value = k; s.append(o); }); s.value = g.status;
       s.onchange = async () => {
-        if (s.value === 'on' && !confirm('"' + g.title + '"을(를) 로그인한 회원 모두에게 공개할까요?\n처리방침 공고가 끝났는지 확인해 주세요.')) { s.value = g.status; return; }
+        if (s.value === 'on' && !confirm('"' + g.title + '"을(를) 로그인한 회원 모두에게 공개할까요?')) { s.value = g.status; return; }
         if (await gapi({ action: 'game_status', key: g.key, status: s.value }, '바꿨어요')) g.status = s.value; else s.value = g.status;
       };
-      row.append(s); view.append(row);
+      td.append(s); tr.append(td);
+      const nd = el('td');
+      const need = NEED[g.key] && NEED[g.key]();
+      if (need) {
+        nd.append(el('span', need[1] ? 'need-ok' : 'need-bad', (need[1] ? '✅ ' : '⚠ ') + need[0] + ' '));
+        const go = el('button', 'linkbtn', '관리하기 →'); go.type = 'button'; go.onclick = () => show(need[2]); nd.append(go);
+      } else nd.textContent = '-';
+      tr.append(nd); t.append(tr);
     });
-    // 기억 조각 그림 닮은꼴 세트
-    view.append(el('h2', '', '🧠 기억 조각 그림 — 닮은꼴 세트'));
-    view.append(el('p', 'hint', '거의 같은 캐릭터 4장을 한 세트로 만들어요. 가르마 방향·점 위치·피부 톤처럼 한두 군데만 달라서, 부위를 맡은 친구들이 잘 기억해 그려야 맞힐 수 있어요. 라운드마다 세트 하나를 쓰고, 세트가 없거나 다 쓰면 기본 캐릭터(지금 ' + d.characters + '개)로 해요.'));
-    const memBox = el('div'); view.append(memBox);
-    await renderMemory(memBox);
+    const wrapT = el('div'); wrapT.style.overflowX = 'auto'; wrapT.append(t); view.append(wrapT);
+    if (d.warnings.length) { view.append(el('h2', '', '⚠ 확인할 것')); d.warnings.forEach(w => view.append(el('div', 'msg err', w))); }
+  }
 
-    // 그림 퍼즐 그림
-    view.append(el('h2', '', '🧩 그림 퍼즐 그림'));
-    view.append(el('p', 'hint', '올린 그림은 자동으로 퍼즐 조각으로 나뉘어요. 볼드하다가 쓸 권리가 있는 그림만 올려 주세요 (직접 그린 그림, 동의 받은 학생 작품, 저작권이 끝난 명화 등). 가로 그림이 퍼즐로 좋아요.'));
-    const puzBox = el('div'); view.append(puzBox);
-    await renderPuzzles(puzBox);
-
-    // 제시어 추가
-    view.append(el('h2', '', '제시어 추가'));
-    if (d.warnings.length) d.warnings.forEach(w => view.append(el('div', 'msg err', '⚠ ' + w)));
-    const ta = el('textarea'); ta.placeholder = '낱말을 쉼표나 줄바꿈으로 여러 개 적어요 (예: 판다, 코알라, 하마). 한 낱말 20자까지.'; ta.maxLength = 4000;
-    const catRow = el('div', 'row2');
-    const cat = el('input'); cat.type = 'text'; cat.maxLength = 12; cat.placeholder = '분류 (예: 동물)'; cat.setAttribute('list', 'gwCats');
+  // ── 🔤 제시어: 분류 단추로 거르고, 낱말은 작은 카드로 ──
+  async function renderWords(view, opt) {
+    const d = await api('/api/admin/games');
+    view.innerHTML = '';
+    const SHORT = { draw_relay: '릴레이', sketch_quiz: '쓱싹', liar_draw: '라이어' };
+    const head = el('div', 'sec-head'); head.append(el('h2', '', '🔤 제시어 (' + d.words.length + '개)'));
+    head.append(el('span', 'hint', d.word_games.map(g => g.title + ' ' + d.words.filter(w => w.active && w.games.includes(g.key)).length + '개').join(' · ')));
+    view.append(head);
+    d.warnings.forEach(w => view.append(el('div', 'msg err', '⚠ ' + w)));
+    // 추가 (접는 상자)
+    const mk = el('details', 'box'); mk.append(el('summary', '', '➕ 낱말 추가'));
+    const ta = el('textarea'); ta.placeholder = '낱말을 쉼표나 줄바꿈으로 여러 개 (예: 판다, 코알라, 하마). 한 낱말 20자까지.'; ta.maxLength = 4000;
+    const cat = el('input'); cat.type = 'text'; cat.maxLength = 12; cat.placeholder = '분류 (예: 동물)'; cat.setAttribute('list', 'gwCats'); cat.value = opt.cat || '';
     const dl = el('datalist'); dl.id = 'gwCats'; d.categories.forEach(c => { const o = el('option'); o.value = c; dl.append(o); });
-    catRow.append(cat, dl);
     const gbox = el('div', 'chips');
     const checks = d.word_games.map(g => { const l = el('label', 'consent'); l.style.margin = '0'; const c = el('input'); c.type = 'checkbox'; c.checked = true; c.value = g.key; l.append(c, el('span', '', g.title)); gbox.append(l); return c; });
     const add = el('button', 'btn btn-main', '추가하기'); add.type = 'button';
@@ -558,50 +898,151 @@
       try {
         const r = await api('/api/admin/games', { action: 'add_words', words: ta.value, category: cat.value, games: checks.filter(c => c.checked).map(c => c.value) });
         status(r.added + '개 추가했어요' + (r.skipped.length ? ' (이미 있음: ' + r.skipped.join(', ') + ')' : ''), 'ok');
-        renderGames(view, { cat: cat.value });
+        renderWords(view, { cat: cat.value });
       } catch (e) { status(e.message, 'err'); alert(e.message); }
     };
-    view.append(ta, el('label', '', '분류 — 숨은 라이어 그림은 같은 분류 안에서 라이어 제시어를 골라요 (분류마다 5개 이상 필요)'), catRow,
-      el('label', '', '쓸 게임'), gbox, add);
-
-    // 목록
-    view.append(el('h2', '', '제시어 목록 (' + d.words.length + '개)'));
-    const counts = d.word_games.map(g => g.title + ' ' + d.words.filter(w => w.active && w.games.includes(g.key)).length + '개').join(' · ');
-    view.append(el('p', 'hint', '사용 중: ' + counts));
-    const fRow = el('div', 'row2');
-    const fc = el('select'); fc.style.width = 'auto'; [['', '모든 분류'], ...d.categories.map(c => [c, c])].forEach(([v2, t]) => { const o = el('option', '', t + (v2 ? ' (' + d.words.filter(w => w.category === v2).length + ')' : '')); o.value = v2; fc.append(o); });
-    fc.value = opt.cat || '';
-    const fq = el('input'); fq.type = 'text'; fq.placeholder = '낱말 찾기';
-    fRow.append(fc, fq); view.append(fRow);
-    const list = el('div'); view.append(list);
-    const draw = () => {
-      list.innerHTML = '';
-      const rows = d.words.filter(w => (!fc.value || w.category === fc.value) && (!fq.value.trim() || w.word.includes(fq.value.trim())));
-      if (!rows.length) list.append(el('div', 'empty', '없어요.'));
-      rows.forEach(w => {
-        const row = el('div', 'adm-row'); row.style.alignItems = 'center'; if (!w.active) row.style.opacity = '.5';
-        const g = el('div', 'grow');
-        g.append(el('div', 'post-title', w.word + (w.active ? '' : ' (안 씀)')), el('div', 'post-sub', '분류: ' + (w.category || '-')));
-        const acts = el('div', 'acts');
-        d.word_games.forEach(gm => {
-          const on = w.games.includes(gm.key);
-          const x = el('button', 'chip' + (on ? ' on' : ''), (on ? '✓ ' : '') + gm.title); x.type = 'button';
-          x.onclick = async () => { const games = on ? w.games.filter(k => k !== gm.key) : [...w.games, gm.key]; if (await gapi({ action: 'update_word', id: w.id, games }, '바꿨어요')) { w.games = games; draw(); } };
-          acts.append(x);
-        });
-        const b = (t, fn) => { const x = el('button', 'chip', t); x.type = 'button'; x.onclick = fn; acts.append(x); };
-        b(w.active ? '쓰지 않기' : '다시 쓰기', async () => { if (await gapi({ action: 'update_word', id: w.id, active: !w.active }, '바꿨어요')) { w.active = !w.active; draw(); } });
-        b('고치기', async () => {
-          const nw = ask('낱말', w.word); if (nw == null) return;
-          const nc = ask('분류', w.category || ''); if (nc == null) return;
-          if (await gapi({ action: 'update_word', id: w.id, word: nw, category: nc }, '고쳤어요')) renderGames(view, { cat: fc.value });
-        });
-        b('🗑 지우기', async () => { if (!confirm('"' + w.word + '"을(를) 지울까요?')) return; if (await gapi({ action: 'delete_word', id: w.id }, '지웠어요')) { d.words = d.words.filter(x => x.id !== w.id); draw(); } });
-        g.append(acts); row.append(g); list.append(row);
+    mk.append(ta, el('label', '', '분류 (숨은 라이어 그림은 같은 분류 안에서 라이어 낱말을 골라요 — 분류마다 5개 이상)'), cat, dl, el('label', '', '쓸 게임'), gbox, add);
+    view.append(mk);
+    // 거르기: 분류 단추 + 찾기
+    let curCat = opt.cat && d.categories.includes(opt.cat) ? opt.cat : '';
+    const bar = el('div', 'catbar');
+    const fq = el('input'); fq.type = 'text'; fq.placeholder = '🔍 낱말 찾기'; fq.style.marginTop = '4px';
+    const drawBar = () => {
+      bar.innerHTML = '';
+      [['', '전체', d.words.length], ...d.categories.map(c => [c, c, d.words.filter(w => w.category === c).length])].forEach(([k, t2, n]) => {
+        const b = el('button', 'chip' + (curCat === k ? ' on' : ''), t2 + ' ' + n); b.type = 'button';
+        b.onclick = () => { curCat = k; drawBar(); draw(); }; bar.append(b);
       });
     };
-    fc.onchange = draw; fq.oninput = draw;
-    draw();
+    view.append(bar, fq);
+    const list = el('div', 'wgrid'); list.style.marginTop = '8px'; view.append(list);
+    const draw = () => {
+      list.innerHTML = '';
+      const q = fq.value.trim();
+      const rows = d.words.filter(w => (!curCat || w.category === curCat) && (!q || w.word.includes(q)));
+      if (!rows.length) { list.append(el('div', 'empty', '없어요.')); return; }
+      rows.forEach(w => {
+        const c = el('div', 'wcard' + (w.active ? '' : ' off'));
+        const top = el('div', 'w'); top.append(el('span', '', w.word), el('small', '', w.category || '-')); c.append(top);
+        const tg = el('div', 'tg');
+        d.word_games.forEach(gm => {
+          const on = w.games.includes(gm.key);
+          const x = el('button', on ? 'on' : '', SHORT[gm.key] || gm.title); x.type = 'button'; x.title = gm.title + (on ? '에 써요 (누르면 빼기)' : '에 안 써요 (누르면 넣기)');
+          x.onclick = async () => { const games = on ? w.games.filter(k => k !== gm.key) : [...w.games, gm.key]; if (await gapi({ action: 'update_word', id: w.id, games }, '바꿨어요')) { w.games = games; draw(); } };
+          tg.append(x);
+        });
+        const m = (t2, fn, cls) => { const x = el('button', 'mini' + (cls ? ' ' + cls : ''), t2); x.type = 'button'; x.onclick = fn; tg.append(x); };
+        m(w.active ? '끄기' : '켜기', async () => { if (await gapi({ action: 'update_word', id: w.id, active: !w.active }, '바꿨어요')) { w.active = !w.active; draw(); } });
+        m('✏️', async () => {
+          const nw = ask('낱말', w.word); if (nw == null) return;
+          const nc = ask('분류', w.category || ''); if (nc == null) return;
+          if (await gapi({ action: 'update_word', id: w.id, word: nw, category: nc }, '고쳤어요')) renderWords(view, { cat: curCat });
+        });
+        m('🗑', async () => { if (!confirm('"' + w.word + '"을(를) 지울까요?')) return; if (await gapi({ action: 'delete_word', id: w.id }, '지웠어요')) { d.words = d.words.filter(x => x.id !== w.id); drawBar(); draw(); } }, 'danger');
+        c.append(tg); list.append(c);
+      });
+    };
+    fq.oninput = draw;
+    drawBar(); draw();
+  }
+
+  // ── ❓ 이미지 상식 퀴즈 (혼자 하기·친구 배틀 공용). char_items category 'quiz': label=질문, src=그림, src_back=보기 JSON, bg_emoji=정답 번호 ──
+  async function renderQuiz(view) {
+    const all = await itemsCall('GET');
+    const qs = (Array.isArray(all) ? all : []).filter(x => x.category === 'quiz').map(r => {
+      let options = []; try { options = JSON.parse(r.src_back || '[]'); } catch (e) {}
+      return { id: r.id, question: r.label || '', image: r.src || '', options: Array.isArray(options) ? options : [], correct: parseInt(r.bg_emoji, 10) || 0 };
+    });
+    view.innerHTML = '';
+    const head = el('div', 'sec-head'); head.append(el('h2', '', '❓ 이미지 상식 퀴즈 (' + qs.length + '개)'), el('span', 'hint', '혼자 하기와 친구 배틀이 함께 써요. 배틀은 3개 이상 필요해요.'));
+    view.append(head);
+    // 만들기·고치기
+    const mk = el('details', 'box'); mk.open = !qs.length;
+    const sum = el('summary', '', '➕ 새 퀴즈 추가'); mk.append(sum);
+    const form = { id: null, image: '', options: ['', ''], correct: 0 };
+    const file = el('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp';
+    const prev = el('img'); prev.alt = ''; prev.style.cssText = 'max-width:240px;max-height:180px;display:none;background:#fff;margin:6px 0';
+    const qIn = el('input'); qIn.type = 'text'; qIn.maxLength = 120; qIn.placeholder = '질문 (예: 이 동물의 이름은?)';
+    const optBox = el('div');
+    const drawOpts = () => {
+      optBox.innerHTML = '';
+      form.options.forEach((o, i) => {
+        const r = el('div', 'qopt');
+        const rd = el('input'); rd.type = 'radio'; rd.name = 'qzc'; rd.checked = form.correct === i; rd.title = '정답'; rd.onchange = () => { form.correct = i; };
+        const t2 = el('input'); t2.type = 'text'; t2.maxLength = 60; t2.placeholder = '보기 ' + (i + 1); t2.value = o; t2.oninput = () => { form.options[i] = t2.value; };
+        r.append(rd, t2);
+        if (form.options.length > 2) { const x = el('button', 'mini danger', '빼기'); x.type = 'button'; x.onclick = () => { form.options.splice(i, 1); if (form.correct >= form.options.length) form.correct = 0; drawOpts(); }; r.append(x); }
+        optBox.append(r);
+      });
+      if (form.options.length < 6) { const a = el('button', 'mini', '➕ 보기 추가'); a.type = 'button'; a.onclick = () => { form.options.push(''); drawOpts(); }; optBox.append(a); }
+    };
+    file.onchange = async () => { const f = file.files && file.files[0]; if (!f) return; try { form.image = await shrinkImage(f); prev.src = form.image; prev.style.display = 'block'; } catch (e) { status(e.message, 'err'); } };
+    const reset = () => { form.id = null; form.image = ''; form.options = ['', '']; form.correct = 0; qIn.value = ''; file.value = ''; prev.style.display = 'none'; sum.textContent = '➕ 새 퀴즈 추가'; drawOpts(); };
+    const save = el('button', 'btn btn-main', '💾 저장'); save.type = 'button';
+    save.onclick = async () => {
+      const question = qIn.value.trim(); const opts = form.options.map(o => String(o || '').trim());
+      if (!question) return status('질문을 적어 주세요', 'err');
+      if (opts.length < 2 || opts.some(o => !o)) return status('보기를 모두 채워 주세요 (2개 이상)', 'err');
+      if (!form.image) return status('그림을 골라 주세요', 'err');
+      save.disabled = true; status('저장하는 중...');
+      try {
+        let src = form.image;
+        if (src.startsWith('data:')) {
+          const name = 'quiz/quiz_' + Date.now() + '.jpg';
+          const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Hash': HASH }, body: JSON.stringify({ fileName: name, fileData: src }) });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.url) throw new Error('그림을 올리지 못했어요.');
+          src = j.url;
+        }
+        const id = form.id || 'quiz_' + Date.now();
+        await itemsCall('POST', { id, category: 'quiz', label: question, emoji: '❓', src, src_back: JSON.stringify(opts), bg_emoji: String(form.correct), sort_order: 0 });
+        status('저장했어요 ✓', 'ok'); renderQuiz(view);
+      } catch (e) { status(e.message, 'err'); save.disabled = false; }
+    };
+    const cancel = el('button', 'btn btn-sub', '새로 쓰기'); cancel.type = 'button'; cancel.onclick = reset;
+    mk.append(el('label', '', '그림'), file, prev, el('label', '', '질문'), qIn, el('label', '', '보기 (동그라미를 눌러 정답 고르기)'), optBox);
+    const br = el('div', 'acts'); br.style.marginTop = '8px'; br.append(save, cancel); mk.append(br);
+    view.append(mk); drawOpts();
+    // 목록
+    const q2 = el('input'); q2.type = 'text'; q2.placeholder = '🔍 질문·보기 찾기';
+    const grid = el('div', 'igrid'); grid.style.marginTop = '8px';
+    view.append(q2, grid);
+    const draw = () => {
+      grid.innerHTML = '';
+      const k = q2.value.trim();
+      const rows = qs.filter(q => !k || q.question.includes(k) || q.options.some(o => String(o).includes(k)));
+      if (!rows.length) { grid.append(el('div', 'empty', qs.length ? '없어요.' : '아직 퀴즈가 없어요.')); return; }
+      rows.forEach(q => {
+        const c = el('div', 'icard');
+        const im = el('img'); im.src = q.image; im.alt = ''; im.loading = 'lazy'; c.append(im, el('b', '', q.question));
+        const ol = el('div'); ol.style.fontSize = '.8rem';
+        q.options.forEach((o, i) => ol.append(el('div', i === q.correct ? 'need-ok' : '', (i === q.correct ? '✔ ' : '· ') + o)));
+        c.append(ol);
+        const row = el('div', 'row');
+        const e1 = el('button', 'mini', '✏️ 고치기'); e1.type = 'button';
+        e1.onclick = () => { form.id = q.id; form.image = q.image; form.options = [...q.options]; form.correct = q.correct; qIn.value = q.question; prev.src = q.image; prev.style.display = 'block'; sum.textContent = '✏️ 퀴즈 고치기'; mk.open = true; drawOpts(); mk.scrollIntoView({ behavior: 'smooth' }); };
+        const e2 = el('button', 'mini danger', '🗑 지우기'); e2.type = 'button';
+        e2.onclick = async () => { if (!confirm('"' + q.question + '" 퀴즈를 지울까요?')) return; try { await itemsCall('DELETE', { id: q.id }); status('지웠어요', 'ok'); renderQuiz(view); } catch (e) { status(e.message, 'err'); } };
+        row.append(e1, e2); c.append(row); grid.append(c);
+      });
+    };
+    q2.oninput = draw; draw();
+  }
+
+  async function renderMemoryTab(view) {
+    const d = await api('/api/admin/games');
+    view.innerHTML = '';
+    const head = el('div', 'sec-head'); head.append(el('h2', '', '🧠 기억 조각 그림 — 닮은꼴 세트')); view.append(head);
+    view.append(el('p', 'hint', '거의 같은 캐릭터 4장이 한 세트예요. 한두 군데만 달라서 부위를 맡은 친구들이 잘 기억해 그려야 맞힐 수 있어요. 라운드마다 세트 하나를 쓰고, 세트가 없거나 다 쓰면 기본 캐릭터(' + d.characters + '개)로 해요.'));
+    const box = el('div'); view.append(box);
+    await renderMemory(box);
+  }
+  async function renderPuzzleTab(view) {
+    view.innerHTML = '';
+    const head = el('div', 'sec-head'); head.append(el('h2', '', '🧩 그림 퍼즐 그림')); view.append(head);
+    view.append(el('p', 'hint', '올린 그림은 자동으로 퍼즐 조각으로 나뉘어요. 볼드하다가 쓸 권리가 있는 그림만 올려 주세요 (직접 그린 그림, 동의 받은 학생 작품, 저작권이 끝난 명화 등). 가로 그림이 퍼즐로 좋아요.'));
+    const box = el('div'); view.append(box);
+    await renderPuzzles(box);
   }
 })();
 </script>
