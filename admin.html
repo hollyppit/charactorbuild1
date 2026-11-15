@@ -404,13 +404,50 @@
         } finally { gen.disabled = false; head.textContent = title; }
       };
       gen.onclick = async () => { if (busy) return; busy = true; try { await sl.run(); } catch (e) { status(e.message, 'err'); } busy = false; };
-      sl.diffEl = diff;
+      sl.diffEl = diff; sl.sel = sel; sl.custom = custom;
       acts.append(gen, upb);
       c.append(head, im);
       if (sel) c.append(sel, custom);
       c.append(diff, acts, file);
       grid.append(c);
     });
+    // ✨ AI가 알아서: 캐릭터 정하기(이름이 비어 있으면, 이미 있는 세트와 겹치지 않게) → 변화 3가지 새로 고르기 → 기본 그림 → 닮은꼴 3장
+    const IDEAS = [
+      ['모자 쓴 남자아이', '노란 야구 모자를 쓰고 풍선을 든 남자아이'], ['할머니', '뜨개 조끼를 입고 꽃다발을 든 할머니'], ['요리사', '하얀 요리사 모자를 쓰고 국자를 든 요리사'],
+      ['우주비행사', '하얀 우주복을 입고 깃발을 든 어린이 우주비행사'], ['소방관', '빨간 헬멧을 쓰고 소방 호스를 든 소방관'], ['곰돌이', '멜빵바지를 입고 꿀단지를 든 곰 캐릭터'],
+      ['토끼', '원피스를 입고 당근을 든 토끼 캐릭터'], ['펭귄', '목도리 대신 나비넥타이를 하고 생선을 든 펭귄 캐릭터'], ['마법사 소녀', '별무늬 망토를 두르고 지팡이를 든 소녀 마법사'],
+      ['축구 선수', '줄무늬 유니폼을 입고 축구공을 든 아이'], ['화가', '베레모를 쓰고 붓을 든 화가'], ['농부 아저씨', '밀짚모자를 쓰고 삽을 든 농부'],
+      ['해적 선장', '해적 모자를 쓰고 보물 지도를 든 귀여운 해적 선장'], ['공룡 친구', '티셔츠를 입고 사과를 든 아기 공룡 캐릭터'], ['로봇', '네모난 몸에 안테나가 달리고 렌치를 든 로봇'],
+      ['간호사', '하늘색 간호복을 입고 체온계를 든 간호사'], ['발레리나', '분홍 튜튜를 입고 리본을 든 발레리나'], ['탐험가', '사파리 모자를 쓰고 돋보기를 든 탐험가'],
+      ['고양이', '멜빵 반바지를 입고 털실 뭉치를 든 고양이 캐릭터'], ['캠핑 소년', '조끼를 입고 손전등을 든 캠핑하는 소년'], ['제빵사', '앞치마를 두르고 식빵을 든 제빵사'],
+      ['가수', '반짝이 재킷을 입고 마이크를 든 가수'], ['여우', '후드티를 입고 도토리를 든 여우 캐릭터'], ['우체부', '우체부 모자를 쓰고 편지 가방을 멘 우체부'],
+    ];
+    const autoMsg = el('div', 'hint'); autoMsg.style.cssText = 'min-height:1.2em;font-weight:700;color:var(--yellow,#ffd400)';
+    const auto = el('button', 'btn btn-main', '✨ AI가 알아서 세트 만들기 (캐릭터·변화·그림 4장)'); auto.type = 'button';
+    auto.onclick = async () => {
+      if (busy) return;
+      if (slots.some(s => s.img) && !confirm('지금 만든 그림을 지우고 새로 만들까요?')) return;
+      busy = true; auto.disabled = true;
+      try {
+        if (!name.value.trim()) {
+          const used = new Set(mem.map(x => String(x.label || '').split(' — ')[0]));
+          const left = IDEAS.filter(([n]) => !used.has(n));
+          const [n, dsc] = rnd(left.length ? left : IDEAS);
+          name.value = n; desc.value = dsc;
+        }
+        // 변화 3가지를 새로: 머리·얼굴 / 몸 / 다리에서 눈에 띄는 것 하나씩
+        const pick = [rnd(big(['머리', '얼굴'])), rnd(big(['몸'])), rnd(big(['다리']))];
+        for (let i = 1; i < 4; i++) {
+          const s = slots[i]; s.sel.value = String(pick[i - 1]); s.custom.style.display = 'none'; s.diffEl.value = MEM_CHANGES[pick[i - 1]][1];
+        }
+        for (let i = 0; i < 4; i++) {
+          autoMsg.textContent = '✨ ' + name.value + ' — ' + (i ? '닮은꼴 ' + i + ' (' + slots[i].diffEl.value + ')' : '기본 그림') + ' 만드는 중... (' + (i + 1) + '/4)';
+          await slots[i].run();
+        }
+        autoMsg.textContent = '✅ 4장을 다 만들었어요. 잘 바뀌었는지 확인하고, 이상한 장은 그 장만 다시 만든 뒤 "세트 저장"을 눌러 주세요.';
+      } catch (e) { autoMsg.textContent = ''; status(e.message, 'err'); }
+      busy = false; auto.disabled = false;
+    };
     const all3 = el('button', 'btn', '🤖 닮은꼴 3장 한꺼번에 만들기'); all3.type = 'button';
     all3.onclick = async () => {
       if (busy) return; busy = true; all3.disabled = true;
@@ -442,7 +479,7 @@
       }
     };
     box.append(el('label', '', '세트 이름'), name, el('label', '', '캐릭터 설명 (AI용)'), desc, grid);
-    const bar = el('div', 'acts'); bar.style.marginTop = '8px'; bar.append(all3, save); box.append(bar);
+    const bar = el('div', 'acts'); bar.style.marginTop = '8px'; bar.append(auto, all3, save); box.append(bar, autoMsg);
     box.append(el('p', 'hint', 'AI가 다른 곳까지 바꾸거나 왼쪽·오른쪽을 헷갈릴 때가 있어요. 저장 전에 눈으로 확인하고, 이상한 장은 그 장만 다시 만들어 주세요. 그림 1장 만들 때마다 AI 비용이 들어요.'));
 
     // 저장된 세트
