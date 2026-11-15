@@ -29,7 +29,7 @@
   }
   const charCard = (c, size, noLabel) => {
     const box = el('div', 'text-align:center');
-    const im = el('img', 'width:' + (size || 110) + 'px;height:' + (size || 110) + 'px;object-fit:contain;background:#fff;border:2px solid #000;display:block;margin:0 auto'); im.src = c.src; im.alt = c.label;
+    const im = el('img', 'width:' + (size || 110) + 'px;max-width:100%;height:auto;aspect-ratio:1/1;box-sizing:border-box;object-fit:contain;background:#fff;border:2px solid #000;display:block;margin:0 auto'); im.src = c.src; im.alt = c.label;
     box.append(im); if (!noLabel && c.label) box.append(el('div', 'font-weight:800;margin-top:4px;max-width:' + Math.max(110, size || 110) + 'px;margin-left:auto;margin-right:auto', c.label));
     return box;
   };
@@ -69,9 +69,9 @@
       box.append(compose(M.parts, M.K));
       if (M.role === 'guesser') {
         box.append(el('div', 'text-align:center;font-weight:800', '어떤 캐릭터일까요? 골라 주세요'));
-        const opts = el('div', 'display:grid;grid-template-columns:1fr 1fr;gap:8px');
+        const opts = el('div', 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px');
         (M.options || []).forEach(o => {
-          const b = el('button', 'padding:8px;background:#fff;color:#111;border:3px solid #000;cursor:pointer'); b.type = 'button';
+          const b = el('button', 'padding:8px;min-width:0;background:#fff;color:#111;border:3px solid #000;cursor:pointer'); b.type = 'button';
           b.append(charCard(o, o.set !== undefined ? 150 : 90));
           b.onclick = async () => {
             [...opts.children].forEach(x => { x.style.outline = x === b ? '4px solid var(--yellow,#ffd400)' : 'none'; x.disabled = true; });
