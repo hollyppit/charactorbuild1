@@ -6,6 +6,7 @@
 //  - 지운 그룹 작품·지운 그룹: 30일 뒤 그림 파일·용량과 함께 파기 (장면·버전·기여 기록은 함께 지워짐)
 //  - 답이 끝난 그룹 초대: 90일
 //  - 게임 방(5단계, 0016): 시작 안 한 방 2시간·6시간 넘은 진행 방은 닫고, 끝난 방과 결과는 90일 뒤 삭제 (gm_housekeeping, 0016 전에는 조용히 실패)
+//  - 지운 자녀 프로필(0004): 지운 뒤 30일이 지나면 그 아이 작품과 함께 영구 삭제 (보호자가 자녀 목록을 열 때도 실행)
 //  (알림 90일·AI 이용 기록 90일은 DB 함수가 따로 정리)
 // Cloudflare Pages 에는 예약 실행이 없으므로 자주 쓰이는 요청에서 가끔(확률) 실행한다. 실패해도 요청에는 영향 없음.
 import { makeSb } from './common.js';
@@ -28,6 +29,34 @@ export async function purgeGroupStories(env, storyIds) {
   }
   await sb(`/rest/v1/group_stories?id=in.(${storyIds.join(',')})`, { method: 'DELETE' });   // 장면·버전·기록·파일 기록은 CASCADE
   return storyIds.length;
+}
+
+// 지운 지 30일 지난 자녀 프로필(0004): 그 아이 작품(파일·용량 포함)을 지우고 프로필을 영구 삭제 (처리방침 4조).
+// 동의 기록(guardian_consents)은 child_id 만 비워져 철회 기록으로 남는다. 0004 전에는 표가 없어 조용히 0.
+export async function purgeChildren(env, guardianId) {
+  const sb = makeSb(env);
+  const d30 = encodeURIComponent(iso(30 * DAY));
+  const r = await sb(`/rest/v1/child_profiles?deleted_at=lt.${d30}${guardianId ? '&guardian_id=eq.' + encodeURIComponent(guardianId) : ''}&select=id,guardian_id&limit=5`);
+  if (!r.ok) return 0;
+  const kids = await r.json();
+  let done = 0;
+  for (const k of Array.isArray(kids) ? kids : []) {
+    const pr = await sb(`/rest/v1/projects?child_id=eq.${k.id}&owner_id=eq.${k.guardian_id}&select=id&limit=100`);
+    if (!pr.ok) continue;
+    const pids = (await pr.json()).map(x => x.id);
+    if (pids.length) {
+      const ar = await sb(`/rest/v1/project_assets?project_id=in.(${pids.join(',')})&select=path,bytes`);
+      const assets = ar.ok ? await ar.json() : [];
+      for (let i = 0; i < assets.length; i += 100) await removeObjects(env, assets.slice(i, i + 100).map(a => a.path));
+      const total = assets.reduce((s, a) => s + Number(a.bytes || 0), 0);
+      await sb(`/rest/v1/projects?id=in.(${pids.join(',')})&owner_id=eq.${k.guardian_id}`, { method: 'DELETE' });   // 파일 기록·버전은 CASCADE
+      if (total) await sb('/rest/v1/rpc/release_quota', { method: 'POST', body: JSON.stringify({ p_owner: k.guardian_id, p_bytes: total }) });
+      if (pids.length === 100) continue;   // 작품이 더 남았으면 다음 기회에 이어서 (프로필은 그 뒤에 지움)
+    }
+    const d = await sb(`/rest/v1/child_profiles?id=eq.${k.id}&deleted_at=lt.${d30}`, { method: 'DELETE' });
+    if (d.ok) done++;
+  }
+  return done;
 }
 
 async function purgeGroups(env, d30) {
@@ -61,6 +90,7 @@ export async function housekeeping(env, chance = 0.02) {
       del(`/rest/v1/sanctions?kind=eq.warning&created_at=lt.${y1}`),
       del(`/rest/v1/group_invites?status=neq.pending&responded_at=lt.${d90}`),
       purgeGroups(env, d30).catch(() => null),
+      purgeChildren(env).catch(() => null),
       sb('/rest/v1/rpc/gm_housekeeping', { method: 'POST', body: '{}' }).catch(() => null),
     ]);
   } catch (_) { /* 다음 기회에 다시 */ }

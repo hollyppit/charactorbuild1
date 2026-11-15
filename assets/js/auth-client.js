@@ -77,7 +77,7 @@
       opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers, { Authorization: 'Bearer ' + s.access_token });
       const res = await fetch(path, opts);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { const e = new Error(data.error || 'request_failed'); e.status = res.status; throw e; }
+      if (!res.ok) { const e = new Error(data.error || 'request_failed'); e.status = res.status; e.data = data; throw e; }
       return data;
     },
   };

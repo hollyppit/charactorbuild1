@@ -278,7 +278,7 @@
     invalid_nickname: '닉네임은 2~12자의 한글·영문·숫자·_ 만 쓸 수 있어요.', nickname_taken: '이미 사용 중인 닉네임이에요.',
     invalid_pin: 'PIN은 숫자 4자리예요.', consent_required: '동의 항목을 모두 확인해 주세요.',
     child_limit: '자녀 프로필은 최대 5명까지 만들 수 있어요.', guardian_declaration_required: '먼저 보호자 확인이 필요해요.',
-    restore_expired: '복구 가능 기간이 지났어요.'
+    restore_expired: '복구 가능 기간이 지났어요.', pin_locked: 'PIN을 여러 번 틀려서 10분 동안 잠겼어요.'
   };
   let kids = { consent_version: '', avatar: 'fox' };
 
@@ -586,7 +586,12 @@
     try {
       await BoldAuth.api('/api/children?action=verify-pin', { method: 'POST', body: JSON.stringify({ id: k.id, pin: pin.trim() }) });
       setKidMode(null); return true;
-    } catch (e) { alert('PIN이 맞지 않아요.'); location.replace('/'); return false; }
+    } catch (e) {
+      const d = e.data || {};
+      if (e.message === 'pin_locked') alert('PIN을 여러 번 틀려서 잠겼어요. ' + Math.ceil((d.retry_after_sec || 600) / 60) + '분 뒤에 다시 해 주세요.');
+      else alert('PIN이 맞지 않아요.' + (d.left != null ? ' (' + d.left + '번 더 틀리면 10분 동안 잠겨요)' : ''));
+      location.replace('/'); return false;
+    }
   }
 
   (async () => {

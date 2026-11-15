@@ -2,6 +2,7 @@
 // 아동은 계정이 없고, 보호자(JWT 로그인)만 호출한다. 쓰기는 모두 서버에서 검증한다.
 import { corsHeaders, jsonResponder, checkOrigin, checkSize, makeSb, sha256hex, timingSafeEqual } from './_lib/common.js';
 import { getUser } from './_lib/auth.js';
+import { purgeChildren } from './_lib/housekeeping.js';
 
 const CONSENT_VERSION = 'v1-draft'; // 개인정보 처리방침·동의문 확정 시 갱신
 const CONSENT_KEYS = ['collect', 'ai_processing', 'retention', 'guardian_rights'];
@@ -11,6 +12,8 @@ const NICK_RE = /^[0-9A-Za-z가-힣_]{2,12}$/;
 const PIN_RE = /^\d{4}$/;
 const MAX_CHILDREN = 5;
 const RESTORE_DAYS = 30;
+const PIN_MAX_FAILS = 5, PIN_LOCK_MIN = 10;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PUBLIC_COLS = 'id,nickname,avatar_key,age_group,created_at,deleted_at';
 
 function b64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
@@ -46,6 +49,9 @@ export async function onRequest({ request, env }) {
   let body = {};
   if (request.method !== 'GET') {
     try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+    // 자녀 id 를 쓰는 요청은 형식부터 확인 (만들기·보호자 선언 제외)
+    const needsId = request.method === 'PATCH' || request.method === 'DELETE' || action === 'verify-pin' || action === 'restore';
+    if (needsId && !UUID.test(String(body.id || ''))) return json({ error: 'not_found' }, 404);
   }
 
   // 보호자 프로필(선언 여부) 조회
@@ -56,8 +62,9 @@ export async function onRequest({ request, env }) {
 
   const childQ = id => `/rest/v1/child_profiles?id=eq.${encodeURIComponent(id)}&guardian_id=eq.${encodeURIComponent(user.id)}`;
 
-  // 목록
+  // 목록 (열 때마다 이 보호자의 30일 지난 삭제 프로필을 작품과 함께 정리)
   if (request.method === 'GET') {
+    await purgeChildren(env, user.id).catch(() => null);
     const r = await sb(`/rest/v1/child_profiles?guardian_id=eq.${encodeURIComponent(user.id)}&select=${PUBLIC_COLS}&order=created_at.asc`);
     const rows = r.ok ? await r.json() : [];
     const cutoff = Date.now() - RESTORE_DAYS * 86400000;
@@ -77,13 +84,27 @@ export async function onRequest({ request, env }) {
     return r.ok ? json({ ok: true }) : json({ error: 'declare_failed' }, 500);
   }
 
-  // PIN 확인 (아이 모드 이탈용 편의 장치)
+  // PIN 확인 (아이 모드 이탈용 편의 장치). 5번 연속 틀리면 10분 잠금
   if (request.method === 'POST' && action === 'verify-pin') {
     if (!PIN_RE.test(String(body.pin || ''))) return json({ error: 'invalid_pin' }, 400);
-    const r = await sb(`${childQ(body.id)}&deleted_at=is.null&select=pin_hash`);
+    const r = await sb(`${childQ(body.id)}&deleted_at=is.null&select=pin_hash,pin_fail_count,pin_locked_until`);
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) return json({ error: 'not_found' }, 404);
-    return (await checkPin(String(body.pin), rows[0].pin_hash)) ? json({ ok: true }) : json({ ok: false }, 403);
+    const row = rows[0];
+    const lockedMs = row.pin_locked_until ? new Date(row.pin_locked_until).getTime() - Date.now() : 0;
+    if (lockedMs > 0) return json({ error: 'pin_locked', retry_after_sec: Math.ceil(lockedMs / 1000) }, 429);
+    const patch = p => sb(childQ(body.id), { method: 'PATCH', body: JSON.stringify(p) });
+    if (await checkPin(String(body.pin), row.pin_hash)) {
+      if (row.pin_fail_count || row.pin_locked_until) await patch({ pin_fail_count: 0, pin_locked_until: null });
+      return json({ ok: true });
+    }
+    const fails = (row.pin_fail_count || 0) + 1;
+    if (fails >= PIN_MAX_FAILS) {
+      await patch({ pin_fail_count: 0, pin_locked_until: new Date(Date.now() + PIN_LOCK_MIN * 60000).toISOString() });
+      return json({ error: 'pin_locked', retry_after_sec: PIN_LOCK_MIN * 60 }, 429);
+    }
+    await patch({ pin_fail_count: fails });
+    return json({ ok: false, left: PIN_MAX_FAILS - fails }, 403);
   }
 
   // 삭제 취소 (30일 이내)
